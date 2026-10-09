@@ -255,3 +255,20 @@ def test_edit_over_http_records_history_and_restores(demo, tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_saving_without_changes_is_refused(demo, tmp_path):
+    store = ProjectStore(tmp_path / "projects.json")
+    project = store.add("Demo", demo.steps, demo.features)
+    server, app, _ = start_in_background(store)
+    port = server.server_address[1]
+    try:
+        opened = editor.open_scenario(demo, "cart.feature", 13, "Remove a product again")
+        same = spec(name=opened["name"], tags="", steps=[{"line": f"{s['written']} {s['text']}"} for s in opened["steps"]])
+        body = {"project": project.id, "file": "cart.feature", "start": 13, "name": opened["name"], "spec": same}
+        status, _, data, _ = request(port, "POST", "/api/scenario/edit/preview", body, app.token)
+        assert status == 400 and "nothing to save" in json.loads(data)["error"]
+        assert history.entries(demo) == []
+    finally:
+        server.shutdown()
+        server.server_close()

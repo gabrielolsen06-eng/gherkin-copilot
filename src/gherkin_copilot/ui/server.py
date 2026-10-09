@@ -149,6 +149,8 @@ class App:
     def _flow(project: Project, step: str, change: builder.FileChange, body: dict[str, Any], action: str,
               author: object, scenario: str = "", before: str | None = None, after: str | None = None) -> dict[str, Any]:
         """Preview a change, or save it (if it still matches the preview) and record it in the history."""
+        if change.before == change.after and not change.creates:
+            raise ValueError("There's nothing to save: the file would stay exactly the same.")
         if step == "preview":
             return change.describe()
         expected = body.get("hash")
