@@ -43,6 +43,8 @@ class MergePlan:
     keep: StepDef
     drop: StepDef
     score: float
+    keep_uses: int = 0  # feature lines using each step before the merge
+    drop_uses: int = 0
     edits: list[LineEdit] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
 
@@ -193,15 +195,18 @@ def _plan_edits(plan: MergePlan, feature_steps) -> None:
         plan.edits.append(LineEdit(path, fs.line, old, f"{indent}{word} {new_text}"))
 
 
-def plan_merges(root: Path, threshold: float = 0.6, keep: frozenset[str] = frozenset()) -> MergeResult:
+def plan_merges(root: Path, threshold: float = 0.6, keep: frozenset[str] = frozenset(),
+                features: Path | None = None) -> MergeResult:
     """Work out every merge without writing anything.
 
-    ``keep`` names functions to prefer as the kept step; otherwise the step used
-    in more feature lines wins, and on a tie the one defined first.
+    ``root`` is scanned for step definitions and, unless ``features`` names
+    another folder, for .feature files too. ``keep`` names functions to prefer as
+    the kept step; otherwise the step used in more feature lines wins, and on a
+    tie the one defined first.
     """
     root = root.resolve()
     steps = build_index(root)
-    feature_steps = [fs for f in iter_feature_files(root) for fs in parse_feature(f)]
+    feature_steps = [fs for f in iter_feature_files((features or root).resolve()) for fs in parse_feature(f)]
     usage = _usage(feature_steps, steps)
     order = {s: i for i, s in enumerate(steps)}
 
@@ -215,7 +220,7 @@ def plan_merges(root: Path, threshold: float = 0.6, keep: frozenset[str] = froze
         taken.update((pair.first, pair.second))
         a, b = sorted((pair.first, pair.second),
                       key=lambda s: (s.function not in keep, -usage[s], order[s]))
-        plan = MergePlan(keep=a, drop=b, score=pair.score)
+        plan = MergePlan(keep=a, drop=b, score=pair.score, keep_uses=usage[a], drop_uses=usage[b])
         plans.append(plan)
 
         if a.keyword != b.keyword:
@@ -232,10 +237,11 @@ def plan_merges(root: Path, threshold: float = 0.6, keep: frozenset[str] = froze
         if plan.ok:
             _plan_edits(plan, feature_steps)
 
-    return MergeResult(plans, skipped, _changes([p for p in plans if p.ok], root))
+    return MergeResult(plans, skipped, file_changes([p for p in plans if p.ok], root))
 
 
-def _changes(plans: list[MergePlan], root: Path) -> dict[Path, tuple[str, str]]:
+def file_changes(plans: list[MergePlan], root: Path) -> dict[Path, tuple[str, str]]:
+    """File contents (before, after) for carrying out these plans; ``root`` is the steps folder."""
     before: dict[Path, str] = {}
     after: dict[Path, str] = {}
 

@@ -9,7 +9,7 @@ const KEYWORDS = [
   ["then", "Then", "Check the result"],
   ["step", "Any keyword", "Works after Given, When or Then"],
 ];
-const TABS = ["build", "steps"];
+const TABS = ["build", "steps", "dupes"];
 
 const state = {
   projects: [],
@@ -19,6 +19,9 @@ const state = {
   paletteQuery: "",
   tab: "build",
   draft: emptyDraft(),
+  dupes: null, // last /api/dupes answer
+  dupesThreshold: 0.6,
+  dupesKeep: new Set(), // functions the user chose to keep
   results: [], // server check, one per block, in order
   checking: false,
 };
@@ -114,6 +117,7 @@ function showTab(tab) {
     button.classList.toggle("active", button.dataset.tab === state.tab);
   }
   for (const name of TABS) $(`panel-${name}`).hidden = !state.active || name !== state.tab;
+  if (state.tab === "dupes" && state.active) loadDupes();
 }
 
 // --- projects -------------------------------------------------------------
@@ -131,7 +135,11 @@ function applyProjects(data) {
   const select = $("project-select");
   select.replaceChildren(...state.projects.map((p) => el("option", { value: p.id }, p.name)));
   if (state.active) select.value = state.active;
-  if (state.active !== previous) loadDraft();
+  if (state.active !== previous) {
+    loadDraft();
+    state.dupes = null;
+    state.dupesKeep = new Set();
+  }
   showTab(state.tab);
 }
 
@@ -209,6 +217,7 @@ async function loadSteps() {
   renderSteps();
   renderPalette();
   scheduleCheck();
+  loadDupes();
 }
 
 function matchesQuery(step, query) {
@@ -621,6 +630,103 @@ function onDrop(event) {
   if (step) addStepBlock(step, at);
 }
 
+// --- duplicates ----------------------------------------------------------------
+
+let dupesSeq = 0;
+async function loadDupes() {
+  const project = activeProject();
+  if (!project) return;
+  const seq = ++dupesSeq;
+  const query = new URLSearchParams({ project: project.id, threshold: state.dupesThreshold });
+  for (const fn of state.dupesKeep) query.append("keep", fn);
+  try {
+    const data = await api(`/api/dupes?${query}`);
+    if (seq !== dupesSeq) return;
+    state.dupes = data;
+    $("dupes-error").hidden = true;
+  } catch (error) {
+    if (seq !== dupesSeq) return;
+    state.dupes = null;
+    $("dupes-error").textContent = error.message;
+    $("dupes-error").hidden = false;
+  }
+  renderDupes();
+}
+
+function uses(n) {
+  return n === 0 ? "not used in any feature file" : `used in ${n} feature line${n === 1 ? "" : "s"}`;
+}
+
+function dupeSide(step, role, pair) {
+  const keyword = step.keyword === "step" ? "Any" : capitalize(step.keyword);
+  return el("div", { class: `dupe-side ${role}` },
+    el("span", { class: "side-label" }, role === "keep" ? "Keep" : "Remove"),
+    el("span", { class: "sentence" }, el("strong", { class: "dupe-kw" }, `${keyword} `),
+      ...sentence(step, slotChip).childNodes),
+    el("span", { class: "where" }, `${step.file}:${step.line} · ${step.function}()`),
+    el("span", { class: "uses" }, uses(step.uses)),
+    role === "drop" ? el("button", { type: "button", class: "ghost small", onclick: () => {
+      state.dupesKeep.delete(pair.keep.function);
+      state.dupesKeep.add(step.function);
+      loadDupes();
+    } }, "Keep this one instead") : null);
+}
+
+function dupeCard(pair) {
+  const footer = pair.ok
+    ? el("div", { class: "dupe-foot" },
+        el("span", {}, pair.rewrites
+          ? `Merging rewrites ${pair.rewrites} feature line${pair.rewrites === 1 ? "" : "s"} and removes ${pair.drop.function}().`
+          : `No feature file uses the second wording, so merging just removes ${pair.drop.function}().`),
+        el("button", { type: "button", class: "primary", onclick: () => openMergeDialog(pair) }, "Preview merge…"))
+    : el("div", { class: "dupe-foot problems" },
+        el("strong", {}, "Can't merge automatically"),
+        el("ul", {}, ...pair.problems.map((p) => el("li", {}, p))),
+        el("span", { class: "muted small" }, "Tidy these up by hand, or reword one step so they're no longer alike."));
+  return el("article", { class: `dupe ${pair.ok ? "" : "blocked"}` },
+    el("div", { class: "dupe-head" }, el("span", { class: "score" }, `${Math.round(pair.score * 100)}% similar`)),
+    el("div", { class: "dupe-sides" }, dupeSide(pair.keep, "keep", pair), el("span", { class: "arrow", "aria-hidden": "true" }, "←"),
+      dupeSide(pair.drop, "drop", pair)),
+    footer);
+}
+
+function renderDupes() {
+  const data = state.dupes;
+  const count = $("dupes-count");
+  count.hidden = !data?.pairs.length;
+  count.textContent = data?.pairs.length || "";
+  if (!data) return;
+  const n = data.pairs.length;
+  $("dupes-summary").textContent = n
+    ? `${n} pair${n === 1 ? "" : "s"} of steps say the same thing in different words`
+    : "";
+  const list = data.pairs.map(dupeCard);
+  if (data.skipped.length) {
+    list.push(el("p", { class: "muted small" },
+      `${data.skipped.length} more pair${data.skipped.length === 1 ? "" : "s"} share a step with one above. ` +
+      "Merge those first and the rest will show up here."));
+  }
+  $("dupes-list").replaceChildren(...(list.length ? list : [
+    el("div", { class: "all-clear" }, el("strong", {}, "No duplicates found."),
+      el("span", { class: "muted" }, " Every step says something different. Slide the similarity lower to look harder.")),
+  ]));
+}
+
+async function openMergeDialog(pair) {
+  dialog.kind = "merge";
+  const body = { project: state.active, threshold: state.dupesThreshold, pair: pair.id, keep: [...state.dupesKeep] };
+  dialog.request = ["/api/merge", body];
+  try {
+    const preview = await api("/api/merge/preview", body);
+    $("change-options").replaceChildren();
+    showPreview(preview);
+    $("change-back").hidden = true;
+    $("change-dialog").showModal();
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
 // --- builder: save and stubs dialogs -----------------------------------------
 
 const dialog = { kind: null, preview: null, request: null };
@@ -695,12 +801,18 @@ function showPreview(preview) {
   $("change-note").hidden = !!preview;
   $("change-preview").hidden = !preview;
   $("change-back").hidden = !preview;
-  $("change-submit").textContent = preview ? (dialog.kind === "save" ? "Save" : "Add to file") : "Preview";
+  $("change-submit").textContent = preview ? { save: "Save", stubs: "Add to file", merge: "Merge" }[dialog.kind] : "Preview";
   if (preview) {
-    $("change-diff").replaceChildren(...preview.diff.slice(2).map((line) =>
-      el("span", { class: line.startsWith("+") ? "add" : line.startsWith("-") ? "del" : line.startsWith("@@") ? "hunk" : "" },
-        `${line}\n`)));
-    $("change-title").textContent = preview.creates ? `Create ${preview.file}` : `Change ${preview.file}`;
+    const files = preview.files || [preview];
+    $("change-diff").replaceChildren(...files.flatMap((file) => [
+      files.length > 1 ? el("span", { class: "file" }, `${file.file}\n`) : null,
+      ...file.diff.slice(2).map((line) =>
+        el("span", { class: line.startsWith("+") ? "add" : line.startsWith("-") ? "del" : line.startsWith("@@") ? "hunk" : "" },
+          `${line}\n`)),
+    ].filter(Boolean)));
+    $("change-title").textContent = dialog.kind === "merge"
+      ? `Merge: change ${files.length} file${files.length === 1 ? "" : "s"}`
+      : preview.creates ? `Create ${preview.file}` : `Change ${preview.file}`;
   }
 }
 
@@ -729,8 +841,10 @@ async function submitChange(event) {
     const [base, body] = dialog.request;
     const result = await api(`${base}/save`, { ...body, hash: dialog.preview.hash });
     $("change-dialog").close();
-    toast(dialog.kind === "save" ? `Saved to ${result.saved}` : `Added steps to ${result.saved}`);
-    if (dialog.kind === "stubs") await loadSteps();
+    toast(dialog.kind === "save" ? `Saved to ${result.saved}`
+      : dialog.kind === "merge" ? `Merged: updated ${result.saved.join(", ")}`
+      : `Added steps to ${result.saved}`);
+    if (dialog.kind !== "save") await loadSteps();
   } catch (error) {
     $("change-error").textContent = error.message;
     $("change-error").hidden = false;
@@ -751,6 +865,11 @@ $("steps-search").addEventListener("input", (e) => { state.query = e.target.valu
 $("steps-refresh").addEventListener("click", () => loadSteps().then(() => toast("Rescanned")));
 for (const button of document.querySelectorAll(".tab")) button.addEventListener("click", () => showTab(button.dataset.tab));
 
+$("dupes-threshold").addEventListener("input", (e) => {
+  state.dupesThreshold = Number(e.target.value);
+  $("dupes-threshold-value").textContent = `${Math.round(state.dupesThreshold * 100)}%`;
+  loadDupes();
+});
 $("palette-search").addEventListener("input", (e) => { state.paletteQuery = e.target.value; renderPalette(); });
 $("draft-feature").addEventListener("input", (e) => { state.draft.feature = e.target.value; saveDraft(); renderGherkin(); });
 $("draft-scenario").addEventListener("input", (e) => { state.draft.scenario = e.target.value; saveDraft(); renderGherkin(); });

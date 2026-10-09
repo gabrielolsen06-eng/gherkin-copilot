@@ -45,7 +45,8 @@ and `bandit -r src demo run_demo.py` afterwards.
   to HTML, no JS), `cli.py`, `ui/` (the local web app: `server.py` stdlib HTTP server with
   token + Host/Origin checks, `projects.py` project list in `~/.gherkin-copilot/`,
   `catalog.py` steps as text + slots, `builder.py` check/save/stubs for the scenario
-  builder (preview diff + hash, writes only inside project folders), `static/` plain
+  builder (preview diff + hash, writes only inside project folders), `dupes.py` duplicates
+  screen on top of `merger.plan_merges` (one pair at a time, multi-file hash), `static/` plain
   HTML/CSS/JS, `textContent` only, no frameworks or CDNs)
 - `demo/`: `app/` practice shop, `features/`, `drafts/` (deliberately unimplemented
   checkout scenario), `steps/` (two deliberate near-duplicate steps for the `dupes`/`merge` demo; `cart.feature`
@@ -65,7 +66,7 @@ and `bandit -r src demo run_demo.py` afterwards.
 In progress, the app (`gherkin-copilot ui`), built in stages: 1. server, projects, step
 catalogue (done); 2. block-based scenario builder with live check, stubs, save to
 .feature (done; writes only after the user confirms a preview); 3. duplicates & merge
-(needs merge to support features outside the steps folder);
+(done; `merge --features` supports features outside the steps folder);
 4. test results; 5. docs/security pass. The app never starts other programs (no "run
 tests" button without an explicit decision).
 

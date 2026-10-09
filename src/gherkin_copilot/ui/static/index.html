@@ -23,7 +23,7 @@
 <nav class="tabs" id="tabs" hidden>
   <button type="button" class="tab" data-tab="build">Build a scenario</button>
   <button type="button" class="tab" data-tab="steps">Steps</button>
-  <button type="button" class="tab" data-tab="dupes" disabled>Duplicates <span class="soon">soon</span></button>
+  <button type="button" class="tab" data-tab="dupes">Duplicates <span class="count" id="dupes-count" hidden></span></button>
   <button type="button" class="tab" data-tab="results" disabled>Test results <span class="soon">soon</span></button>
 </nav>
 
@@ -80,6 +80,27 @@
         </div>
       </aside>
     </div>
+  </section>
+
+  <section id="panel-dupes" class="panel" hidden>
+    <div class="panel-head">
+      <div>
+        <h1>Duplicates</h1>
+        <p class="muted" id="dupes-summary"></p>
+      </div>
+      <div class="panel-tools">
+        <label class="sensitivity" title="How alike two steps must be to show up here">
+          Show pairs at least
+          <input type="range" id="dupes-threshold" min="0.4" max="0.9" step="0.05" value="0.6">
+          <output id="dupes-threshold-value">60%</output> similar
+        </label>
+      </div>
+    </div>
+    <p class="hint">Steps that say the same thing in different words. Merging keeps one, rewrites every
+      feature file line to use it, and deletes the other. It's only offered when both steps do exactly the
+      same thing, so the tests behave the same afterwards.</p>
+    <div id="dupes-error" class="error-box" hidden></div>
+    <div id="dupes-list" class="dupes"></div>
   </section>
 
   <section id="panel-steps" class="panel" hidden>

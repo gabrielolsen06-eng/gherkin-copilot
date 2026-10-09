@@ -195,3 +195,29 @@ def test_cli_preview_and_json(tmp_path, capsys):
     assert data["applied"] and len(data["merges"]) == 2 and len(data["files_changed"]) == 3
     assert main(["merge", str(demo)]) == 0
     assert "No likely duplicates" in capsys.readouterr().out
+
+
+def test_features_can_live_outside_the_steps_folder(tmp_path):
+    steps_dir, specs = tmp_path / "steps", tmp_path / "specs"
+    steps_dir.mkdir()
+    specs.mkdir()
+    (steps_dir / "steps.py").write_text(HEADER + '''@given("I am on the login page")
+def a(page):
+    pass
+
+
+@given("the user is on the login page")
+def b(page):
+    pass
+''')
+    (specs / "login.feature").write_text("Feature: x\n  Scenario: y\n    Given the user is on the login page\n"
+                                        "    Given the user is on the login page\n    Given I am on the login page\n")
+    assert plan_merges(steps_dir).plans[0].edits == []  # without --features the lines aren't seen
+
+    result = plan_merges(steps_dir, features=specs)
+    plan = result.plans[0]
+    assert (plan.keep.function, plan.keep_uses, plan.drop_uses) == ("b", 2, 1)
+    assert len(plan.edits) == 1
+    assert main(["merge", str(steps_dir), "--features", str(specs), "--apply"]) == 0
+    assert (specs / "login.feature").read_text().count("the user is on the login page") == 3
+    assert "def a(" not in (steps_dir / "steps.py").read_text()

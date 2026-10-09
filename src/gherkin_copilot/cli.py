@@ -132,7 +132,8 @@ def cmd_check(args: argparse.Namespace) -> int:
 
 def cmd_merge(args: argparse.Namespace) -> int:
     root = Path(args.path or ".")
-    result = plan_merges(root, threshold=args.threshold, keep=frozenset(args.keep))
+    result = plan_merges(root, threshold=args.threshold, keep=frozenset(args.keep),
+                         features=Path(args.features) if args.features else None)
     written = apply(result) if args.apply else []
 
     if args.json:
@@ -248,6 +249,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--threshold", type=float, default=0.6, help="similarity needed to treat a pair as duplicates")
     p.add_argument("--keep", action="append", default=[], metavar="FUNCTION",
                    help="prefer keeping this step function (can be repeated)")
+    p.add_argument("--features", help="folder with the .feature files, if it isn't inside PATH")
     p.add_argument("--apply", action="store_true", help="write the changes instead of only showing them")
     p.add_argument("--json", action="store_true", help="machine-readable output")
     p.set_defaults(func=cmd_merge)

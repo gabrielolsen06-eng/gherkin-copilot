@@ -21,7 +21,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 from gherkin_copilot import __version__
-from gherkin_copilot.ui import builder
+from gherkin_copilot.ui import builder, dupes
 from gherkin_copilot.ui.catalog import describe
 from gherkin_copilot.ui.projects import Project, ProjectStore
 
@@ -100,6 +100,13 @@ class App:
                 change = builder.plan_scenario(self.project(body.get("project")), text("mode"), text("file"),
                                                text("feature"), text("scenario"), body.get("lines"))
                 return self._preview_or_save(route, change, body)
+            if route == "/api/merge/preview":
+                return dupes.preview(self.project(body.get("project")), body.get("threshold"), text("pair"),
+                                     body.get("keep"))
+            if route == "/api/merge/save":
+                files = dupes.apply(self.project(body.get("project")), body.get("threshold"), text("pair"),
+                                    body.get("keep"), body.get("hash"))
+                return {"saved": files}
             if route in {"/api/stubs/preview", "/api/stubs/save"}:
                 change = builder.plan_stubs(self.project(body.get("project")), text("file"), body.get("lines"),
                                             body.get("only"))
@@ -158,6 +165,10 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                     return self._json(HTTPStatus.OK, app.steps(project_id))
                 if url.path == "/api/files":
                     return self._json(HTTPStatus.OK, app.files(project_id))
+                if url.path == "/api/dupes":
+                    query = parse_qs(url.query)
+                    return self._json(HTTPStatus.OK, dupes.overview(
+                        app.project(project_id), query.get("threshold", ["0.6"])[0], query.get("keep", [])))
                 self._json(HTTPStatus.NOT_FOUND, {"error": "Not found."})
             except ApiError as exc:
                 self._json(exc.status, {"error": str(exc)})

@@ -12,7 +12,7 @@ and helps you:
 | `dupes` | Spots step definitions that say the same thing in slightly different words |
 | `merge` | Merges those duplicates: rewrites feature files to use one wording and deletes the other step (preview first, `--apply` to write) |
 | `check FEATURES` | Checks every line of your .feature files, and drafts Python code for missing steps (`--stubs`) |
-| `ui` | Opens the gherkin-copilot app in your browser: build scenarios from blocks, browse every step, switch between projects |
+| `ui` | Opens the gherkin-copilot app in your browser: build scenarios from blocks, browse every step, merge duplicates, switch between projects |
 | `report [JSON]` | Turns a Cucumber JSON results file into a single HTML page, with screenshots, videos and traces linked |
 
 The tool reads source code with Python's `ast` module. It never imports or runs your
@@ -209,10 +209,19 @@ Then, with placeholders such as “product” highlighted. Search it, or click a
 it. The app rescans the project whenever you come back to the browser tab, so edits show up
 straight away.
 
-Coming next: duplicates and merging, and test results.
+**Duplicates** shows each pair of steps that say the same thing in different words, side by
+side: which one would be kept, which removed, and how many feature-file lines use each.
+Click **Keep this one instead** to swap them, and **Preview merge** to see every file the
+merge would change before confirming. Pairs that can't be merged safely say why (for
+example, their code differs). The slider sets how alike two steps must be to be listed.
+
+Coming next: test results.
 
 Options: `--port` to use another port, `--no-open` to not open the browser, `--projects`
 to use a different project list file.
+
+If your `.feature` files live outside the folder with your step definitions, the command
+line `merge` takes the same split: `gherkin-copilot merge path/to/steps --features path/to/features`.
 
 ## How matching works
 
@@ -228,7 +237,7 @@ signed in" won't be flagged as duplicates. That's a job for the planned LLM feat
 ## Development
 
 ```bash
-python -m pytest tests       # tool tests (85)
+python -m pytest tests       # tool tests (92)
 python -m pytest demo        # browser scenarios (5)
 ```
 

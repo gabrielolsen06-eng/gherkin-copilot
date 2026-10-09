@@ -42,7 +42,10 @@ This page is written for whoever approves software on a managed work laptop.
     names in the features folder, appends only to existing `.feature` files, and step
     templates only to `.py` files that already contain step definitions. The step code it
     writes is generated on the server from the scenario text, never taken from the
-    browser. The app reads
+    browser;
+  - a merge of two duplicate steps (rewritten feature-file lines and the removed step),
+    with the same preview, confirm and changed-since-preview checks, and the same safety
+    rules as the command line `merge`. All the files a merge touches are checked together. The app reads
   project folders the same way the command line does: with `ast`, never importing or
   running code.
 - **Opens your browser** with Python's standard `webbrowser` module (use `--no-open` to
@@ -116,7 +119,7 @@ Results from 2026-10-09:
 | `pip-audit --strict -r requirements.lock` (known vulnerabilities) | No known vulnerabilities found |
 | `bandit -r src demo run_demo.py` (static security analysis) | No medium or high findings. Two low, informational notes say `run_demo.py` uses `subprocess`. It only re-runs the current Python with fixed argument lists and no shell. |
 | `pip install --require-hashes -r requirements.lock` in a clean venv, then `pip check` | Installs cleanly, no broken requirements |
-| Tool tests / demo scenarios | 84 of 85 passed / 5 passed. The failure is `test_brave_found_on_mac`, which finds the real Brave in `/Applications` before the test's fake one; it isn't related to the tool. `bandit` and `pip-audit` were not re-run after `merge` was added. |
+| Tool tests / demo scenarios | 91 of 92 passed / 5 passed. The failure is `test_brave_found_on_mac`, which finds the real Brave in `/Applications` before the test's fake one; it isn't related to the tool. `bandit` and `pip-audit` were not re-run after `merge` was added. |
 
 To repeat these checks yourself, install `pip-audit` and `bandit` in a separate
 virtual environment and run the commands above.
