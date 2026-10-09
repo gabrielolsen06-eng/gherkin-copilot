@@ -65,6 +65,11 @@ def parse_command(text: str) -> tuple[dict[str, str], list[str]]:
     return env, tokens
 
 
+def default_folder(project: Project) -> Path:
+    """Where tests run unless the user picks a folder: the folder holding both steps and features."""
+    return Path(os.path.commonpath([project.steps, project.features]))
+
+
 def results_dir(project: Project) -> Path:
     return project_root(project) / ".gherkin-copilot" / "results"
 
@@ -117,7 +122,7 @@ class Runner:
         if not project.test_command.strip():
             raise ValueError("Set this project's test command first (Details at the top).")
         env, args = parse_command(project.test_command)
-        cwd = Path(project.run_from or project_root(project))
+        cwd = Path(project.run_from or default_folder(project))
         if not cwd.is_dir():
             raise ValueError(f"The folder to run tests from doesn't exist: {cwd}")
         wanted, label = self._scope(project, scope, file, name)
@@ -200,8 +205,14 @@ class Runner:
                     run.status, run.ended = "error", time.time()
                     return
             command = [*args, *extra]
+            run.log.append(f"$ cd {cwd}")
             run.log.append("$ " + " ".join([*(f"{k}={v}" for k, v in env.items()), *command]))
             run.exit_code = self._exec(run, command, env, cwd, deadline)
+            missing = next((line for line in run.log if "file or directory not found:" in line), None)
+            if missing:
+                run.log.append("")
+                run.log.append(f"pytest couldn't find “{missing.split(':', 2)[-1].strip()}” from {cwd}. Set “Run from "
+                               "folder” in Details to the folder you'd run this command from in a terminal.")
             run.status = "stopped" if run.stop_requested else "error" if time.time() > deadline else "finished"
             if run.status == "error":
                 run.log.append(f"Stopped after the {TIME_LIMIT // 60}-minute time limit.")

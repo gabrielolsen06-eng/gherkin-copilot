@@ -224,7 +224,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                     project = app.project(project_id)
                     return self._json(HTTPStatus.OK, {"run": app.runner.status(project.id),
                                                       "results": runner.latest_results(project),
-                                                      "default_folder": str(history.project_root(project))})
+                                                      "default_folder": str(runner.default_folder(project))})
                 if url.path == "/api/artifact":
                     body, content_type = runner.artifact(app.project(project_id), query.get("path", [""])[0])
                     return self._send(HTTPStatus.OK, body, content_type)

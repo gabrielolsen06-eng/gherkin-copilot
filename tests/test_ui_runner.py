@@ -161,3 +161,16 @@ def test_settings_and_artifacts_over_http(project, tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_default_folder_and_not_found_hint(project, tmp_path):
+    assert runner.default_folder(project) == Path(project.steps)
+    split = Project("s", "S", str(tmp_path / "a" / "steps"), str(tmp_path / "a" / "features"))
+    assert runner.default_folder(split) == tmp_path / "a"
+
+    wrong = Project("p", "P", project.steps, project.features, "python -m pytest nowhere", "", False)
+    work = runner.Runner()
+    work.start(wrong, "all")
+    done = wait(lambda: work.status("p"))
+    assert f"$ cd {project.steps}" in done["log"]
+    assert "couldn't find “nowhere”" in done["log"][-1]
