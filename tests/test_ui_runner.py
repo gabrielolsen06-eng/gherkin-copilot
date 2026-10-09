@@ -67,7 +67,9 @@ def test_parse_command(command, expected):
     ("", "Enter a test command"),
     ("X=1", "Enter a test command"),
     ("rm -rf /", "must run pytest"),
-    ("python script.py", "must run pytest"),
+    ("python run_demo.py --brave", "not scripts like run_demo.py"),
+    ("source .venv/bin/activate && python -m pytest demo", "single command"),
+    ("cd demo; pytest", "single command"),
     ("pytest 'unclosed", "can't be read"),
 ])
 def test_bad_commands(command, message):

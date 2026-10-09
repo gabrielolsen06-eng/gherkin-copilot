@@ -51,11 +51,17 @@ def parse_command(text: str) -> tuple[dict[str, str], list[str]]:
         env[key] = value
     if not tokens:
         raise ValueError("Enter a test command, for example: python -m pytest tests")
-    if tokens[0] in {"python", "python3", "py"}:
-        tokens[0] = sys.executable  # the Python the app runs with, i.e. the project's virtual environment
+    if tokens[0] in {"source", "cd", "export", "set"} or {"&&", "||", ";", "|", "&"} & set(tokens):
+        raise ValueError("Enter a single command, without source, cd, export or &&. The app already uses the "
+                         "Python it was started with, and the folder goes in “Run from folder”.")
     is_pytest = Path(tokens[0]).stem.startswith("pytest") or tokens[1:3] == ["-m", "pytest"]
     if not is_pytest:
+        if len(tokens) > 1 and tokens[1].endswith(".py"):
+            raise ValueError(f"The app runs pytest itself, not scripts like {Path(tokens[1]).name}, so it can "
+                             "collect the results. For example: python -m pytest tests")
         raise ValueError("The test command must run pytest, for example: python -m pytest tests")
+    if tokens[0] in {"python", "python3", "py"}:
+        tokens[0] = sys.executable  # the Python the app runs with, i.e. the project's virtual environment
     return env, tokens
 
 
