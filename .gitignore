@@ -5,3 +5,5 @@ __pycache__/
 .venv/
 reports/
 build/
+# history written by the app during demos (in real projects, commit it)
+demo/.gherkin-copilot/

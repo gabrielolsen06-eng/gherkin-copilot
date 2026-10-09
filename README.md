@@ -12,7 +12,7 @@ and helps you:
 | `dupes` | Spots step definitions that say the same thing in slightly different words |
 | `merge` | Merges those duplicates: rewrites feature files to use one wording and deletes the other step (preview first, `--apply` to write) |
 | `check FEATURES` | Checks every line of your .feature files, and drafts Python code for missing steps (`--stubs`) |
-| `ui` | Opens the gherkin-copilot app in your browser: build scenarios from blocks, browse every step, merge duplicates, switch between projects |
+| `ui` | Opens the gherkin-copilot app in your browser: build and edit scenarios with blocks, browse every step, merge duplicates, see the history of changes |
 | `report [JSON]` | Turns a Cucumber JSON results file into a single HTML page, with screenshots, videos and traces linked |
 
 The tool reads source code with Python's `ast` module. It never imports or runs your
@@ -204,6 +204,23 @@ Both show exactly what will change and only write when you confirm. If the file 
 in the meantime, saving is refused so nothing is overwritten. Your draft is kept in the
 browser per project, so a reload doesn't lose it.
 
+**Scenarios** lists every feature file and its scenarios, with tags, step counts and
+whether every line has a step behind it. From there you can:
+
+- **Edit** a scenario: it opens in the block editor, with each line turned back into a
+  block and its values filled in (lines with no step behind them open as text). Change the
+  steps, the name, the tags or the description; Scenario Outlines get a table editor for
+  their Examples, and the Background can be edited too. Data tables and doc strings under a
+  step are kept as they are. **Save changes** replaces just that scenario in the file;
+  **Save as a new scenario** keeps the original.
+- **Duplicate** a scenario as a starting point for a similar one, or **Delete** it.
+
+**History** lists every change made through the app: what was done, to which scenario,
+by whom and when, with the before/after diff. Changes to a scenario (edits, deletions,
+additions) can be undone from here, with the usual preview. The history is stored in the
+project, in `.gherkin-copilot/history.jsonl`, so committing it shares it with the team.
+The app asks for your name the first time you save something.
+
 The **Steps** screen lists every step in the selected project, grouped by Given / When /
 Then, with placeholders such as “product” highlighted. Search it, or click a step to copy
 it. The app rescans the project whenever you come back to the browser tab, so edits show up
@@ -216,6 +233,10 @@ merge would change before confirming. Pairs that can't be merged safely say why 
 example, their code differs). The slider sets how alike two steps must be to be listed.
 
 Coming next: test results.
+
+When demoing on this repository's `demo` folder, reset it afterwards with
+`git checkout -- demo` (and delete any new `.feature` files you created). The demo's
+history file is ignored by git here.
 
 Options: `--port` to use another port, `--no-open` to not open the browser, `--projects`
 to use a different project list file.
@@ -237,7 +258,7 @@ signed in" won't be flagged as duplicates. That's a job for the planned LLM feat
 ## Development
 
 ```bash
-python -m pytest tests       # tool tests (92)
+python -m pytest tests       # tool tests (117)
 python -m pytest demo        # browser scenarios (5)
 ```
 

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from gherkin_copilot.ui import builder
+from gherkin_copilot.ui import builder, editor
 from gherkin_copilot.ui.projects import Project, ProjectStore
 from gherkin_copilot.ui.server import start_in_background
 from test_ui import request
@@ -50,25 +50,29 @@ def test_newlines_cant_smuggle_extra_lines_into_a_file():
     assert builder.clean_lines(["Given a\n  Scenario: sneaky"]) == ["Given a Scenario: sneaky"]
 
 
+def spec(name, lines):
+    return {"name": name, "steps": [{"line": line} for line in lines]}
+
+
 def test_save_new_feature_file(demo):
-    change = builder.plan_scenario(demo, "new", "checkout", "Checkout", "Buy one product", DRAFT)
+    change, _ = editor.plan_new(demo, "new", "checkout", "Checkout", spec("Buy one product", DRAFT))
     assert change.creates and change.shown == "checkout.feature"
     builder.apply_change(change, change.hash)
     text = (Path(demo.features) / "checkout.feature").read_text()
     assert text.startswith("Feature: Checkout\n\n  Scenario: Buy one product\n    Given I am logged in")
     with pytest.raises(ValueError, match="already exists"):
-        builder.plan_scenario(demo, "new", "checkout", "Checkout", "Again", DRAFT)
+        editor.plan_new(demo, "new", "checkout", "Checkout", spec("Again", DRAFT))
 
 
 @pytest.mark.parametrize("name", ["../outside", "a/b", "", ".hidden", "x" * 90])
 def test_new_file_names_stay_in_the_features_folder(demo, name):
     with pytest.raises(ValueError):
-        builder.plan_scenario(demo, "new", name, "F", "S", DRAFT)
+        editor.plan_new(demo, "new", name, "F", spec("S", DRAFT))
 
 
 def test_append_matches_the_files_indentation(demo, tmp_path):
     feature = Path(demo.features) / "cart.feature"
-    change = builder.plan_scenario(demo, "append", "cart.feature", "", "Check out", DRAFT[:1])
+    change, _ = editor.plan_new(demo, "append", "cart.feature", "", spec("Check out", DRAFT[:1]))
     builder.apply_change(change, change.hash)
     assert feature.read_text().endswith(
         '    Then the cart badge is hidden\n\n  Scenario: Check out\n    Given I am logged in as "standard_user"\n')
@@ -77,11 +81,11 @@ def test_append_matches_the_files_indentation(demo, tmp_path):
 @pytest.mark.parametrize("file", ["../steps/cart_steps.py", "/etc/passwd", "login.feature/../../conftest.py", "nope.feature"])
 def test_append_only_to_feature_files_in_the_project(demo, file):
     with pytest.raises(ValueError):
-        builder.plan_scenario(demo, "append", file, "", "S", DRAFT)
+        editor.plan_new(demo, "append", file, "", spec("S", DRAFT))
 
 
 def test_save_refuses_if_the_file_changed_since_the_preview(demo):
-    change = builder.plan_scenario(demo, "append", "cart.feature", "", "S", DRAFT)
+    change, _ = editor.plan_new(demo, "append", "cart.feature", "", spec("S", DRAFT))
     (Path(demo.features) / "cart.feature").write_text("Feature: edited elsewhere\n")
     with pytest.raises(ValueError, match="changed since the preview"):
         builder.apply_change(change, change.hash)
@@ -128,7 +132,7 @@ def test_preview_then_save_over_http(demo, tmp_path):
     port = server.server_address[1]
     try:
         body = {"project": project.id, "mode": "new", "file": "checkout", "feature": "Checkout",
-                "scenario": "Buy", "lines": DRAFT}
+                "spec": spec("Buy", DRAFT)}
         status, _, data, _ = request(port, "POST", "/api/scenario/save", body, app.token)
         assert status == 400 and "Preview" in json.loads(data)["error"]
         preview = json.loads(request(port, "POST", "/api/scenario/preview", body, app.token)[2])

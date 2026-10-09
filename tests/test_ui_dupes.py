@@ -52,7 +52,7 @@ def test_preview_then_apply_one_pair(demo):
     assert '+    When I add "Sauce Labs Onesie" to the cart' in preview["files"][0]["diff"]
     assert "def put_in_cart" in (Path(demo.steps) / "steps/cart_steps.py").read_text()  # preview writes nothing
 
-    assert dupes.apply(demo, 0.6, cart["id"], [], preview["hash"]) == ["features/cart.feature", "steps/cart_steps.py"]
+    assert sorted(dupes.apply(demo, 0.6, cart["id"], [], preview["hash"])) == ["features/cart.feature", "steps/cart_steps.py"]
     remaining = find_duplicates(build_index(Path(demo.steps)))
     assert [p.first.function for p in remaining] == ["open_login_page"]  # the other pair is untouched
 

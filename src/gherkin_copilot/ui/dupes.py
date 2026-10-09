@@ -100,7 +100,9 @@ def preview(project: Project, threshold: object, pair: str, keep: object) -> dic
     return {"files": files, "hash": _hash(changes)}
 
 
-def apply(project: Project, threshold: object, pair: str, keep: object, expected_hash: object) -> list[str]:
+def apply(project: Project, threshold: object, pair: str, keep: object,
+          expected_hash: object) -> dict[str, tuple[str, str]]:
+    """Write the merge; returns shown path -> (before, after) for each file changed."""
     if not isinstance(expected_hash, str):
         raise ValueError("Preview the merge before applying it.")
     changes = _one(project, threshold, pair, keep)  # re-planned against the files as they are now
@@ -108,4 +110,4 @@ def apply(project: Project, threshold: object, pair: str, keep: object, expected
         raise ValueError("Some of these files changed since the preview. Preview again to see the latest version.")
     for path, (_, after) in changes.items():
         path.write_text(after, encoding="utf-8")
-    return sorted(_shown(p, project) for p in changes)
+    return {_shown(p, project): pair for p, pair in changes.items()}

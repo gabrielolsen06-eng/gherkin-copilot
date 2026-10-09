@@ -72,14 +72,14 @@ def _one_line(text: str, what: str) -> str:
     return text
 
 
-def scenario_block(scenario: str, lines: list[str], indent: str = "  ") -> str:
-    body = "\n".join(f"{indent}  {line}" for line in lines)
-    return f"{indent}Scenario: {_one_line(scenario, 'scenario')}\n{body}\n"
+def check(project: Project, lines: list[str], examples: object = None) -> list[dict]:
+    """Status of each draft line, in order: ok / missing / ambiguous, with suggestions and a stub.
 
+    For an outline, pass its Examples tables: placeholders are filled from the first row.
+    """
+    from gherkin_copilot.ui.editor import outline_check_text  # editor builds on this module
 
-def check(project: Project, lines: list[str]) -> list[dict]:
-    """Status of each draft line, in order: ok / missing / ambiguous, with suggestions and a stub."""
-    text = "Feature: draft\n  Scenario: draft\n" + "".join(f"    {line}\n" for line in lines)
+    text = outline_check_text(lines, examples)
     results = check_steps(parse_feature_text(text), build_index(Path(project.steps)))
     return [{
         "status": r.status,
@@ -109,31 +109,6 @@ def project_files(project: Project) -> dict[str, list[str]]:
     }
 
 
-def plan_scenario(project: Project, mode: str, file: str, feature: str, scenario: str, lines: list[str]) -> FileChange:
-    folder = Path(project.features)
-    lines = clean_lines(lines)
-    if not lines:
-        raise ValueError("Add at least one step before saving.")
-    if mode == "new":
-        name = file.strip().removesuffix(".feature")
-        if not FILE_NAME.match(name):
-            raise ValueError("Use a file name made of letters, numbers, spaces, - or _.")
-        path = folder / f"{name}.feature"
-        if path.exists():
-            raise ValueError(f"{path.name} already exists. Choose “Add to an existing file” instead.")
-        after = f"Feature: {_one_line(feature, 'feature')}\n\n{scenario_block(scenario, lines)}"
-        return FileChange(path, path.name, "", after, creates=True)
-    if mode == "append":
-        path = _inside(folder, file, ".feature")
-        if not path.is_file():
-            raise ValueError("That feature file no longer exists.")
-        before = path.read_text(encoding="utf-8")
-        indent = next((m.group(1) for m in re.finditer(r"^([ \t]*)Scenario", before, re.M)), "  ")
-        after = before.rstrip("\n") + "\n\n" + scenario_block(scenario, lines, indent)
-        return FileChange(path, str(path.relative_to(folder)), before, after, creates=False)
-    raise ValueError("Choose a new file or an existing one.")
-
-
 def _module_names(tree: ast.Module) -> set[str]:
     names = set()
     for node in tree.body:
@@ -144,7 +119,8 @@ def _module_names(tree: ast.Module) -> set[str]:
     return names
 
 
-def plan_stubs(project: Project, file: str, lines: list[str], only: object = None) -> FileChange:
+def plan_stubs(project: Project, file: str, lines: list[str], only: object = None,
+               examples: object = None) -> FileChange:
     """Stubs for the draft's missing lines; ``only`` limits them to those positions.
 
     The whole draft is always checked, so an "And" line gets the keyword of the line above it.
@@ -155,7 +131,7 @@ def plan_stubs(project: Project, file: str, lines: list[str], only: object = Non
         raise ValueError("Pick one of the project's step files.")
     if only is not None and (not isinstance(only, list) or not all(isinstance(i, int) for i in only)):
         raise ValueError("Choose which steps to add.")
-    results = check(project, clean_lines(lines))
+    results = check(project, clean_lines(lines), examples)
     stubs = list(dict.fromkeys(r["stub"] for i, r in enumerate(results) if r["stub"] and (only is None or i in only)))
     if not stubs:
         raise ValueError("Every step in this scenario already exists.")

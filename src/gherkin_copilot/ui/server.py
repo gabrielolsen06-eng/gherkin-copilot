@@ -21,7 +21,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 from gherkin_copilot import __version__
-from gherkin_copilot.ui import builder, dupes
+from gherkin_copilot.ui import builder, dupes, editor, gherkin, history
 from gherkin_copilot.ui.catalog import describe
 from gherkin_copilot.ui.projects import Project, ProjectStore
 
@@ -94,35 +94,69 @@ class App:
             if route == "/api/projects/active":
                 self.store.set_active(text("id"))
                 return self.projects()
+
+            project = self.project(body.get("project"))
             if route == "/api/check":
-                return {"results": builder.check(self.project(body.get("project")), builder.clean_lines(body.get("lines")))}
-            if route in {"/api/scenario/preview", "/api/scenario/save"}:
-                change = builder.plan_scenario(self.project(body.get("project")), text("mode"), text("file"),
-                                               text("feature"), text("scenario"), body.get("lines"))
-                return self._preview_or_save(route, change, body)
-            if route == "/api/merge/preview":
-                return dupes.preview(self.project(body.get("project")), body.get("threshold"), text("pair"),
-                                     body.get("keep"))
-            if route == "/api/merge/save":
-                files = dupes.apply(self.project(body.get("project")), body.get("threshold"), text("pair"),
-                                    body.get("keep"), body.get("hash"))
-                return {"saved": files}
-            if route in {"/api/stubs/preview", "/api/stubs/save"}:
-                change = builder.plan_stubs(self.project(body.get("project")), text("file"), body.get("lines"),
-                                            body.get("only"))
-                return self._preview_or_save(route, change, body)
+                lines = builder.clean_lines(body.get("lines"))
+                return {"results": builder.check(project, lines, body.get("examples"))}
+            base, _, step = route.rpartition("/")
+            if step not in {"preview", "save"}:
+                raise ApiError(HTTPStatus.NOT_FOUND, "Unknown action.")
+            author = body.get("author")
+            where = (text("file"), body.get("start"), body.get("name"))
+
+            if base == "/api/merge":
+                if step == "preview":
+                    return dupes.preview(project, body.get("threshold"), text("pair"), body.get("keep"))
+                changes = dupes.apply(project, body.get("threshold"), text("pair"), body.get("keep"), body.get("hash"))
+                history.record(project, "merge", author, changes, scenario=text("label"))
+                return {"saved": sorted(changes)}
+            if base == "/api/stubs":
+                change = builder.plan_stubs(project, text("file"), body.get("lines"), body.get("only"),
+                                            body.get("examples"))
+                return self._flow(project, step, change, body, "add steps", author)
+            if base == "/api/scenario":
+                change, rendered = editor.plan_new(project, text("mode"), text("file"), text("feature"), body.get("spec"))
+                return self._flow(project, step, change, body, "create" if change.creates else "add", author,
+                                  scenario=self._name(rendered), after=rendered)
+            if base == "/api/scenario/edit":
+                change, before, after = editor.plan_edit(project, *where, body.get("spec"))
+                return self._flow(project, step, change, body, "edit", author, scenario=self._name(after),
+                                  before=before, after=after)
+            if base == "/api/scenario/delete":
+                change, before = editor.plan_delete(project, *where)
+                return self._flow(project, step, change, body, "delete", author, scenario=self._name(before),
+                                  before=before)
+            if base == "/api/scenario/duplicate":
+                change, after = editor.plan_duplicate(project, *where)
+                return self._flow(project, step, change, body, "duplicate", author, scenario=self._name(after),
+                                  after=after)
+            if base == "/api/history/restore":
+                entry = history.find(project, text("id"))
+                change, before, after = editor.plan_restore(project, entry)
+                return self._flow(project, step, change, body, "restore", author,
+                                  scenario=self._name(after or before or ""), before=before, after=after)
         except ValueError as exc:
             raise ApiError(HTTPStatus.BAD_REQUEST, str(exc)) from exc
         raise ApiError(HTTPStatus.NOT_FOUND, "Unknown action.")
 
     @staticmethod
-    def _preview_or_save(route: str, change: builder.FileChange, body: dict[str, Any]) -> dict[str, Any]:
-        if route.endswith("/preview"):
+    def _name(scenario_text: str) -> str:
+        blocks = gherkin.parse("Feature: x\n" + scenario_text).blocks
+        return (blocks[0].name or blocks[0].kind) if blocks else ""
+
+    @staticmethod
+    def _flow(project: Project, step: str, change: builder.FileChange, body: dict[str, Any], action: str,
+              author: object, scenario: str = "", before: str | None = None, after: str | None = None) -> dict[str, Any]:
+        """Preview a change, or save it (if it still matches the preview) and record it in the history."""
+        if step == "preview":
             return change.describe()
         expected = body.get("hash")
         if not isinstance(expected, str):
             raise ValueError("Preview the change before saving it.")
         builder.apply_change(change, expected)
+        history.record(project, action, author, {change.shown: (change.before, change.after)},
+                       scenario=scenario, file=change.shown, before=before, after=after)
         return {"saved": change.shown}
 
 
@@ -165,13 +199,26 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                     return self._json(HTTPStatus.OK, app.steps(project_id))
                 if url.path == "/api/files":
                     return self._json(HTTPStatus.OK, app.files(project_id))
+                query = parse_qs(url.query)
+                if url.path == "/api/scenarios":
+                    return self._json(HTTPStatus.OK, editor.list_scenarios(app.project(project_id)))
+                if url.path == "/api/scenario/open":
+                    start = query.get("start", [""])[0]
+                    return self._json(HTTPStatus.OK, editor.open_scenario(
+                        app.project(project_id), query.get("file", [""])[0], int(start) if start.isdigit() else None,
+                        query.get("name", [""])[0]))
+                if url.path == "/api/history":
+                    project = app.project(project_id)
+                    return self._json(HTTPStatus.OK, {"entries": history.entries(project),
+                                                      "file": str(history.history_file(project))})
                 if url.path == "/api/dupes":
-                    query = parse_qs(url.query)
                     return self._json(HTTPStatus.OK, dupes.overview(
                         app.project(project_id), query.get("threshold", ["0.6"])[0], query.get("keep", [])))
                 self._json(HTTPStatus.NOT_FOUND, {"error": "Not found."})
             except ApiError as exc:
                 self._json(exc.status, {"error": str(exc)})
+            except ValueError as exc:
+                self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
 
         def do_POST(self) -> None:
             if not self._host_ok():

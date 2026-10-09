@@ -22,8 +22,10 @@
 
 <nav class="tabs" id="tabs" hidden>
   <button type="button" class="tab" data-tab="build">Build a scenario</button>
+  <button type="button" class="tab" data-tab="scenarios">Scenarios</button>
   <button type="button" class="tab" data-tab="steps">Steps</button>
   <button type="button" class="tab" data-tab="dupes">Duplicates <span class="count" id="dupes-count" hidden></span></button>
+  <button type="button" class="tab" data-tab="history">History</button>
   <button type="button" class="tab" data-tab="results" disabled>Test results <span class="soon">soon</span></button>
 </nav>
 
@@ -39,12 +41,16 @@
   <section id="panel-build" class="panel" hidden>
     <div class="panel-head">
       <div>
-        <h1>Build a scenario</h1>
-        <p class="muted">Snap together steps this project already has. Anything that doesn't exist yet turns red.</p>
+        <h1 id="build-title">Build a scenario</h1>
+        <p class="muted" id="build-subtitle">Snap together steps this project already has. Anything that doesn't exist yet turns red.</p>
       </div>
       <div class="panel-tools">
         <button type="button" class="ghost" id="build-clear">Start over</button>
       </div>
+    </div>
+    <div id="editing-banner" class="editing-banner" hidden>
+      <span>Editing <strong id="editing-where"></strong>. Saving replaces it in the file.</span>
+      <button type="button" class="ghost small" id="editing-stop">Stop editing</button>
     </div>
     <div class="build-grid">
       <aside class="palette" aria-label="Available steps">
@@ -55,11 +61,23 @@
 
       <div class="canvas">
         <div class="names">
-          <label>Feature <input id="draft-feature" placeholder="e.g. Checkout" maxlength="200" autocomplete="off"></label>
-          <label>Scenario <input id="draft-scenario" placeholder="e.g. Buy one product" maxlength="200" autocomplete="off"></label>
+          <label id="feature-field">Feature <input id="draft-feature" placeholder="e.g. Checkout" maxlength="200" autocomplete="off"></label>
+          <label id="scenario-field">Scenario <input id="draft-scenario" placeholder="e.g. Buy one product" maxlength="200" autocomplete="off"></label>
+          <label id="kind-field">Type
+            <select id="draft-kind">
+              <option value="Scenario">Scenario</option>
+              <option value="Scenario Outline">Scenario Outline (runs once per row of a table)</option>
+            </select>
+          </label>
+          <label id="tags-field">Tags <input id="draft-tags" placeholder="e.g. @smoke @checkout" maxlength="300" autocomplete="off"></label>
         </div>
+        <details class="description" id="description-box">
+          <summary>Description <span class="muted">(optional)</span></summary>
+          <textarea id="draft-description" rows="2" placeholder="A sentence or two about what this scenario checks"></textarea>
+        </details>
         <ol id="blocks" class="blocks" aria-label="Scenario steps"></ol>
         <div id="drop-empty" class="drop-empty">Drag steps here, or click <strong>+</strong> next to a step.</div>
+        <section id="examples" class="examples" hidden aria-label="Examples tables"></section>
         <form id="typed-form" class="typed">
           <input id="typed-input" placeholder="…or type a step, e.g. And I open the cart page" autocomplete="off"
                  aria-label="Type a step">
@@ -76,6 +94,7 @@
         <pre id="gherkin" class="gherkin"></pre>
         <div class="preview-actions">
           <button type="button" class="primary" id="save-btn">Save to a feature file…</button>
+          <button type="button" class="ghost" id="save-copy-btn" hidden>Save as a new scenario…</button>
           <button type="button" class="ghost" id="stubs-btn">Add missing steps to code…</button>
         </div>
       </aside>
@@ -101,6 +120,38 @@
       same thing, so the tests behave the same afterwards.</p>
     <div id="dupes-error" class="error-box" hidden></div>
     <div id="dupes-list" class="dupes"></div>
+  </section>
+
+  <section id="panel-scenarios" class="panel narrow" hidden>
+    <div class="panel-head">
+      <div>
+        <h1>Scenarios</h1>
+        <p class="muted" id="scenarios-summary"></p>
+      </div>
+      <div class="panel-tools">
+        <input type="search" id="scenarios-search" placeholder="Search scenarios, tags, files…" aria-label="Search scenarios">
+      </div>
+    </div>
+    <p class="hint">Every scenario in this project. Open one in the block editor to change its steps, or duplicate
+      it as a starting point for a similar test.</p>
+    <div id="scenarios-error" class="error-box" hidden></div>
+    <div id="scenarios-list" class="feature-list"></div>
+  </section>
+
+  <section id="panel-history" class="panel narrow" hidden>
+    <div class="panel-head">
+      <div>
+        <h1>History</h1>
+        <p class="muted" id="history-summary"></p>
+      </div>
+      <div class="panel-tools">
+        <span class="muted small" id="author-line"></span>
+        <button type="button" class="ghost small" id="author-change">Change name</button>
+      </div>
+    </div>
+    <p class="hint" id="history-hint"></p>
+    <div id="history-error" class="error-box" hidden></div>
+    <ol id="history-list" class="history"></ol>
   </section>
 
   <section id="panel-steps" class="panel" hidden>
@@ -175,6 +226,19 @@
       <button type="button" class="ghost" id="change-cancel">Cancel</button>
       <button type="button" class="ghost" id="change-back" hidden>Back</button>
       <button type="submit" class="primary" id="change-submit">Preview</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="author-dialog">
+  <form id="author-form" method="dialog">
+    <h2>Who's making changes?</h2>
+    <p class="field-hint">Your name is saved with every change in the project's history, so your team can see who
+      changed what. It's only asked once on this computer.</p>
+    <label>Your name <input name="author" required maxlength="60" autocomplete="name"></label>
+    <div class="dialog-actions">
+      <button type="button" class="ghost" id="author-cancel">Cancel</button>
+      <button type="submit" class="primary">Continue</button>
     </div>
   </form>
 </dialog>
