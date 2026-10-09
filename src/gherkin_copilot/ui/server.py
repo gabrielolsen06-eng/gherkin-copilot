@@ -21,8 +21,9 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 from gherkin_copilot import __version__
+from gherkin_copilot.ui import builder
 from gherkin_copilot.ui.catalog import describe
-from gherkin_copilot.ui.projects import ProjectStore
+from gherkin_copilot.ui.projects import Project, ProjectStore
 
 HOST = "127.0.0.1"
 MAX_BODY = 1_000_000
@@ -61,14 +62,20 @@ class App:
         projects, active = self.store.load()
         return {"active": active, "projects": [p.__dict__ for p in projects]}
 
-    def steps(self, project_id: str) -> dict[str, Any]:
-        project = self.store.get(project_id)
+    def project(self, project_id: object) -> Project:
+        project = self.store.get(project_id) if isinstance(project_id, str) else None
         if project is None:
             raise ApiError(HTTPStatus.NOT_FOUND, "No such project.")
-        folder = Path(project.steps)
-        if not folder.is_dir():
-            raise ApiError(HTTPStatus.NOT_FOUND, f"The steps folder is missing: {folder}")
-        return {"steps": describe(folder)}
+        for folder in (project.steps, project.features):
+            if not Path(folder).is_dir():
+                raise ApiError(HTTPStatus.NOT_FOUND, f"This project's folder is missing: {folder}")
+        return project
+
+    def steps(self, project_id: str) -> dict[str, Any]:
+        return {"steps": describe(Path(self.project(project_id).steps))}
+
+    def files(self, project_id: str) -> dict[str, Any]:
+        return builder.project_files(self.project(project_id))
 
     def post(self, route: str, body: dict[str, Any]) -> dict[str, Any]:
         def text(key: str) -> str:
@@ -87,9 +94,29 @@ class App:
             if route == "/api/projects/active":
                 self.store.set_active(text("id"))
                 return self.projects()
+            if route == "/api/check":
+                return {"results": builder.check(self.project(body.get("project")), builder.clean_lines(body.get("lines")))}
+            if route in {"/api/scenario/preview", "/api/scenario/save"}:
+                change = builder.plan_scenario(self.project(body.get("project")), text("mode"), text("file"),
+                                               text("feature"), text("scenario"), body.get("lines"))
+                return self._preview_or_save(route, change, body)
+            if route in {"/api/stubs/preview", "/api/stubs/save"}:
+                change = builder.plan_stubs(self.project(body.get("project")), text("file"), body.get("lines"),
+                                            body.get("only"))
+                return self._preview_or_save(route, change, body)
         except ValueError as exc:
             raise ApiError(HTTPStatus.BAD_REQUEST, str(exc)) from exc
         raise ApiError(HTTPStatus.NOT_FOUND, "Unknown action.")
+
+    @staticmethod
+    def _preview_or_save(route: str, change: builder.FileChange, body: dict[str, Any]) -> dict[str, Any]:
+        if route.endswith("/preview"):
+            return change.describe()
+        expected = body.get("hash")
+        if not isinstance(expected, str):
+            raise ValueError("Preview the change before saving it.")
+        builder.apply_change(change, expected)
+        return {"saved": change.shown}
 
 
 def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
@@ -126,9 +153,11 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                     return self._send(HTTPStatus.OK, _static(name), STATIC[name])
                 if url.path == "/api/projects":
                     return self._json(HTTPStatus.OK, app.projects())
+                project_id = parse_qs(url.query).get("project", [""])[0]
                 if url.path == "/api/steps":
-                    project_id = parse_qs(url.query).get("project", [""])[0]
                     return self._json(HTTPStatus.OK, app.steps(project_id))
+                if url.path == "/api/files":
+                    return self._json(HTTPStatus.OK, app.files(project_id))
                 self._json(HTTPStatus.NOT_FOUND, {"error": "Not found."})
             except ApiError as exc:
                 self._json(exc.status, {"error": str(exc)})

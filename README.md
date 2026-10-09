@@ -12,7 +12,7 @@ and helps you:
 | `dupes` | Spots step definitions that say the same thing in slightly different words |
 | `merge` | Merges those duplicates: rewrites feature files to use one wording and deletes the other step (preview first, `--apply` to write) |
 | `check FEATURES` | Checks every line of your .feature files, and drafts Python code for missing steps (`--stubs`) |
-| `ui` | Opens the gherkin-copilot app in your browser: switch between projects and browse every step (more screens on the way, see below) |
+| `ui` | Opens the gherkin-copilot app in your browser: build scenarios from blocks, browse every step, switch between projects |
 | `report [JSON]` | Turns a Cucumber JSON results file into a single HTML page, with screenshots, videos and traces linked |
 
 The tool reads source code with Python's `ast` module. It never imports or runs your
@@ -181,12 +181,35 @@ your step definitions, and optionally the folder with your `.feature` files. You
 as many projects as you like and switch between them at the top; the list is saved in
 `~/.gherkin-copilot/projects.json`.
 
+**Build a scenario** is a block editor, a bit like Scratch. Every step the project already
+has is a block on the left: drag it into your scenario (or click **+**) and fill in its
+blanks, such as the product name. Blocks can only be made from steps that exist, so they
+are ready to run by construction. You can also type a line by hand; each line is checked as
+you type and shows:
+
+- ✓ when it matches an existing step,
+- ✗ when it doesn't, with “did you mean” suggestions (click one to swap it in) and the
+  drafted code for a new step,
+- ! when more than one step matches, or a value doesn't fit (e.g. text in a number blank).
+
+The Gherkin text builds up live on the right. When you're done:
+
+- **Save to a feature file** creates a new `.feature` file or adds the scenario to an
+  existing one.
+- **Add missing steps to code** adds templates for the steps that don't exist yet to one of
+  your step files (with any imports they need). They fail with “Step not written yet” until
+  someone writes the body.
+
+Both show exactly what will change and only write when you confirm. If the file changed
+in the meantime, saving is refused so nothing is overwritten. Your draft is kept in the
+browser per project, so a reload doesn't lose it.
+
 The **Steps** screen lists every step in the selected project, grouped by Given / When /
 Then, with placeholders such as “product” highlighted. Search it, or click a step to copy
-it. It rescans the project whenever you come back to the browser tab, so edits show up
+it. The app rescans the project whenever you come back to the browser tab, so edits show up
 straight away.
 
-Coming next: a block-based scenario builder, duplicates and merging, and test results.
+Coming next: duplicates and merging, and test results.
 
 Options: `--port` to use another port, `--no-open` to not open the browser, `--projects`
 to use a different project list file.
@@ -205,7 +228,7 @@ signed in" won't be flagged as duplicates. That's a job for the planned LLM feat
 ## Development
 
 ```bash
-python -m pytest tests       # tool tests (60)
+python -m pytest tests       # tool tests (85)
 python -m pytest demo        # browser scenarios (5)
 ```
 

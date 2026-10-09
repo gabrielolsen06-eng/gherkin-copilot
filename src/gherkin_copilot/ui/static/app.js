@@ -9,20 +9,36 @@ const KEYWORDS = [
   ["then", "Then", "Check the result"],
   ["step", "Any keyword", "Works after Given, When or Then"],
 ];
+const TABS = ["build", "steps"];
 
-const state = { projects: [], active: null, steps: [], query: "" };
+const state = {
+  projects: [],
+  active: null,
+  steps: [],
+  query: "",
+  paletteQuery: "",
+  tab: "build",
+  draft: emptyDraft(),
+  results: [], // server check, one per block, in order
+  checking: false,
+};
+
+function emptyDraft() {
+  return { feature: "", scenario: "", blocks: [] };
+}
 
 // --- helpers --------------------------------------------------------------
 
 function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(attrs)) {
+    if (value === false || value == null) continue;
     if (key === "class") node.className = value;
     else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
-    else node.setAttribute(key, value);
+    else node.setAttribute(key, value === true ? "" : value);
   }
   for (const child of children) {
-    if (child != null) node.append(child instanceof Node ? child : document.createTextNode(String(child)));
+    if (child != null && child !== false) node.append(child instanceof Node ? child : document.createTextNode(String(child)));
   }
   return node;
 }
@@ -45,28 +61,78 @@ function toast(message) {
   box.textContent = message;
   box.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { box.hidden = true; }, 2200);
+  toastTimer = setTimeout(() => { box.hidden = true; }, 2400);
 }
+
+function store(key, value) {
+  try {
+    if (value === undefined) return JSON.parse(localStorage.getItem(key));
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+const capitalize = (word) => word[0].toUpperCase() + word.slice(1);
+const stepKey = (step) => `${step.file}:${step.line}`;
 
 function stepText(step) {
   return step.segments.map((s) => ("slot" in s ? `{${s.slot}}` : s.text)).join("");
 }
 
+// Fold the quotes around a slot into the chip: I add "{product}" -> I add [“product”]
+function displayParts(segments) {
+  const parts = segments.map((s) => ({ ...s }));
+  parts.forEach((part, i) => {
+    const before = parts[i - 1], after = parts[i + 1];
+    if ("slot" in part && before?.text?.endsWith('"') && after?.text?.startsWith('"')) {
+      before.text = before.text.slice(0, -1);
+      after.text = after.text.slice(1);
+      part.quoted = true;
+    }
+  });
+  return parts.filter((p) => "slot" in p || p.text);
+}
+
+function sentence(step, makeSlot) {
+  return el("span", { class: "sentence" },
+    ...displayParts(step.segments).map((s) => ("slot" in s ? makeSlot(s) : s.text)));
+}
+
+function slotChip(s) {
+  return el("span", { class: `slot ${s.type}`, title: s.type === "number" ? "A number" : "Any text" },
+    s.quoted ? `“${s.slot}”` : s.slot);
+}
+
+// --- tabs -------------------------------------------------------------------
+
+function showTab(tab) {
+  state.tab = TABS.includes(tab) ? tab : "build";
+  store("gc-tab", state.tab);
+  for (const button of document.querySelectorAll(".tab")) {
+    button.classList.toggle("active", button.dataset.tab === state.tab);
+  }
+  for (const name of TABS) $(`panel-${name}`).hidden = !state.active || name !== state.tab;
+}
+
 // --- projects -------------------------------------------------------------
 
 function applyProjects(data) {
+  const previous = state.active;
   state.projects = data.projects;
   state.active = data.active;
   const hasProjects = state.projects.length > 0;
   $("welcome").hidden = hasProjects;
   $("picker").hidden = !hasProjects;
   $("tabs").hidden = !hasProjects;
-  $("panel-steps").hidden = !hasProjects;
   $("add-project-btn").hidden = !hasProjects;
 
   const select = $("project-select");
   select.replaceChildren(...state.projects.map((p) => el("option", { value: p.id }, p.name)));
   if (state.active) select.value = state.active;
+  if (state.active !== previous) loadDraft();
+  showTab(state.tab);
 }
 
 function activeProject() {
@@ -80,8 +146,8 @@ async function loadProjects() {
 
 async function switchProject(id) {
   applyProjects(await api("/api/projects/active", { id }));
-  state.query = "";
-  $("steps-search").value = "";
+  state.query = state.paletteQuery = "";
+  $("steps-search").value = $("palette-search").value = "";
   await loadSteps();
 }
 
@@ -95,8 +161,7 @@ function openAddDialog() {
 
 async function submitAddDialog(event) {
   event.preventDefault();
-  const form = event.target;
-  const body = Object.fromEntries(new FormData(form));
+  const body = Object.fromEntries(new FormData(event.target));
   try {
     applyProjects(await api("/api/projects/add", body));
     $("add-dialog").close();
@@ -142,36 +207,19 @@ async function loadSteps() {
     $("steps-error").hidden = false;
   }
   renderSteps();
+  renderPalette();
+  scheduleCheck();
 }
 
-function matchesQuery(step, words) {
+function matchesQuery(step, query) {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   const haystack = `${step.keyword} ${stepText(step)} ${step.function} ${step.file}`.toLowerCase();
   return words.every((w) => haystack.includes(w));
 }
 
-// Fold the quotes around a slot into the chip: I add "{product}" -> I add [“product”]
-function displayParts(segments) {
-  const parts = segments.map((s) => ({ ...s }));
-  parts.forEach((part, i) => {
-    const before = parts[i - 1], after = parts[i + 1];
-    if ("slot" in part && before?.text?.endsWith('"') && after?.text?.startsWith('"')) {
-      before.text = before.text.slice(0, -1);
-      after.text = after.text.slice(1);
-      part.quoted = true;
-    }
-  });
-  return parts.filter((p) => "slot" in p || p.text);
-}
-
 function stepCard(step) {
-  const sentence = el("span", { class: "sentence" },
-    ...displayParts(step.segments).map((s) => ("slot" in s
-      ? el("span", { class: `slot ${s.type}`, title: s.type === "number" ? "A number" : "Any text" },
-          s.quoted ? `“${s.slot}”` : s.slot)
-      : s.text)));
   const copy = async () => {
-    const keyword = step.keyword === "step" ? "Given" : step.keyword[0].toUpperCase() + step.keyword.slice(1);
-    const text = `${keyword} ${stepText(step)}`;
+    const text = `${step.keyword === "step" ? "Given" : capitalize(step.keyword)} ${stepText(step)}`;
     try {
       await navigator.clipboard.writeText(text);
       toast("Copied to clipboard");
@@ -181,33 +229,512 @@ function stepCard(step) {
   };
   return el("li", {},
     el("button", { type: "button", class: "step-card", onclick: copy, title: "Copy this step" },
-      sentence,
+      sentence(step, slotChip),
       el("span", { class: "where" }, `${step.file}:${step.line}`, el("span", { class: "fn" }, ` · ${step.function}()`))));
 }
 
-function renderSteps() {
-  const words = state.query.toLowerCase().split(/\s+/).filter(Boolean);
-  const shown = state.steps.filter((s) => matchesQuery(s, words));
-  const project = activeProject();
-  $("steps-summary").textContent = project
-    ? `${state.steps.length} step${state.steps.length === 1 ? "" : "s"} in ${project.name}` +
-      (words.length ? ` · ${shown.length} matching` : "")
-    : "";
-
-  const groups = KEYWORDS.map(([key, label, meaning]) => {
-    const items = shown.filter((s) => s.keyword === key);
+function groupedSteps(steps, makeItem, listClass) {
+  return KEYWORDS.map(([key, label, meaning]) => {
+    const items = steps.filter((s) => s.keyword === key);
     if (!items.length) return null;
     return el("section", { class: `group kw-${key}` },
       el("h2", {}, el("span", { class: "kw-pill" }, label), el("span", { class: "muted" }, ` ${meaning} · ${items.length}`)),
-      el("ul", { class: "step-list" }, ...items.map(stepCard)));
+      el("ul", { class: listClass }, ...items.map(makeItem)));
   }).filter(Boolean);
-  $("steps-groups").replaceChildren(...groups);
+}
 
+function renderSteps() {
+  const shown = state.steps.filter((s) => matchesQuery(s, state.query));
+  const project = activeProject();
+  $("steps-summary").textContent = project
+    ? `${state.steps.length} step${state.steps.length === 1 ? "" : "s"} in ${project.name}` +
+      (state.query.trim() ? ` · ${shown.length} matching` : "")
+    : "";
+  $("steps-groups").replaceChildren(...groupedSteps(shown, stepCard, "step-list"));
   const empty = $("steps-empty");
   empty.hidden = shown.length > 0 || !$("steps-error").hidden;
   empty.textContent = state.steps.length
     ? "No steps match your search."
     : "No step definitions found in this folder. Check the steps folder under Details.";
+}
+
+// --- builder: palette -------------------------------------------------------
+
+function paletteItem(step) {
+  const item = el("li", { class: "palette-item", draggable: "true", title: "Drag into your scenario" },
+    sentence(step, slotChip),
+    el("button", { type: "button", class: "add-btn", title: "Add to the end of the scenario",
+      "aria-label": `Add “${stepText(step)}”`, onclick: () => addStepBlock(step) }, "+"));
+  item.addEventListener("dragstart", (event) => {
+    event.dataTransfer.setData("application/x-gc-step", stepKey(step));
+    event.dataTransfer.effectAllowed = "copy";
+  });
+  return item;
+}
+
+function renderPalette() {
+  const shown = state.steps.filter((s) => matchesQuery(s, state.paletteQuery));
+  const groups = groupedSteps(shown, paletteItem, "palette-items");
+  $("palette-list").replaceChildren(...(groups.length ? groups
+    : [el("p", { class: "muted small" }, state.steps.length ? "No steps match." : "This project has no steps yet.")]));
+}
+
+// --- builder: the draft -----------------------------------------------------
+
+let nextId = 1;
+const newId = () => `b${Date.now().toString(36)}${nextId++}`;
+
+function draftKey() {
+  return `gc-draft-${state.active}`;
+}
+
+function loadDraft() {
+  const saved = state.active && store(draftKey());
+  state.draft = saved && Array.isArray(saved.blocks) ? saved : emptyDraft();
+  state.results = [];
+  $("draft-feature").value = state.draft.feature || "";
+  $("draft-scenario").value = state.draft.scenario || "";
+  renderBlocks();
+  scheduleCheck();
+}
+
+function saveDraft() {
+  if (state.active) store(draftKey(), state.draft);
+}
+
+function changed() {
+  saveDraft();
+  renderBlocks();
+  scheduleCheck();
+}
+
+function addStepBlock(step, index = state.draft.blocks.length) {
+  const block = { id: newId(), kind: "step", step, values: {}, keyword: step.keyword === "step" ? null : step.keyword };
+  state.draft.blocks.splice(index, 0, block);
+  changed();
+  requestAnimationFrame(() => document.querySelector(`[data-block="${block.id}"] .slot-input`)?.focus());
+}
+
+function addTextBlock(line) {
+  const match = line.trim().match(/^(Given|When|Then|And|But|\*)\s+(.*)$/i);
+  const word = match ? match[1].toLowerCase() : null;
+  const text = (match ? match[2] : line).trim();
+  if (!text) return;
+  const keyword = ["given", "when", "then"].includes(word) ? word : null; // And / But / none: follow the line above
+  state.draft.blocks.push({ id: newId(), kind: "text", text, keyword });
+  changed();
+}
+
+function moveBlock(id, to) {
+  const blocks = state.draft.blocks;
+  const from = blocks.findIndex((b) => b.id === id);
+  if (from < 0) return;
+  const [block] = blocks.splice(from, 1);
+  blocks.splice(Math.max(0, Math.min(to > from ? to - 1 : to, blocks.length)), 0, block);
+  changed();
+}
+
+function removeBlock(id) {
+  state.draft.blocks = state.draft.blocks.filter((b) => b.id !== id);
+  changed();
+}
+
+function replaceWithStep(id, step) {
+  const index = state.draft.blocks.findIndex((b) => b.id === id);
+  if (index < 0) return;
+  state.draft.blocks.splice(index, 1);
+  addStepBlock(step, index);
+}
+
+// Base keyword per block, then the label shown in Gherkin ("And" when it repeats).
+function keywords() {
+  let previous = "given";
+  return state.draft.blocks.map((block) => {
+    const base = block.keyword || previous;
+    const label = base === previous && block !== state.draft.blocks[0] ? "And" : capitalize(base);
+    previous = base;
+    return { base, label };
+  });
+}
+
+function blockText(block) {
+  if (block.kind === "text") return block.text;
+  return block.step.segments.map((s) => ("slot" in s ? (block.values[s.slot] ?? "").trim() : s.text)).join("");
+}
+
+function emptySlots(block) {
+  if (block.kind !== "step") return [];
+  return block.step.segments.filter((s) => "slot" in s && !(block.values[s.slot] ?? "").trim()).map((s) => s.slot);
+}
+
+function badNumbers(block) {
+  if (block.kind !== "step") return [];
+  return block.step.segments.filter((s) => s.type === "number" && (block.values[s.slot] ?? "").trim()
+    && !/^-?\d+([.,]\d+)?$/.test(block.values[s.slot].trim())).map((s) => s.slot);
+}
+
+function draftLines() {
+  const kws = keywords();
+  return state.draft.blocks.map((block, i) => `${kws[i].label} ${blockText(block)}`);
+}
+
+function blockStatus(block, i) {
+  if (emptySlots(block).length) return "incomplete";
+  if (badNumbers(block).length) return "invalid";
+  return state.results[i]?.status || "checking";
+}
+
+// --- builder: checking --------------------------------------------------------
+
+let checkTimer, checkSeq = 0;
+function scheduleCheck() {
+  clearTimeout(checkTimer);
+  checkTimer = setTimeout(runCheck, 250);
+}
+
+async function runCheck() {
+  const project = activeProject();
+  if (!project) return;
+  const seq = ++checkSeq;
+  const lines = draftLines();
+  if (!lines.length) {
+    state.results = [];
+    renderStatus();
+    return;
+  }
+  try {
+    const data = await api("/api/check", { project: project.id, lines });
+    if (seq !== checkSeq) return; // a newer check is on its way
+    state.results = data.results;
+  } catch (error) {
+    if (seq !== checkSeq) return;
+    state.results = [];
+    toast(error.message);
+  }
+  renderStatus();
+}
+
+// --- builder: rendering -------------------------------------------------------
+
+const STATUS = {
+  ok: ["✓", "Ready: this step exists"],
+  missing: ["✗", "This step doesn't exist yet"],
+  ambiguous: ["!", "More than one step matches this line"],
+  incomplete: ["…", "Fill in the blanks"],
+  invalid: ["!", "Use a number here"],
+  checking: ["·", "Checking…"],
+};
+
+function slotInput(block, s) {
+  const value = block.values[s.slot] ?? "";
+  const input = el("input", {
+    class: `slot-input ${s.type}`,
+    value,
+    placeholder: s.slot,
+    "aria-label": s.slot,
+    inputmode: s.type === "number" ? "decimal" : null,
+    size: String(Math.max(value.length, s.slot.length, 3) + 1),
+  });
+  input.addEventListener("input", () => {
+    block.values[s.slot] = input.value;
+    input.size = Math.max(input.value.length, s.slot.length, 3) + 1;
+    saveDraft();
+    renderStatus();
+    scheduleCheck();
+  });
+  return s.quoted ? el("span", { class: "quoted" }, "“", input, "”") : input;
+}
+
+function blockView(block, index) {
+  const handle = el("span", { class: "handle", draggable: "true", title: "Drag to reorder", "aria-hidden": "true" }, "⋮⋮");
+  handle.addEventListener("dragstart", (event) => {
+    event.dataTransfer.setData("application/x-gc-block", block.id);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setDragImage(handle.closest("li"), 16, 16);
+  });
+
+  let body;
+  if (block.kind === "step") {
+    body = sentence(block.step, (s) => slotInput(block, s));
+    if (block.step.keyword === "step") {
+      const choose = el("select", { class: "kw-choose", "aria-label": "Keyword" },
+        ...["given", "when", "then"].map((k) => el("option", { value: k }, capitalize(k))));
+      choose.value = block.keyword || "given";
+      choose.addEventListener("change", () => { block.keyword = choose.value; changed(); });
+      body = el("span", { class: "sentence" }, choose, " ", body);
+    }
+  } else {
+    const input = el("input", { class: "text-input", value: block.text, "aria-label": "Step text" });
+    input.addEventListener("change", () => {
+      if (input.value.trim()) block.text = input.value.trim();
+      changed();
+    });
+    body = input;
+  }
+
+  const last = state.draft.blocks.length - 1;
+  return el("li", { class: "block", "data-block": block.id },
+    el("div", { class: "block-row" },
+      handle,
+      el("span", { class: "kw-pill block-kw" }),
+      body,
+      el("span", { class: "status", role: "img" }),
+      el("span", { class: "block-tools" },
+        el("button", { type: "button", class: "icon", title: "Move up", "aria-label": "Move up", disabled: index === 0,
+          onclick: () => moveBlock(block.id, index - 1) }, "↑"),
+        el("button", { type: "button", class: "icon", title: "Move down", "aria-label": "Move down", disabled: index === last,
+          onclick: () => moveBlock(block.id, index + 2) }, "↓"),
+        el("button", { type: "button", class: "icon", title: "Remove", "aria-label": "Remove step",
+          onclick: () => removeBlock(block.id) }, "✕"))),
+    el("div", { class: "block-help" }));
+}
+
+function renderBlocks() {
+  const list = $("blocks");
+  list.replaceChildren(...state.draft.blocks.map(blockView));
+  $("drop-empty").hidden = state.draft.blocks.length > 0;
+  renderStatus();
+}
+
+function helpFor(block, result, status) {
+  if (status === "incomplete") return el("p", { class: "help-line" }, `Fill in: ${emptySlots(block).join(", ")}`);
+  if (status === "invalid") return el("p", { class: "help-line" }, `Use a number for: ${badNumbers(block).join(", ")}`);
+  if (status === "ambiguous") {
+    return el("p", { class: "help-line" }, "Matches more than one step: ",
+      result.bound.map((b) => `${b.file}:${b.line}`).join(", "), ". Reword it so only one matches.");
+  }
+  if (status !== "missing") return null;
+  if (block.kind === "step") {
+    return el("p", { class: "help-line" }, "These values don't fit the step. Check for extra quotes or spaces.");
+  }
+  const box = el("div", { class: "missing" });
+  if (result.suggestions.length) {
+    box.append(el("p", { class: "help-line" }, "Did you mean:"),
+      el("div", { class: "suggestions" }, ...result.suggestions.map((m) =>
+        el("button", { type: "button", class: "suggestion", title: `Use this existing step (${Math.round(m.score * 100)}% similar)`,
+          onclick: () => replaceWithStep(block.id, state.steps.find((s) => stepKey(s) === stepKey(m)) || m) },
+          sentence(m, slotChip)))));
+  } else {
+    box.append(el("p", { class: "help-line" }, "No similar step exists. It needs new code."));
+  }
+  const copy = () => navigator.clipboard.writeText(result.stub).then(() => toast("Code copied"), () => toast("Couldn't copy"));
+  box.append(el("details", { class: "stub" },
+    el("summary", {}, "Code for this new step"),
+    el("pre", {}, result.stub),
+    el("button", { type: "button", class: "ghost small", onclick: copy }, "Copy code")));
+  return box;
+}
+
+function renderStatus() {
+  const kws = keywords();
+  const counts = { ok: 0, missing: 0, other: 0 };
+  state.draft.blocks.forEach((block, i) => {
+    const li = document.querySelector(`[data-block="${block.id}"]`);
+    if (!li) return;
+    const status = blockStatus(block, i);
+    const result = state.results[i];
+    li.className = `block kw-${kws[i].base} status-${status}`;
+    li.querySelector(".block-kw").textContent = kws[i].label;
+    const [icon, label] = STATUS[status];
+    const badge = li.querySelector(".status");
+    badge.textContent = icon;
+    badge.title = status === "ok" && result?.bound[0] ? `${label}: ${result.bound[0].file}:${result.bound[0].line}` : label;
+    badge.setAttribute("aria-label", badge.title);
+    li.querySelector(".block-help").replaceChildren(...[result || status !== "missing" ? helpFor(block, result, status) : null]
+      .filter(Boolean));
+    if (status === "ok") counts.ok += 1;
+    else if (status === "missing") counts.missing += 1;
+    else counts.other += 1;
+  });
+
+  const total = state.draft.blocks.length;
+  const summary = $("draft-summary");
+  summary.className = `summary ${!total ? "" : counts.ok === total ? "good" : counts.missing ? "bad" : "warn"}`;
+  summary.textContent = !total ? "Your scenario will appear here."
+    : counts.ok === total ? `All ${total} steps are ready to run.`
+    : `${counts.ok} of ${total} steps ready` +
+      (counts.missing ? ` · ${counts.missing} don't exist yet` : "") +
+      (counts.other ? ` · ${counts.other} to fix` : "");
+  renderGherkin();
+  const missingTyped = state.draft.blocks.some((b, i) => b.kind === "text" && blockStatus(b, i) === "missing");
+  $("stubs-btn").disabled = !missingTyped;
+  $("stubs-btn").title = missingTyped ? "" : "Every typed step already exists";
+  $("save-btn").disabled = !total;
+}
+
+function gherkinText() {
+  const feature = state.draft.feature.trim() || "Untitled feature";
+  const scenario = state.draft.scenario.trim() || "Untitled scenario";
+  return [`Feature: ${feature}`, "", `  Scenario: ${scenario}`, ...draftLines().map((l) => `    ${l}`)].join("\n");
+}
+
+function renderGherkin() {
+  const lines = draftLines();
+  const pre = $("gherkin");
+  if (!lines.length) {
+    pre.replaceChildren(el("span", { class: "muted" }, "Feature: …\n\n  Scenario: …\n    Given …"));
+    return;
+  }
+  const head = gherkinText().split("\n").slice(0, 3).join("\n") + "\n";
+  pre.replaceChildren(head, ...lines.map((line, i) =>
+    el("span", { class: `line status-${blockStatus(state.draft.blocks[i], i)}` }, `    ${line}\n`)));
+}
+
+// --- builder: drag and drop -------------------------------------------------
+
+function dropIndex(event) {
+  const items = [...$("blocks").children];
+  const i = items.findIndex((li) => {
+    const box = li.getBoundingClientRect();
+    return event.clientY < box.top + box.height / 2;
+  });
+  return i < 0 ? items.length : i;
+}
+
+function clearDropMarks() {
+  for (const li of $("blocks").children) li.classList.remove("drop-before", "drop-after");
+  $("drop-empty").classList.remove("drop-over");
+  $("blocks").classList.remove("drop-over");
+}
+
+function onDragOver(event) {
+  const types = event.dataTransfer.types;
+  if (!types.includes("application/x-gc-step") && !types.includes("application/x-gc-block")) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = types.includes("application/x-gc-block") ? "move" : "copy";
+  clearDropMarks();
+  const items = [...$("blocks").children];
+  const at = dropIndex(event);
+  if (!items.length) $("drop-empty").classList.add("drop-over");
+  else if (at < items.length) items[at].classList.add("drop-before");
+  else items[items.length - 1].classList.add("drop-after");
+}
+
+function onDrop(event) {
+  event.preventDefault();
+  const at = dropIndex(event);
+  clearDropMarks();
+  const blockId = event.dataTransfer.getData("application/x-gc-block");
+  if (blockId) return moveBlock(blockId, at);
+  const key = event.dataTransfer.getData("application/x-gc-step");
+  const step = state.steps.find((s) => stepKey(s) === key);
+  if (step) addStepBlock(step, at);
+}
+
+// --- builder: save and stubs dialogs -----------------------------------------
+
+const dialog = { kind: null, preview: null, request: null };
+
+function slug(text) {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60);
+}
+
+function radio(name, value, label, checked) {
+  return el("label", { class: "radio" }, el("input", { type: "radio", name, value, checked }), label);
+}
+
+async function openChangeDialog(kind) {
+  const project = activeProject();
+  if (!project) return;
+  if (kind === "save") {
+    if (state.draft.blocks.some((b, i) => ["incomplete", "invalid"].includes(blockStatus(b, i)))) {
+      return toast("Fill in the blanks first");
+    }
+  }
+  let files;
+  try {
+    files = await api(`/api/files?project=${encodeURIComponent(project.id)}`);
+  } catch (error) {
+    return toast(error.message);
+  }
+  dialog.kind = kind;
+  dialog.preview = null;
+  const options = $("change-options");
+  if (kind === "save") {
+    $("change-title").textContent = "Save scenario";
+    const existing = el("select", { name: "existing", "aria-label": "Feature file" },
+      ...files.features.map((f) => el("option", { value: f }, f)));
+    options.replaceChildren(
+      el("div", { class: "radios" },
+        radio("mode", "new", "Create a new feature file", true),
+        radio("mode", "append", "Add to an existing file", false)),
+      el("label", { class: "mode-new" }, "File name",
+        el("span", { class: "with-suffix" },
+          el("input", { name: "file", value: slug(state.draft.feature) || "new_feature", autocomplete: "off" }),
+          el("span", { class: "suffix" }, ".feature"))),
+      el("label", { class: "mode-append", hidden: true }, "Feature file", existing));
+    if (!files.features.length) options.querySelector('input[value="append"]').disabled = true;
+    const missing = state.draft.blocks.filter((b, i) => blockStatus(b, i) !== "ok").length;
+    $("change-note").textContent = missing
+      ? `${missing} step${missing === 1 ? " doesn't" : "s don't"} exist yet. You can still save; the scenario will fail until ${missing === 1 ? "it's" : "they're"} written.`
+      : `It goes into ${project.features}.`;
+    if (!state.draft.scenario.trim()) $("change-note").textContent = "Give the scenario a name first (above the steps).";
+  } else {
+    $("change-title").textContent = "Add missing steps to code";
+    options.replaceChildren(
+      el("label", {}, "Steps file", el("select", { name: "file", "aria-label": "Steps file" },
+        ...files.steps.map((f) => el("option", { value: f }, f)))));
+    $("change-note").textContent = "Each new step is added as a template that fails with “Step not written yet” " +
+      "until a developer fills in the code. Steps you built from blocks already exist, so only typed steps are added.";
+  }
+  syncModes();
+  showPreview(null);
+  $("change-dialog").showModal();
+}
+
+function syncModes() {
+  const mode = $("change-form").elements.mode?.value;
+  for (const node of document.querySelectorAll(".mode-new")) node.hidden = mode !== "new";
+  for (const node of document.querySelectorAll(".mode-append")) node.hidden = mode !== "append";
+}
+
+function showPreview(preview) {
+  dialog.preview = preview;
+  $("change-error").hidden = true;
+  $("change-options").hidden = !!preview;
+  $("change-note").hidden = !!preview;
+  $("change-preview").hidden = !preview;
+  $("change-back").hidden = !preview;
+  $("change-submit").textContent = preview ? (dialog.kind === "save" ? "Save" : "Add to file") : "Preview";
+  if (preview) {
+    $("change-diff").replaceChildren(...preview.diff.slice(2).map((line) =>
+      el("span", { class: line.startsWith("+") ? "add" : line.startsWith("-") ? "del" : line.startsWith("@@") ? "hunk" : "" },
+        `${line}\n`)));
+    $("change-title").textContent = preview.creates ? `Create ${preview.file}` : `Change ${preview.file}`;
+  }
+}
+
+function changeRequest() {
+  const form = $("change-form").elements;
+  const project = state.active;
+  if (dialog.kind === "save") {
+    const mode = form.mode.value;
+    return ["/api/scenario", { project, mode, file: mode === "new" ? form.file.value : form.existing.value,
+      feature: state.draft.feature, scenario: state.draft.scenario, lines: draftLines() }];
+  }
+  const only = state.draft.blocks.map((b, i) => (b.kind === "text" && blockStatus(b, i) === "missing" ? i : -1))
+    .filter((i) => i >= 0);
+  return ["/api/stubs", { project, file: form.file.value, lines: draftLines(), only }];
+}
+
+async function submitChange(event) {
+  event.preventDefault();
+  try {
+    if (!dialog.preview) {
+      const [base, body] = changeRequest();
+      dialog.request = [base, body];
+      showPreview(await api(`${base}/preview`, body));
+      return;
+    }
+    const [base, body] = dialog.request;
+    const result = await api(`${base}/save`, { ...body, hash: dialog.preview.hash });
+    $("change-dialog").close();
+    toast(dialog.kind === "save" ? `Saved to ${result.saved}` : `Added steps to ${result.saved}`);
+    if (dialog.kind === "stubs") await loadSteps();
+  } catch (error) {
+    $("change-error").textContent = error.message;
+    $("change-error").hidden = false;
+  }
 }
 
 // --- wiring -----------------------------------------------------------------
@@ -222,6 +749,39 @@ $("info-close").addEventListener("click", () => $("info-dialog").close());
 $("info-remove").addEventListener("click", () => removeActiveProject().catch((err) => toast(err.message)));
 $("steps-search").addEventListener("input", (e) => { state.query = e.target.value; renderSteps(); });
 $("steps-refresh").addEventListener("click", () => loadSteps().then(() => toast("Rescanned")));
+for (const button of document.querySelectorAll(".tab")) button.addEventListener("click", () => showTab(button.dataset.tab));
+
+$("palette-search").addEventListener("input", (e) => { state.paletteQuery = e.target.value; renderPalette(); });
+$("draft-feature").addEventListener("input", (e) => { state.draft.feature = e.target.value; saveDraft(); renderGherkin(); });
+$("draft-scenario").addEventListener("input", (e) => { state.draft.scenario = e.target.value; saveDraft(); renderGherkin(); });
+$("typed-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  addTextBlock($("typed-input").value);
+  $("typed-input").value = "";
+});
+$("build-clear").addEventListener("click", () => {
+  if (state.draft.blocks.length && !confirm("Clear this scenario and start again?")) return;
+  state.draft = emptyDraft();
+  $("draft-feature").value = $("draft-scenario").value = "";
+  changed();
+});
+$("copy-gherkin").addEventListener("click", () =>
+  navigator.clipboard.writeText(gherkinText()).then(() => toast("Gherkin copied"), () => toast("Couldn't copy")));
+for (const zone of [$("blocks"), $("drop-empty")]) {
+  zone.addEventListener("dragover", onDragOver);
+  zone.addEventListener("drop", onDrop);
+  zone.addEventListener("dragleave", (e) => { if (!zone.contains(e.relatedTarget)) clearDropMarks(); });
+}
+document.addEventListener("dragend", clearDropMarks);
+
+$("save-btn").addEventListener("click", () => openChangeDialog("save"));
+$("stubs-btn").addEventListener("click", () => openChangeDialog("stubs"));
+$("change-form").addEventListener("submit", submitChange);
+$("change-options").addEventListener("change", syncModes);
+$("change-back").addEventListener("click", () => showPreview(null));
+$("change-cancel").addEventListener("click", () => $("change-dialog").close());
+
 window.addEventListener("focus", () => { if (state.active) loadSteps(); }); // pick up edits made in the editor
 
+state.tab = store("gc-tab") || "build";
 loadProjects().catch((error) => toast(error.message));

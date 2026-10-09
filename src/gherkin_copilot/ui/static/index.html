@@ -21,8 +21,8 @@
 </header>
 
 <nav class="tabs" id="tabs" hidden>
-  <button type="button" class="tab" data-tab="build" disabled>Build a scenario <span class="soon">soon</span></button>
-  <button type="button" class="tab active" data-tab="steps">Steps</button>
+  <button type="button" class="tab" data-tab="build">Build a scenario</button>
+  <button type="button" class="tab" data-tab="steps">Steps</button>
   <button type="button" class="tab" data-tab="dupes" disabled>Duplicates <span class="soon">soon</span></button>
   <button type="button" class="tab" data-tab="results" disabled>Test results <span class="soon">soon</span></button>
 </nav>
@@ -34,6 +34,52 @@
       line of Gherkin) and a folder of <code>.feature</code> files. Add one to see every step it already knows.</p>
     <p class="muted">You can add as many projects as you like and switch between them at the top.</p>
     <button type="button" class="primary" id="welcome-add-btn">+ Add your first project</button>
+  </section>
+
+  <section id="panel-build" class="panel" hidden>
+    <div class="panel-head">
+      <div>
+        <h1>Build a scenario</h1>
+        <p class="muted">Snap together steps this project already has. Anything that doesn't exist yet turns red.</p>
+      </div>
+      <div class="panel-tools">
+        <button type="button" class="ghost" id="build-clear">Start over</button>
+      </div>
+    </div>
+    <div class="build-grid">
+      <aside class="palette" aria-label="Available steps">
+        <input type="search" id="palette-search" placeholder="Find a step…" aria-label="Find a step">
+        <p class="field-hint">Drag a step into your scenario, or click <strong>+</strong>.</p>
+        <div id="palette-list" class="palette-list"></div>
+      </aside>
+
+      <div class="canvas">
+        <div class="names">
+          <label>Feature <input id="draft-feature" placeholder="e.g. Checkout" maxlength="200" autocomplete="off"></label>
+          <label>Scenario <input id="draft-scenario" placeholder="e.g. Buy one product" maxlength="200" autocomplete="off"></label>
+        </div>
+        <ol id="blocks" class="blocks" aria-label="Scenario steps"></ol>
+        <div id="drop-empty" class="drop-empty">Drag steps here, or click <strong>+</strong> next to a step.</div>
+        <form id="typed-form" class="typed">
+          <input id="typed-input" placeholder="…or type a step, e.g. And I open the cart page" autocomplete="off"
+                 aria-label="Type a step">
+          <button type="submit" class="ghost">Add</button>
+        </form>
+      </div>
+
+      <aside class="preview" aria-label="Gherkin preview">
+        <div class="preview-head">
+          <h2>Gherkin</h2>
+          <button type="button" class="ghost small" id="copy-gherkin">Copy</button>
+        </div>
+        <p id="draft-summary" class="summary"></p>
+        <pre id="gherkin" class="gherkin"></pre>
+        <div class="preview-actions">
+          <button type="button" class="primary" id="save-btn">Save to a feature file…</button>
+          <button type="button" class="ghost" id="stubs-btn">Add missing steps to code…</button>
+        </div>
+      </aside>
+    </div>
   </section>
 
   <section id="panel-steps" class="panel" hidden>
@@ -92,6 +138,24 @@
       <button type="button" class="primary" id="info-close">Close</button>
     </div>
   </div>
+</dialog>
+
+<dialog id="change-dialog">
+  <form id="change-form" method="dialog">
+    <h2 id="change-title"></h2>
+    <div id="change-options"></div>
+    <p class="field-hint" id="change-note"></p>
+    <div id="change-preview" hidden>
+      <p class="field-hint">Here's exactly what will change. Nothing has been written yet.</p>
+      <pre id="change-diff" class="diff"></pre>
+    </div>
+    <p class="error-box" id="change-error" hidden></p>
+    <div class="dialog-actions">
+      <button type="button" class="ghost" id="change-cancel">Cancel</button>
+      <button type="button" class="ghost" id="change-back" hidden>Back</button>
+      <button type="submit" class="primary" id="change-submit">Preview</button>
+    </div>
+  </form>
 </dialog>
 
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>

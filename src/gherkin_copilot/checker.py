@@ -46,7 +46,11 @@ class StepResult:
 
 def parse_feature(path: Path, shown_path: str | None = None) -> list[FeatureStep]:
     """Return every step in a feature file, in order."""
-    lines = path.read_text(encoding="utf-8").splitlines()
+    return parse_feature_text(path.read_text(encoding="utf-8"), shown_path or str(path))
+
+
+def parse_feature_text(text: str, shown_path: str = "<text>") -> list[FeatureStep]:
+    lines = text.splitlines()
     steps: list[FeatureStep] = []
     outline: list[FeatureStep] = []  # steps waiting for their Examples table
     previous = "given"
@@ -89,7 +93,7 @@ def parse_feature(path: Path, shown_path: str | None = None) -> list[FeatureStep
             word, text = m.groups()
             kw = previous if word in {"And", "But", "*"} else word.lower()
             previous = kw
-            step = FeatureStep(kw, text.strip(), stripped, shown_path or str(path), number)
+            step = FeatureStep(kw, text.strip(), stripped, shown_path, number)
             if section in {"Scenario Outline", "Scenario Template"}:
                 outline.append(step)
             else:
