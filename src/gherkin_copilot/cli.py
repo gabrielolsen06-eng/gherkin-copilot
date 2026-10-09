@@ -6,6 +6,7 @@
     gherkin-copilot merge [PATH]          merge duplicate steps (preview; --apply to write)
     gherkin-copilot check [FEATURES]      check .feature files bind to real steps, draft stubs
     gherkin-copilot report [JSON]         turn a Cucumber JSON report into an HTML page
+    gherkin-copilot ui                    open the app in your browser (local only)
 """
 
 from __future__ import annotations
@@ -188,6 +189,30 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0 if passed == len(scenarios) else 1
 
 
+def cmd_ui(args: argparse.Namespace) -> int:
+    from gherkin_copilot.ui.projects import DEFAULT_FILE, ProjectStore
+    from gherkin_copilot.ui.server import make_server
+
+    store = ProjectStore(args.projects or DEFAULT_FILE)
+    try:
+        server, _ = make_server(store, args.port)
+    except OSError:  # port taken: let the system pick a free one
+        server, _ = make_server(store, 0)
+    url = f"http://127.0.0.1:{server.server_address[1]}"
+    print(f"gherkin-copilot is running at {url}  (only reachable from this computer; Ctrl+C to stop)")
+    print(f"Projects are saved in {store.path}")
+    if not args.no_open:
+        import webbrowser
+
+        webbrowser.open(url)
+    with server:
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            print("\nStopped.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="gherkin-copilot", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -242,6 +267,12 @@ def build_parser() -> argparse.ArgumentParser:
                    help="pytest-playwright --output folder with screenshots, videos and traces (default: %(default)s)")
     p.add_argument("--open", action="store_true", help="open the report in your default browser")
     p.set_defaults(func=cmd_report)
+
+    p = sub.add_parser("ui", help="open the gherkin-copilot app in your browser (runs on this computer only)")
+    p.add_argument("--port", type=int, default=8765, help="port to listen on (default: %(default)s)")
+    p.add_argument("--no-open", action="store_true", help="don't open the browser")
+    p.add_argument("--projects", type=Path, help="project list file (default: ~/.gherkin-copilot/projects.json)")
+    p.set_defaults(func=cmd_ui)
     return parser
 
 

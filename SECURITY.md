@@ -19,6 +19,26 @@ This page is written for whoever approves software on a managed work laptop.
 - **No shell commands.** The tool never spawns processes. `run_demo.py` runs Python
   subprocesses with argument lists, never through a shell.
 
+## The app (`gherkin-copilot ui`)
+
+- **Local only.** It listens on `127.0.0.1`, so other machines can't connect to it. It
+  stops when you press Ctrl+C or close the terminal.
+- **Protected against other websites.** A web page open in the same browser can't use the
+  app: every request that changes something must carry a random token that's created
+  fresh each time the app starts and only given to the app's own page, and must come from
+  the app's own address. Requests addressed to any other host name are refused, which
+  blocks DNS-rebinding attacks.
+- **Serves a fixed list of files.** Only the app's own page, script, stylesheet and icon,
+  never files from your disk. Pages have a strict `Content-Security-Policy` (no inline or
+  external scripts, no external connections) and build all text with `textContent`, so
+  step text from a project can never run as code.
+- **What it writes:** only the project list, `~/.gherkin-copilot/projects.json` (names and
+  folder paths). Removing a project from the list never touches its files. The app reads
+  project folders the same way the command line does: with `ast`, never importing or
+  running code.
+- **Opens your browser** with Python's standard `webbrowser` module (use `--no-open` to
+  skip). It starts no other programs.
+
 ## Test reports
 
 - **`report.html` contains no JavaScript.** It has a strict `Content-Security-Policy` that blocks
@@ -87,7 +107,7 @@ Results from 2026-10-09:
 | `pip-audit --strict -r requirements.lock` (known vulnerabilities) | No known vulnerabilities found |
 | `bandit -r src demo run_demo.py` (static security analysis) | No medium or high findings. Two low, informational notes say `run_demo.py` uses `subprocess`. It only re-runs the current Python with fixed argument lists and no shell. |
 | `pip install --require-hashes -r requirements.lock` in a clean venv, then `pip check` | Installs cleanly, no broken requirements |
-| Tool tests / demo scenarios | 45 of 46 passed / 5 passed. The failure is `test_brave_found_on_mac`, which finds the real Brave in `/Applications` before the test's fake one; it isn't related to the tool. `bandit` and `pip-audit` were not re-run after `merge` was added. |
+| Tool tests / demo scenarios | 59 of 60 passed / 5 passed. The failure is `test_brave_found_on_mac`, which finds the real Brave in `/Applications` before the test's fake one; it isn't related to the tool. `bandit` and `pip-audit` were not re-run after `merge` was added. |
 
 To repeat these checks yourself, install `pip-audit` and `bandit` in a separate
 virtual environment and run the commands above.

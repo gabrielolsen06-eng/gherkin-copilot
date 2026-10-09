@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="gc-token" content="{{TOKEN}}">
+<title>gherkin-copilot</title>
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/style.css">
+<script type="module" src="/static/app.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="logo" aria-hidden="true"></span>gherkin-copilot</div>
+  <div class="project-picker" id="picker" hidden>
+    <label for="project-select">Project</label>
+    <select id="project-select"></select>
+    <button type="button" class="ghost" id="project-info-btn" title="Project details">Details</button>
+  </div>
+  <button type="button" class="primary" id="add-project-btn">+ Add project</button>
+</header>
+
+<nav class="tabs" id="tabs" hidden>
+  <button type="button" class="tab" data-tab="build" disabled>Build a scenario <span class="soon">soon</span></button>
+  <button type="button" class="tab active" data-tab="steps">Steps</button>
+  <button type="button" class="tab" data-tab="dupes" disabled>Duplicates <span class="soon">soon</span></button>
+  <button type="button" class="tab" data-tab="results" disabled>Test results <span class="soon">soon</span></button>
+</nav>
+
+<main>
+  <section id="welcome" class="welcome" hidden>
+    <h1>Write tests faster by reusing the steps you already have</h1>
+    <p>A <strong>project</strong> is one test suite: a folder of step definitions (the Python code behind each
+      line of Gherkin) and a folder of <code>.feature</code> files. Add one to see every step it already knows.</p>
+    <p class="muted">You can add as many projects as you like and switch between them at the top.</p>
+    <button type="button" class="primary" id="welcome-add-btn">+ Add your first project</button>
+  </section>
+
+  <section id="panel-steps" class="panel" hidden>
+    <div class="panel-head">
+      <div>
+        <h1>Steps</h1>
+        <p class="muted" id="steps-summary"></p>
+      </div>
+      <div class="panel-tools">
+        <input type="search" id="steps-search" placeholder="Search steps…" aria-label="Search steps">
+        <button type="button" class="ghost" id="steps-refresh" title="Scan the project again">Rescan</button>
+      </div>
+    </div>
+    <p class="hint">Every step this project can already run. Placeholders like <span class="slot">product</span>
+      are filled in when the step is used. Click a step to copy it.</p>
+    <div id="steps-error" class="error-box" hidden></div>
+    <div id="steps-groups" class="groups"></div>
+    <p id="steps-empty" class="muted center" hidden></p>
+  </section>
+</main>
+
+<dialog id="add-dialog">
+  <form id="add-form" method="dialog">
+    <h2>Add a project</h2>
+    <label>Name
+      <input name="name" required maxlength="60" placeholder="e.g. Web shop" autocomplete="off">
+    </label>
+    <label>Steps folder
+      <input name="steps" required placeholder="/Users/you/projects/shop/tests" autocomplete="off">
+      <span class="field-hint">The folder with your Python step definitions. Subfolders are included.</span>
+    </label>
+    <label><span>Features folder <span class="optional">optional</span></span>
+      <input name="features" placeholder="Same as the steps folder" autocomplete="off">
+      <span class="field-hint">Where your <code>.feature</code> files live, if somewhere else.</span>
+    </label>
+    <p class="field-hint">Tip: on a Mac, select the folder in Finder and press ⌥⌘C to copy its full path.
+      On Windows, Shift + right-click it and choose “Copy as path”.</p>
+    <p class="error-box" id="add-error" hidden></p>
+    <div class="dialog-actions">
+      <button type="button" class="ghost" id="add-cancel">Cancel</button>
+      <button type="submit" class="primary">Add project</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="info-dialog">
+  <div class="dialog-body">
+    <h2 id="info-name"></h2>
+    <dl class="info">
+      <dt>Steps folder</dt><dd id="info-steps"></dd>
+      <dt>Features folder</dt><dd id="info-features"></dd>
+    </dl>
+    <p class="field-hint">Removing a project only takes it off this list. Its files aren't touched.</p>
+    <div class="dialog-actions">
+      <button type="button" class="danger" id="info-remove">Remove from list</button>
+      <button type="button" class="primary" id="info-close">Close</button>
+    </div>
+  </div>
+</dialog>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

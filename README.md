@@ -12,6 +12,7 @@ and helps you:
 | `dupes` | Spots step definitions that say the same thing in slightly different words |
 | `merge` | Merges those duplicates: rewrites feature files to use one wording and deletes the other step (preview first, `--apply` to write) |
 | `check FEATURES` | Checks every line of your .feature files, and drafts Python code for missing steps (`--stubs`) |
+| `ui` | Opens the gherkin-copilot app in your browser: switch between projects and browse every step (more screens on the way, see below) |
 | `report [JSON]` | Turns a Cucumber JSON results file into a single HTML page, with screenshots, videos and traces linked |
 
 The tool reads source code with Python's `ast` module. It never imports or runs your
@@ -168,6 +169,28 @@ to the kept step. Commit first so the change is easy to review and undo.
 Every command accepts `--json`. `find` and `check` exit with code 1 when something
 doesn't bind, so they can gate a pull request in CI or a pre-commit hook.
 
+## The app
+
+```bash
+gherkin-copilot ui
+```
+
+This starts the app on your own computer (http://127.0.0.1:8765, never reachable from the
+network) and opens it in your browser. Add a project by giving it a name, the folder with
+your step definitions, and optionally the folder with your `.feature` files. You can add
+as many projects as you like and switch between them at the top; the list is saved in
+`~/.gherkin-copilot/projects.json`.
+
+The **Steps** screen lists every step in the selected project, grouped by Given / When /
+Then, with placeholders such as “product” highlighted. Search it, or click a step to copy
+it. It rescans the project whenever you come back to the browser tab, so edits show up
+straight away.
+
+Coming next: a block-based scenario builder, duplicates and merging, and test results.
+
+Options: `--port` to use another port, `--no-open` to not open the browser, `--projects`
+to use a different project list file.
+
 ## How matching works
 
 - **Exact:** `parsers.parse` / `cfparse` patterns (`{name}`, `{count:d}`) are converted to
@@ -182,7 +205,7 @@ signed in" won't be flagged as duplicates. That's a job for the planned LLM feat
 ## Development
 
 ```bash
-python -m pytest tests       # tool tests (46)
+python -m pytest tests       # tool tests (60)
 python -m pytest demo        # browser scenarios (5)
 ```
 
