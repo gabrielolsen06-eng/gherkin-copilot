@@ -1,0 +1,17 @@
+:root { --accent: #3ddc91; --ink: #132322; --muted: #5b6b6a; --line: #dde3e2; font-family: system-ui, sans-serif; color: var(--ink); }
+body { margin: 0; background: #f6f8f8; }
+.logo { font-weight: 700; font-size: 1.4rem; }
+.login { max-width: 340px; margin: 12vh auto; text-align: center; }
+.login form { display: grid; gap: 10px; margin-top: 24px; }
+input, button { font: inherit; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--line); }
+button { background: var(--accent); border-color: var(--accent); cursor: pointer; font-weight: 600; }
+.error { background: #e2231a; color: #fff; padding: 8px; border-radius: 6px; margin: 0; }
+.hint { color: var(--muted); font-size: .85rem; }
+.bar { display: flex; gap: 16px; align-items: center; padding: 12px 20px; background: #fff; border-bottom: 1px solid var(--line); }
+.bar .logo { flex: 1; }
+.shopping_cart_badge { background: #e2231a; color: #fff; border-radius: 999px; padding: 1px 7px; font-size: .8rem; }
+main { padding: 0 20px 40px; }
+ul { list-style: none; padding: 0; display: grid; gap: 12px; }
+.inventory_item, .cart_item { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: flex; gap: 12px; align-items: center; }
+.inventory_item_name { flex: 1; font-weight: 600; }
+.inventory_item_price { color: var(--muted); }

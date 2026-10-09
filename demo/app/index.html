@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+  <title>Demo Shop · Login</title>
+</head>
+<body data-page="login">
+  <main class="login">
+    <h1 class="logo">Demo Shop</h1>
+    <form id="login-form" autocomplete="off">
+      <input id="user-name" data-test="username" placeholder="Username" aria-label="Username">
+      <input id="password" data-test="password" type="password" placeholder="Password" aria-label="Password">
+      <p class="error" data-test="error" hidden></p>
+      <button id="login-button" data-test="login-button" type="submit">Login</button>
+    </form>
+    <p class="hint">Practice accounts: <code>standard_user</code>, <code>locked_out_user</code> · password <code>secret_sauce</code></p>
+  </main>
+</body>
+</html>

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+  <title>Demo Shop · Products</title>
+</head>
+<body data-page="inventory">
+  <header class="bar">
+    <span class="logo">Demo Shop</span>
+    <a class="shopping_cart_link" href="cart.html" data-test="shopping-cart-link">Cart <span class="shopping_cart_badge" hidden></span></a>
+    <button id="logout" data-test="logout">Log out</button>
+  </header>
+  <main>
+    <h2 class="title" data-test="title">Products</h2>
+    <ul class="inventory_list"></ul>
+  </main>
+</body>
+</html>

@@ -1,0 +1,151 @@
+"""Check .feature files against the step index and draft stubs for missing steps.
+
+The feature parser is deliberately small: it understands Feature, Background,
+Scenario, Scenario Outline / Examples, And / But, tags, comments, doc strings
+and data tables, which covers what step matching needs.
+"""
+
+from __future__ import annotations
+
+import keyword
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from gherkin_copilot.indexer import StepDef
+from gherkin_copilot.matcher import Match, find, is_exact_match
+
+STEP_LINE = re.compile(r"^(Given|When|Then|And|But|\*)\s+(.+)$")
+SECTION = re.compile(r"^(Feature|Background|Scenario Outline|Scenario Template|Scenario|Example|Rule|Examples|Scenarios):")
+OUTLINE_PARAM = re.compile(r"<([^<>]+)>")
+QUOTED = re.compile(r'"[^"]*"')
+NUMBER = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?(?![\w.])")
+
+
+@dataclass
+class FeatureStep:
+    keyword: str  # given / when / then (And / But resolved to the previous one)
+    text: str  # step text with outline parameters filled from the first Examples row
+    raw: str  # the line as written
+    file: str
+    line: int
+
+
+@dataclass
+class StepResult:
+    step: FeatureStep
+    bound: list[StepDef]
+    suggestions: list[Match] = field(default_factory=list)
+
+    @property
+    def status(self) -> str:
+        if not self.bound:
+            return "missing"
+        return "ambiguous" if len(self.bound) > 1 else "ok"
+
+
+def parse_feature(path: Path, shown_path: str | None = None) -> list[FeatureStep]:
+    """Return every step in a feature file, in order."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    steps: list[FeatureStep] = []
+    outline: list[FeatureStep] = []  # steps waiting for their Examples table
+    previous = "given"
+    in_docstring = False
+    section = ""
+    examples_header: list[str] | None = None
+
+    def cells(row: str) -> list[str]:
+        return [c.strip() for c in row.strip().strip("|").split("|")]
+
+    for number, line in enumerate(lines, start=1):
+        stripped = line.strip()
+        if stripped.startswith(('"""', "```")):
+            in_docstring = not in_docstring
+            continue
+        if in_docstring or not stripped or stripped.startswith(("#", "@")):
+            continue
+
+        if m := SECTION.match(stripped):
+            section = m.group(1)
+            examples_header = None
+            if section in {"Scenario", "Example", "Background", "Feature", "Rule"}:
+                steps.extend(outline)  # outline without Examples: keep the raw text
+                outline = []
+            continue
+
+        if stripped.startswith("|"):
+            if section in {"Examples", "Scenarios"}:
+                if examples_header is None:
+                    examples_header = cells(stripped)
+                elif outline:  # fill outline parameters from the first Examples row
+                    values = dict(zip(examples_header, cells(stripped)))
+                    for s in outline:
+                        s.text = OUTLINE_PARAM.sub(lambda p: values.get(p.group(1), p.group(0)), s.text)
+                    steps.extend(outline)
+                    outline = []
+            continue  # data tables under a step don't affect matching
+
+        if m := STEP_LINE.match(stripped):
+            word, text = m.groups()
+            kw = previous if word in {"And", "But", "*"} else word.lower()
+            previous = kw
+            step = FeatureStep(kw, text.strip(), stripped, shown_path or str(path), number)
+            if section in {"Scenario Outline", "Scenario Template"}:
+                outline.append(step)
+            else:
+                steps.append(step)
+    steps.extend(outline)
+    steps.sort(key=lambda s: s.line)
+    return steps
+
+
+def binds(step: FeatureStep, definition: StepDef) -> bool:
+    if definition.keyword not in {step.keyword, "step"}:
+        return False
+    return is_exact_match(step.text, definition)
+
+
+def check_steps(feature_steps: list[FeatureStep], definitions: list[StepDef]) -> list[StepResult]:
+    results = []
+    for fs in feature_steps:
+        bound = [d for d in definitions if binds(fs, d)]
+        suggestions = [] if bound else find(fs.text, definitions, limit=3, min_score=0.5)
+        results.append(StepResult(fs, bound, suggestions))
+    return results
+
+
+def iter_feature_files(root: Path):
+    if root.is_file():
+        yield root
+    else:
+        yield from sorted(p for p in root.rglob("*.feature") if ".venv" not in p.parts)
+
+
+def _function_name(text: str) -> str:
+    name = re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_") or "step"
+    if name[0].isdigit() or keyword.iskeyword(name):
+        name = f"step_{name}"
+    return name[:60].rstrip("_")
+
+
+def make_stub(step: FeatureStep) -> str:
+    """Draft a pytest-bdd step definition, turning quoted values and numbers into parameters."""
+    params: list[tuple[str, str]] = []
+
+    def quoted(m: re.Match) -> str:
+        params.append((f"text{len(params) + 1}", ""))
+        return f'"{{{params[-1][0]}}}"'
+
+    def number(m: re.Match) -> str:
+        fmt = ":g" if "." in m.group() else ":d"
+        params.append((f"number{len(params) + 1}", fmt))
+        return f"{{{params[-1][0]}{fmt}}}"
+
+    pattern = NUMBER.sub(number, QUOTED.sub(quoted, step.text.replace("{", "{{").replace("}", "}}")))
+    args = ", ".join(["page"] + [p for p, _ in params])
+    decorator = f"@{step.keyword}(parsers.parse({pattern!r}))" if params else f"@{step.keyword}({pattern!r})"
+    return (
+        f"{decorator}\n"
+        f"def {_function_name(NUMBER.sub('', OUTLINE_PARAM.sub('', QUOTED.sub('', step.text))))}({args}):\n"
+        f"    raise NotImplementedError({('Step not written yet: ' + step.text)!r})\n"
+    )
