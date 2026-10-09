@@ -7,7 +7,8 @@ For each pair that ``dupes`` reports, one step is kept and the other is removed:
 * the removed step's decorator and function are deleted.
 
 A pair is only merged when that can't change what the tests do: both steps
-use the same keyword, their functions have identical parameters and bodies,
+use the same keyword, their decorators have the same options (such as
+``target_fixture``), their functions have identical parameters and bodies,
 the removed function isn't called from anywhere else, and every rewritten
 line binds to the kept step. Anything else is reported and left alone.
 
@@ -104,6 +105,17 @@ def _signature_and_body(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     return ast.dump(node.args) + ast.dump(ast.Module(body=node.body, type_ignores=[]))
 
 
+def _decorator_options(node: ast.FunctionDef | ast.AsyncFunctionDef, step: StepDef) -> dict[str, str]:
+    """Everything a step decorator says besides its wording, e.g. target_fixture or converters."""
+    deco = next(d for d in node.decorator_list if d.lineno == step.line)
+    assert isinstance(deco, ast.Call)  # the indexer only records called decorators
+    options = {kw.arg or "**kwargs": ast.unparse(kw.value) for kw in deco.keywords}
+    options.update({f"argument {i}": ast.unparse(a) for i, a in enumerate(deco.args[1:], start=2)})
+    if isinstance(deco.args[0], ast.Call):  # parsers.parse("...", extra_types=...)
+        options.update({f"{kw.arg or '**kwargs'} (in the parser)": ast.unparse(kw.value) for kw in deco.args[0].keywords})
+    return options
+
+
 def _references(root: Path, name: str) -> list[str]:
     """Places in the project's Python code that mention a function by name."""
     found = []
@@ -146,6 +158,11 @@ def _check_code(plan: MergePlan, root: Path) -> None:
     if keep_node is None or drop_node is None:
         plan.problems.append("couldn't find both functions in the source; re-run index")
         return
+    keep_options, drop_options = _decorator_options(keep_node, plan.keep), _decorator_options(drop_node, plan.drop)
+    differing = [f"{k}: {keep_options.get(k, 'not set')} vs {drop_options.get(k, 'not set')}"
+                 for k in sorted(keep_options.keys() | drop_options.keys()) if keep_options.get(k) != drop_options.get(k)]
+    if differing:
+        plan.problems.append(f"their decorators differ ({'; '.join(differing)})")
     if _signature_and_body(keep_node) != _signature_and_body(drop_node):
         plan.problems.append(f"{plan.keep.function} and {plan.drop.function} don't do the same thing "
                              "(their parameters or code differ)")

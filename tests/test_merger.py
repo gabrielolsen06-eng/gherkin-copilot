@@ -84,6 +84,42 @@ def c(page):
     assert any("b is used elsewhere: steps.py:" in p for p in plan.problems)
 
 
+def test_refuses_when_decorator_options_differ(tmp_path):
+    root = project(tmp_path, '''@given("I am logged in", target_fixture="user")
+def a(page):
+    return "bob"
+
+
+@given("I am now logged in")
+def b(page):
+    return "bob"
+
+
+@when("I check out")
+def c(page, user):
+    pass
+''', "Feature: x\n  Scenario: y\n    Given I am logged in\n")
+    plan = plan_merges(root).plans[0]
+    assert plan.problems == ["their decorators differ (target_fixture: 'user' vs not set)"]
+    assert plan_merges(root).changes == {}
+
+
+def test_same_decorator_options_still_merge(tmp_path):
+    root = project(tmp_path, '''@given(parsers.parse("I am logged in as {name}", extra_types={}), target_fixture="user")
+def a(page, name):
+    return name
+
+
+@given(parsers.parse("I am now logged in as {name}", extra_types={}), target_fixture="user")
+def b(page, name):
+    return name
+''', "Feature: x\n  Scenario: y\n    Given I am now logged in as bob\n")
+    result = plan_merges(root, keep=frozenset({"a"}))
+    assert result.plans[0].ok
+    apply(result)
+    assert "Given I am logged in as bob" in (root / "shop.feature").read_text()
+
+
 def test_refuses_when_placeholders_dont_line_up(tmp_path):
     root = project(tmp_path, '''@when(parsers.parse('I add "{product}" to the cart'))
 def a(page, product):

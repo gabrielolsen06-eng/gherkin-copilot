@@ -160,7 +160,8 @@ function is deleted:
 
 By default it only shows the diff. `--apply` writes it. A pair is left alone, with the
 reason shown, unless merging can't change what the tests do: both steps must use the same
-keyword and placeholders, their functions must have identical parameters and code, the
+keyword and placeholders, their decorators must have the same options (such as
+`target_fixture`), their functions must have identical parameters and code, the
 removed function mustn't be called from anywhere else, and every rewritten line must bind
 to the kept step. Commit first so the change is easy to review and undo.
 
@@ -181,7 +182,7 @@ signed in" won't be flagged as duplicates. That's a job for the planned LLM feat
 ## Development
 
 ```bash
-python -m pytest tests       # tool tests (44)
+python -m pytest tests       # tool tests (46)
 python -m pytest demo        # browser scenarios (5)
 ```
 
