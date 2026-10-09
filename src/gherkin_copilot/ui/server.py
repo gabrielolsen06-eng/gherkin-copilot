@@ -21,7 +21,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 from gherkin_copilot import __version__
-from gherkin_copilot.ui import builder, dupes, editor, gherkin, history
+from gherkin_copilot.ui import builder, dupes, editor, gherkin, history, runner
 from gherkin_copilot.ui.catalog import describe
 from gherkin_copilot.ui.projects import Project, ProjectStore
 
@@ -34,7 +34,7 @@ STATIC = {  # the only files the app serves
 }
 SECURITY_HEADERS = {
     "Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "
-    "img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    "img-src 'self'; media-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
     "Cache-Control": "no-store",
@@ -57,6 +57,7 @@ class App:
     def __init__(self, store: ProjectStore):
         self.store = store
         self.token = secrets.token_urlsafe(32)
+        self.runner = runner.Runner()
 
     def projects(self) -> dict[str, Any]:
         projects, active = self.store.load()
@@ -94,8 +95,18 @@ class App:
             if route == "/api/projects/active":
                 self.store.set_active(text("id"))
                 return self.projects()
+            if route == "/api/projects/tests":
+                if text("test_command").strip():
+                    runner.parse_command(text("test_command"))
+                self.store.update_tests(text("id"), text("test_command"), text("run_from"), body.get("capture") is not False)
+                return self.projects()
 
             project = self.project(body.get("project"))
+            if route == "/api/run/start":
+                return self.runner.start(project, text("scope"), text("file"), text("name"))
+            if route == "/api/run/stop":
+                self.runner.stop(project.id)
+                return {"stopping": True}
             if route == "/api/check":
                 lines = builder.clean_lines(body.get("lines"))
                 return {"results": builder.check(project, lines, body.get("examples"))}
@@ -209,6 +220,14 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                     return self._json(HTTPStatus.OK, editor.open_scenario(
                         app.project(project_id), query.get("file", [""])[0], int(start) if start.isdigit() else None,
                         query.get("name", [""])[0]))
+                if url.path == "/api/run":
+                    project = app.project(project_id)
+                    return self._json(HTTPStatus.OK, {"run": app.runner.status(project.id),
+                                                      "results": runner.latest_results(project),
+                                                      "default_folder": str(history.project_root(project))})
+                if url.path == "/api/artifact":
+                    body, content_type = runner.artifact(app.project(project_id), query.get("path", [""])[0])
+                    return self._send(HTTPStatus.OK, body, content_type)
                 if url.path == "/api/history":
                     project = app.project(project_id)
                     return self._json(HTTPStatus.OK, {"entries": history.entries(project),

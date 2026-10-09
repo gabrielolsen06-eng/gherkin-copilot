@@ -8,7 +8,9 @@ meant to be shown at work and installed on a locked-down work laptop.
 
 - **The tool (`src/gherkin_copilot`) uses the standard library only.** No runtime
   dependencies in `pyproject.toml`. It never imports or executes scanned code (parse with
-  `ast`), makes no network calls, and never spawns processes.
+  `ast`), makes no network calls, and never spawns processes, with one exception:
+  `ui/runner.py` runs the user's own saved pytest command (argument list, no shell) when
+  they press Run in the app. Keep it that way: nothing else may start a process.
 - **Nothing may require an extra download at run time.** Demo dependencies are pinned
   with hashes in `requirements.lock`. Don't add Playwright browser or ffmpeg downloads to
   the default path (that's why videos are opt-in via `--videos`).
@@ -50,7 +52,8 @@ and `bandit -r src demo run_demo.py` afterwards.
   `gherkin.py` feature-file parser with exact scenario line spans + renderer, `editor.py`
   scenario list/open-as-blocks/new/edit/delete/duplicate/restore (validates a structured
   spec, never writes raw browser text), `history.py` append-only
-  `.gherkin-copilot/history.jsonl` in the project, `static/` plain
+  `.gherkin-copilot/history.jsonl` in the project, `runner.py` runs the project's test
+  command and reads `cucumber.json` back, `static/` plain
   HTML/CSS/JS, `textContent` only, no frameworks or CDNs)
 - `demo/`: `app/` practice shop, `features/`, `drafts/` (deliberately unimplemented
   checkout scenario), `steps/` (two deliberate near-duplicate steps for the `dupes`/`merge` demo; `cart.feature`
@@ -71,9 +74,9 @@ In progress, the app (`gherkin-copilot ui`), built in stages: 1. server, project
 catalogue (done); 2. block-based scenario builder with live check, stubs, save to
 .feature (done; writes only after the user confirms a preview); 3. duplicates & merge
 (done; `merge --features` supports features outside the steps folder); 3b. scenario
-editor + history (done);
-4. test results; 5. docs/security pass. The app never starts other programs (no "run
-tests" button without an explicit decision).
+editor + history (done); 4. test results with a Run button (done: whole suite, one feature
+file, or the scenario being edited; results in `.gherkin-copilot/results`, self-ignored);
+5. docs/security pass (re-run bandit and pip-audit).
 
 
 1. Done: `index`, `find`, `dupes`, `merge`, `check --stubs`, `report`, runnable demo

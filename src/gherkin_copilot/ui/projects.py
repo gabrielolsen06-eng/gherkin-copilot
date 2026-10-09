@@ -24,6 +24,9 @@ class Project:
     name: str
     steps: str  # folder scanned for step definitions (absolute)
     features: str  # folder with .feature files (absolute)
+    test_command: str = ""  # e.g. "python -m pytest tests"; empty means the app can't run tests
+    run_from: str = ""  # folder to run it from; empty means the project folder
+    capture: bool = True  # add pytest-playwright screenshot and trace options
 
 
 class ProjectStore:
@@ -82,6 +85,22 @@ class ProjectStore:
             if len(remaining) == len(projects):
                 raise ValueError("No such project.")
             self._write(remaining, None if active == project_id else active)
+
+    def update_tests(self, project_id: str, test_command: str, run_from: str, capture: bool) -> Project:
+        """Save how to run the project's tests (the command is checked by the caller)."""
+        test_command = " ".join(test_command.split())
+        if len(test_command) > 500:
+            raise ValueError("Keep the test command under 500 characters.")
+        folder = str(_folder(run_from, "run-from")) if run_from.strip() else ""
+        with self._lock:
+            projects, active = self._read()
+            current = next((p for p in projects if p.id == project_id), None)
+            if current is None:
+                raise ValueError("No such project.")
+            updated = Project(current.id, current.name, current.steps, current.features, test_command, folder,
+                              bool(capture))
+            self._write([updated if p.id == project_id else p for p in projects], active)
+        return updated
 
     def set_active(self, project_id: str) -> None:
         with self._lock:

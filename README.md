@@ -12,7 +12,7 @@ and helps you:
 | `dupes` | Spots step definitions that say the same thing in slightly different words |
 | `merge` | Merges those duplicates: rewrites feature files to use one wording and deletes the other step (preview first, `--apply` to write) |
 | `check FEATURES` | Checks every line of your .feature files, and drafts Python code for missing steps (`--stubs`) |
-| `ui` | Opens the gherkin-copilot app in your browser: build and edit scenarios with blocks, browse every step, merge duplicates, see the history of changes |
+| `ui` | Opens the gherkin-copilot app in your browser: build and edit scenarios with blocks, run them, browse every step, merge duplicates, see the history of changes |
 | `report [JSON]` | Turns a Cucumber JSON results file into a single HTML page, with screenshots, videos and traces linked |
 
 The tool reads source code with Python's `ast` module. It never imports or runs your
@@ -232,7 +232,25 @@ Click **Keep this one instead** to swap them, and **Preview merge** to see every
 merge would change before confirming. Pairs that can't be merged safely say why (for
 example, their code differs). The slider sets how alike two steps must be to be listed.
 
-Coming next: test results.
+**Test results** runs your tests and shows what happened, scenario by scenario and step by
+step: errors, timings, a screenshot of each scenario and a command to replay it in
+Playwright's trace viewer. Run everything, one feature file (**▶ Run** on the Scenarios
+tab) or the scenario you're editing (**▶ Run this scenario**), so you find out straight
+away whether a change works. The ✓ in the editor only means a step *exists*; running the
+scenario tells you whether it *passes*.
+
+To turn this on, open **Details** and enter the command you'd use in a terminal, for
+example:
+
+| Project | Test command | Run from folder |
+|---|---|---|
+| This repository's demo | `DEMO_BROWSER=brave python -m pytest demo` | the `gherkin-copilot` folder |
+| A typical project | `python -m pytest tests` | the project folder |
+
+The app only runs pytest commands, never through a shell, and only when you press Run.
+Results go to `.gherkin-copilot/results` in the project, which git ignores
+automatically. To run a single scenario or file, its feature file must be loaded by a test
+module (for example `scenarios("checkout.feature")` in a `test_*.py` file).
 
 When demoing on this repository's `demo` folder, reset it afterwards with
 `git checkout -- demo` (and delete any new `.feature` files you created). The demo's
@@ -258,7 +276,7 @@ signed in" won't be flagged as duplicates. That's a job for the planned LLM feat
 ## Development
 
 ```bash
-python -m pytest tests       # tool tests (117)
+python -m pytest tests       # tool tests (130)
 python -m pytest demo        # browser scenarios (5)
 ```
 

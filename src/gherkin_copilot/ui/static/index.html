@@ -26,7 +26,7 @@
   <button type="button" class="tab" data-tab="steps">Steps</button>
   <button type="button" class="tab" data-tab="dupes">Duplicates <span class="count" id="dupes-count" hidden></span></button>
   <button type="button" class="tab" data-tab="history">History</button>
-  <button type="button" class="tab" data-tab="results" disabled>Test results <span class="soon">soon</span></button>
+  <button type="button" class="tab" data-tab="results">Test results <span class="run-dot" id="run-dot" hidden></span></button>
 </nav>
 
 <main>
@@ -95,6 +95,7 @@
         <div class="preview-actions">
           <button type="button" class="primary" id="save-btn">Save to a feature file…</button>
           <button type="button" class="ghost" id="save-copy-btn" hidden>Save as a new scenario…</button>
+          <button type="button" class="ghost" id="run-scenario-btn" hidden>▶ Run this scenario</button>
           <button type="button" class="ghost" id="stubs-btn">Add missing steps to code…</button>
         </div>
       </aside>
@@ -154,6 +155,36 @@
     <ol id="history-list" class="history"></ol>
   </section>
 
+  <section id="panel-results" class="panel narrow" hidden>
+    <div class="panel-head">
+      <div>
+        <h1>Test results</h1>
+        <p class="muted" id="results-summary"></p>
+      </div>
+      <div class="panel-tools">
+        <button type="button" class="primary" id="run-all">▶ Run all tests</button>
+      </div>
+    </div>
+    <div id="run-setup" class="setup-card" hidden>
+      <strong>Tell the app how to run this project's tests</strong>
+      <p class="muted">Add the command you'd type in a terminal, for example <code>python -m pytest tests</code>. The app
+        only ever runs that command, and only when you press Run.</p>
+      <button type="button" class="primary small" id="run-setup-btn">Set up test command</button>
+    </div>
+    <div id="run-status" class="run-status" hidden>
+      <span class="spinner" aria-hidden="true"></span>
+      <span id="run-status-text"></span>
+      <button type="button" class="ghost small" id="run-stop">Stop</button>
+    </div>
+    <div id="results-error" class="error-box" hidden></div>
+    <div id="results-tiles" class="tiles"></div>
+    <div id="results-list" class="results"></div>
+    <details id="run-log" class="run-log" hidden>
+      <summary>Test output</summary>
+      <pre id="run-log-text"></pre>
+    </details>
+  </section>
+
   <section id="panel-steps" class="panel" hidden>
     <div class="panel-head">
       <div>
@@ -204,6 +235,21 @@
       <dt>Steps folder</dt><dd id="info-steps"></dd>
       <dt>Features folder</dt><dd id="info-features"></dd>
     </dl>
+    <form id="tests-form" class="tests-form">
+      <h3>Running tests</h3>
+      <label>Test command
+        <input name="test_command" placeholder="python -m pytest tests" autocomplete="off" spellcheck="false">
+        <span class="field-hint">What you'd type in a terminal to run this project's pytest-bdd tests. Start with
+          <code>NAME=value</code> to set an environment variable, e.g. <code>DEMO_BROWSER=brave python -m pytest demo</code>.</span>
+      </label>
+      <label>Run from folder <span class="optional">optional</span>
+        <input name="run_from" autocomplete="off" spellcheck="false">
+      </label>
+      <label class="check"><input type="checkbox" name="capture" checked> Screenshots and traces
+        <span class="field-hint">(needs pytest-playwright)</span></label>
+      <p class="error-box" id="tests-error" hidden></p>
+      <div class="dialog-actions"><button type="submit" class="ghost">Save test settings</button></div>
+    </form>
     <p class="field-hint">Removing a project only takes it off this list. Its files aren't touched.</p>
     <div class="dialog-actions">
       <button type="button" class="danger" id="info-remove">Remove from list</button>

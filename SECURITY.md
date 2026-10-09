@@ -16,8 +16,10 @@ This page is written for whoever approves software on a managed work laptop.
   that. `merge` edits `.feature` and step files only with `--apply`; without it, it prints
   the planned diff and changes nothing. It only edits files inside the folder it's given,
   and refuses any merge that could change what a test does.
-- **No shell commands.** The tool never spawns processes. `run_demo.py` runs Python
-  subprocesses with argument lists, never through a shell.
+- **No shell commands.** The command line tool never starts other programs. The only
+  exception is the app's **Run tests** button (see below), which runs the test command you
+  saved for a project. `run_demo.py` runs Python subprocesses with argument lists, never
+  through a shell.
 
 ## The app (`gherkin-copilot ui`)
 
@@ -57,7 +59,23 @@ This page is written for whoever approves software on a managed work laptop.
   project folders the same way the command line does: with `ast`, never importing or
   running code.
 - **Opens your browser** with Python's standard `webbrowser` module (use `--no-open` to
-  skip). It starts no other programs.
+  skip).
+- **Runs tests only when you ask, and only your own command.** A project can have a test
+  command (for example `python -m pytest tests`), typed in by you in the project's
+  details and stored in your `~/.gherkin-copilot/projects.json`. Until you set one, the
+  app can't run anything. When you press Run, the app:
+  - accepts only commands that run pytest (`pytest …` or `python -m pytest …`), optionally
+    preceded by `NAME=value` environment settings;
+  - splits the command into an argument list and starts it directly, never through a
+    shell, so characters like `;`, `|` or `&&` have no special meaning;
+  - runs it from the folder you chose, at most one run per project, with a Stop button and
+    a 30-minute limit;
+  - adds only pytest options that tell it where to write results (and, if ticked,
+    screenshots and traces), into the project's `.gherkin-copilot/results` folder. That
+    folder is cleared before each run and contains a `.gitignore` so it's never committed.
+  The results page shows those files; the app serves only images, videos and traces from
+  inside that folder. Setting or changing the command needs the same session token as
+  every other change.
 
 ## Test reports
 
@@ -127,7 +145,7 @@ Results from 2026-10-09:
 | `pip-audit --strict -r requirements.lock` (known vulnerabilities) | No known vulnerabilities found |
 | `bandit -r src demo run_demo.py` (static security analysis) | No medium or high findings. Two low, informational notes say `run_demo.py` uses `subprocess`. It only re-runs the current Python with fixed argument lists and no shell. |
 | `pip install --require-hashes -r requirements.lock` in a clean venv, then `pip check` | Installs cleanly, no broken requirements |
-| Tool tests / demo scenarios | 116 of 117 passed / 5 passed. The failure is `test_brave_found_on_mac`, which finds the real Brave in `/Applications` before the test's fake one; it isn't related to the tool. `bandit` and `pip-audit` were not re-run after `merge` was added. |
+| Tool tests / demo scenarios | 129 of 130 passed / 5 passed. The failure is `test_brave_found_on_mac`, which finds the real Brave in `/Applications` before the test's fake one; it isn't related to the tool. `bandit` and `pip-audit` were not re-run after `merge` was added. |
 
 To repeat these checks yourself, install `pip-audit` and `bandit` in a separate
 virtual environment and run the commands above.

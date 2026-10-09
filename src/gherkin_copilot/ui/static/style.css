@@ -513,3 +513,54 @@ button:disabled:not(.tab) { opacity: 0.45; }
   .scenario-actions { width: 100%; }
 }
 .gherkin .table-lines { display: block; white-space: pre; overflow-x: auto; }
+
+/* --- test results --- */
+.run-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-left: 4px; vertical-align: middle; }
+.run-dot.failed { background: var(--bad); }
+.run-dot.running { background: var(--given); animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.3; } }
+.setup-card { background: var(--slot-bg); border-radius: 12px; padding: 16px; display: grid; gap: 6px; justify-items: start; margin-bottom: 16px; }
+.setup-card p { margin: 0; }
+.run-status { display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 16px; }
+.run-status .ghost { margin-left: auto; }
+.spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--given); animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner, .run-dot.running { animation: none; } }
+.tiles { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.tile { display: grid; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 16px; min-width: 150px; }
+.tile strong { font-size: 1.3rem; }
+.tile.good strong { color: var(--accent); }
+.tile.bad strong { color: var(--bad); }
+.results { display: grid; gap: 16px; }
+.result-feature { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 8px; box-shadow: var(--shadow); }
+.result-feature header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.result-feature header h2 { font-size: 1.05rem; }
+.badge { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border-radius: 999px; padding: 2px 8px; color: #fff; background: var(--accent); }
+.badge.failed, .badge.undefined { background: var(--bad); }
+.badge.skipped, .badge.pending { background: var(--muted); }
+.result-scenario { border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 8px 12px; }
+.result-scenario.failed, .result-scenario.undefined { border-left-color: var(--bad); }
+.result-scenario.skipped, .result-scenario.pending { border-left-color: var(--muted); }
+.result-scenario summary { cursor: pointer; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.result-scenario[open] { display: grid; gap: 8px; }
+.result-scenario[open] > .ghost { justify-self: start; }
+.result-name { flex: 1; min-width: 0; font-weight: 600; }
+.result-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.result-step { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 3px 0; }
+.result-step > span:nth-child(2) { flex: 1; min-width: 0; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; align-self: center; }
+.result-step.failed .dot, .result-step.undefined .dot { background: var(--bad); }
+.result-step.skipped .dot, .result-step.pending .dot { background: var(--line); }
+.result-error { flex-basis: 100%; margin: 4px 0 0 16px; padding: 8px 10px; background: var(--bad-soft); color: var(--bad); border-radius: 6px; white-space: pre-wrap; font-size: 0.8rem; }
+.shots { display: flex; gap: 8px; flex-wrap: wrap; }
+.shots img { width: 260px; max-width: 100%; border: 1px solid var(--line); border-radius: 6px; display: block; }
+.trace { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.run-log { margin-top: 16px; }
+.run-log summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; }
+.run-log pre { max-height: 360px; overflow: auto; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: 0.75rem; }
+.card-tools { display: flex; gap: 6px; flex-wrap: wrap; }
+.tests-form { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 14px; }
+.tests-form h3 { margin: 0; font-size: 1rem; }
+.tests-form label { display: grid; gap: 5px; font-weight: 600; font-size: 0.9rem; }
+.tests-form label.check { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+#panel-results .panel-head { margin-bottom: 16px; }

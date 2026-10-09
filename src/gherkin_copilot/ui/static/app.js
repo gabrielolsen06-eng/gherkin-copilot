@@ -9,7 +9,7 @@ const KEYWORDS = [
   ["then", "Then", "Check the result"],
   ["step", "Any keyword", "Works after Given, When or Then"],
 ];
-const TABS = ["build", "scenarios", "steps", "dupes", "history"];
+const TABS = ["build", "scenarios", "steps", "dupes", "history", "results"];
 const OUTLINE_KINDS = ["Scenario Outline", "Scenario Template"];
 
 const state = {
@@ -27,6 +27,9 @@ const state = {
   dupes: null, // last /api/dupes answer
   dupesThreshold: 0.6,
   dupesKeep: new Set(), // functions the user chose to keep
+  run: null, // the current or last test run (live, from the server)
+  runResults: null, // the last results on disk
+  defaultFolder: "",
 };
 
 function emptyDraft() {
@@ -138,6 +141,7 @@ function showTab(tab) {
   if (state.tab === "dupes") loadDupes();
   if (state.tab === "scenarios") loadScenarios();
   if (state.tab === "history") loadHistory();
+  if (state.tab === "results") loadRun();
 }
 
 // --- projects -------------------------------------------------------------
@@ -157,8 +161,9 @@ function applyProjects(data) {
   if (state.active) select.value = state.active;
   if (state.active !== previous) {
     loadDraft();
-    state.dupes = state.scenarios = state.history = null;
+    state.dupes = state.scenarios = state.history = state.run = state.runResults = null;
     state.dupesKeep = new Set();
+    loadRun();
   }
   showTab(state.tab);
 }
@@ -207,7 +212,28 @@ function openInfoDialog() {
   $("info-name").textContent = project.name;
   $("info-steps").textContent = project.steps;
   $("info-features").textContent = project.features;
+  const form = $("tests-form").elements;
+  form.test_command.value = project.test_command || "";
+  form.run_from.value = project.run_from || "";
+  form.run_from.placeholder = state.defaultFolder || "The project folder";
+  form.capture.checked = project.capture !== false;
+  $("tests-error").hidden = true;
   $("info-dialog").showModal();
+}
+
+async function saveTestSettings(event) {
+  event.preventDefault();
+  const form = event.target.elements;
+  try {
+    applyProjects(await api("/api/projects/tests", { id: state.active, test_command: form.test_command.value,
+      run_from: form.run_from.value, capture: form.capture.checked }));
+    $("tests-error").hidden = true;
+    toast("Test settings saved");
+    renderResults();
+  } catch (error) {
+    $("tests-error").textContent = error.message;
+    $("tests-error").hidden = false;
+  }
 }
 
 async function removeActiveProject() {
@@ -384,6 +410,7 @@ function syncDraftFields() {
   $("tags-field").hidden = isBackground();
   $("save-btn").textContent = editing ? "Save changes…" : "Save to a feature file…";
   $("save-copy-btn").hidden = !editing || isBackground();
+  $("run-scenario-btn").hidden = !editing || isBackground();
 }
 
 function saveDraft() {
@@ -898,7 +925,9 @@ function renderScenarios() {
       el("header", {},
         el("div", {}, el("h2", {}, file.feature || file.file),
           el("span", { class: "where" }, file.file), ...file.tags.map((t) => el("span", { class: "tag" }, t))),
-        el("button", { type: "button", class: "ghost small", onclick: () => newScenarioIn(file) }, "+ New scenario here")),
+        el("span", { class: "card-tools" },
+          el("button", { type: "button", class: "ghost small", onclick: () => startRun("file", file.file) }, "▶ Run"),
+          el("button", { type: "button", class: "ghost small", onclick: () => newScenarioIn(file) }, "+ New scenario here"))),
       blocks.length ? el("ul", { class: "scenario-rows" }, ...blocks.map((b) => scenarioRow(file, b)))
         : el("p", { class: "muted small" }, "No scenarios yet."));
   }).filter(Boolean);
@@ -963,6 +992,150 @@ function stopEditing() {
   syncDraftFields();
   renderBlocks();
   renderExamples();
+}
+
+// --- running tests and results -------------------------------------------------------
+
+let runTimer;
+async function loadRun() {
+  clearTimeout(runTimer);
+  const project = activeProject();
+  if (!project) return;
+  try {
+    const data = await api(`/api/run?${query({})}`);
+    if (project.id !== state.active) return;
+    const wasRunning = state.run?.status === "running";
+    state.run = data.run;
+    state.runResults = data.results;
+    state.defaultFolder = data.default_folder;
+    $("results-error").hidden = true;
+    if (wasRunning && state.run?.status !== "running") announceRun();
+  } catch (error) {
+    $("results-error").textContent = error.message;
+    $("results-error").hidden = false;
+  }
+  renderResults();
+  if (state.run?.status === "running") runTimer = setTimeout(loadRun, 1000);
+}
+
+function resultCounts() {
+  const scenarios = (state.runResults?.features || []).flatMap((f) => f.scenarios);
+  const failed = scenarios.filter((s) => s.status !== "passed" && s.status !== "skipped").length;
+  return { total: scenarios.length, failed, passed: scenarios.filter((s) => s.status === "passed").length, scenarios };
+}
+
+function announceRun() {
+  const run = state.run;
+  const { total, failed } = resultCounts();
+  if (run.status === "stopped") return toast("Test run stopped");
+  if (!total) return toast("The run finished without results. See the test output.");
+  toast(failed ? `${failed} of ${plural(total, "scenario")} failed`
+    : total === 1 ? "The scenario passed" : `All ${total} scenarios passed`);
+}
+
+async function startRun(scope, file = "", name = "") {
+  const project = activeProject();
+  if (!project) return;
+  if (!project.test_command) {
+    showTab("results");
+    return toast("Set up the test command first");
+  }
+  try {
+    state.run = await api("/api/run/start", { project: state.active, scope, file, name });
+    showTab("results");
+    runTimer = setTimeout(loadRun, 600);
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+function elapsed(run) {
+  const seconds = Math.max(0, ((run.ended || Date.now() / 1000) - run.started));
+  return seconds < 60 ? `${Math.round(seconds)}s` : `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+}
+
+function artifactUrl(path) {
+  return `/api/artifact?${query({ path })}`;
+}
+
+function findScenario(feature, scenario) {
+  const base = feature.uri.split("/").pop();
+  for (const file of state.scenarios?.files || []) {
+    if (file.file.split("/").pop() !== base) continue;
+    const block = file.blocks.find((b) => b.name === scenario.name);
+    if (block) return { file: file.file, start: block.start, name: block.name };
+  }
+  return null;
+}
+
+function resultScenario(feature, s) {
+  const where = findScenario(feature, s);
+  const traces = s.artifacts.traces || [];
+  return el("details", { class: `result-scenario ${s.status}`, open: s.status !== "passed" && s.status !== "skipped" },
+    el("summary", {},
+      el("span", { class: `badge ${s.status}` }, s.status),
+      el("span", { class: "result-name" }, s.name, s.example ? el("span", { class: "muted small" }, ` [${s.example}]`) : null),
+      el("span", { class: "muted small" }, `${s.seconds.toFixed(2)}s`)),
+    el("ol", { class: "result-steps" }, ...s.steps.map((st) => el("li", { class: `result-step ${st.status}` },
+      el("span", { class: "dot", "aria-label": st.status }),
+      el("span", {}, el("strong", { class: "muted" }, `${st.keyword} `), st.name),
+      el("span", { class: "muted small" }, `${st.seconds.toFixed(2)}s`),
+      st.error ? el("pre", { class: "result-error" }, st.error) : null))),
+    (s.artifacts.screenshots || []).length ? el("div", { class: "shots" }, ...s.artifacts.screenshots.map((p) =>
+      el("a", { href: artifactUrl(p), target: "_blank", rel: "noopener", title: "Open full size" },
+        el("img", { src: artifactUrl(p), alt: `Screenshot of ${s.name}`, loading: "lazy" })))) : null,
+    traces.length ? el("div", { class: "trace" },
+      el("span", { class: "muted small" }, "Replay this test step by step:"),
+      ...traces.map((p) => {
+        const command = `python -m playwright show-trace --host 127.0.0.1 --port 0 "${state.runResults.folder}/${p}"`;
+        return el("button", { type: "button", class: "ghost small", onclick: () => copyText(command, "Command copied: paste it in a terminal") },
+          "Copy trace viewer command");
+      })) : null,
+    where ? el("button", { type: "button", class: "ghost small", onclick: () => openForEdit(where) }, "Open in editor") : null);
+}
+
+function renderResults() {
+  const project = activeProject();
+  if (!project) return;
+  const run = state.run;
+  const running = run?.status === "running";
+  const configured = !!project.test_command;
+  $("run-setup").hidden = configured;
+  $("run-all").disabled = !configured || running;
+  $("run-scenario-btn").disabled = running;
+  $("run-dot").hidden = !running && !resultCounts().failed;
+  $("run-dot").className = `run-dot ${running ? "running" : "failed"}`;
+
+  $("run-status").hidden = !running;
+  if (running) $("run-status-text").textContent = `Running ${run.label === "All tests" ? "all tests" : run.label}` +
+    ` · ${run.done} done · ${elapsed(run)}`;
+
+  const results = state.runResults;
+  const meta = results?.run || {};
+  const { total, passed, failed, scenarios } = resultCounts();
+  $("results-summary").textContent = meta.label
+    ? `Last run: ${meta.label} · ${when(new Date(meta.started * 1000).toISOString())}` + (meta.status === "stopped" ? " (stopped)" : "")
+    : configured ? "No results yet. Press Run to run the tests." : "";
+  const seconds = scenarios.reduce((sum, s) => sum + s.seconds, 0);
+  $("results-tiles").replaceChildren(...(total ? [
+    el("div", { class: `tile ${failed ? "bad" : "good"}` }, el("strong", {}, failed ? `${failed} failed` : "All passed"),
+      el("span", { class: "muted small" }, `${passed} of ${plural(total, "scenario")} passed`)),
+    el("div", { class: "tile" }, el("strong", {}, `${seconds.toFixed(1)}s`), el("span", { class: "muted small" }, "test time")),
+  ] : []));
+  $("results-list").replaceChildren(...(results?.features || []).map((f) => el("article", { class: "result-feature" },
+    el("header", {}, el("h2", {}, f.name), el("span", { class: "where" }, f.uri), el("span", { class: `badge ${f.status}` }, f.status)),
+    ...f.scenarios.map((s) => resultScenario(f, s)))));
+  if (results?.error) {
+    $("results-error").textContent = results.error;
+    $("results-error").hidden = false;
+  }
+
+  const log = run?.log || [];
+  $("run-log").hidden = !log.length;
+  if (log.length) {
+    $("run-log-text").textContent = log.join("\n");
+    if (!total && !running && run) $("run-log").open = true;
+  }
 }
 
 // --- history ----------------------------------------------------------------------
@@ -1344,6 +1517,16 @@ $("change-options").addEventListener("change", syncModes);
 $("change-back").addEventListener("click", () => showPreview(null));
 $("change-cancel").addEventListener("click", () => $("change-dialog").close());
 
+$("tests-form").addEventListener("submit", saveTestSettings);
+$("run-all").addEventListener("click", () => startRun("all"));
+$("run-setup-btn").addEventListener("click", openInfoDialog);
+$("run-stop").addEventListener("click", () => api("/api/run/stop", { project: state.active }).catch((e) => toast(e.message)));
+$("run-scenario-btn").addEventListener("click", () => {
+  const e = state.draft.editing;
+  if (!e) return;
+  if (state.draft.dirty) return toast("Save your changes first, then run the scenario");
+  startRun("scenario", e.file, e.original_name);
+});
 $("scenarios-search").addEventListener("input", (e) => { state.scenariosQuery = e.target.value; renderScenarios(); });
 $("author-change").addEventListener("click", () => askAuthor());
 $("dupes-threshold").addEventListener("input", (e) => {
