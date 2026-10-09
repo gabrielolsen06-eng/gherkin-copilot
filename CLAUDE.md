@@ -24,7 +24,7 @@ source .venv/bin/activate
 python -m pytest tests                    # tool unit tests
 python run_demo.py --brave --headed       # full demo in Brave (owner's browser on macOS)
 python run_demo.py --brave --no-open      # same, without opening the HTML report
-gherkin-copilot index|find|dupes|check|report --help
+gherkin-copilot index|find|dupes|merge|check|report --help
 ```
 
 After changing `src/`, reinstall with `python -m pip install --no-deps --no-build-isolation .`
@@ -39,10 +39,12 @@ and `bandit -r src demo run_demo.py` afterwards.
 ## Layout
 
 - `src/gherkin_copilot/`: `indexer.py` (find step defs via ast), `matcher.py` (exact and
-  fuzzy matching), `checker.py` (feature-file parsing, stubs), `report.py` (Cucumber JSON
+  fuzzy matching), `checker.py` (feature-file parsing, stubs), `merger.py` (merge duplicate
+  steps; the only code that edits user files, and only with `--apply`), `report.py` (Cucumber JSON
   to HTML, no JS), `cli.py`
 - `demo/`: `app/` practice shop, `features/`, `drafts/` (deliberately unimplemented
-  checkout scenario), `steps/` (two deliberate near-duplicate steps for the `dupes` demo),
+  checkout scenario), `steps/` (two deliberate near-duplicate steps for the `dupes`/`merge` demo; `cart.feature`
+  uses one so `merge` rewrites a line),
   `conftest.py`, `browsers.py` (finds Brave), `server.py`
 - `tests/`: unit tests for the tool
 
@@ -55,7 +57,7 @@ and `bandit -r src demo run_demo.py` afterwards.
 
 ## Roadmap
 
-1. Done: `index`, `find`, `dupes`, `check --stubs`, `report`, runnable demo
+1. Done: `index`, `find`, `dupes`, `merge`, `check --stubs`, `report`, runnable demo
 2. Next: `generate STORY.txt`: draft scenarios from a user story with an LLM, using only
    existing steps (must be optional and clearly network-using; keep the core offline)
 3. Put it in a GitHub repo with CI (GitHub Actions)

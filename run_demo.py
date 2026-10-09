@@ -31,6 +31,7 @@ STEPS = [
     ("Look up a step that exists", TOOL + ["find", 'When I add "Sauce Labs Onesie" to the cart', "--path", "demo"], False),
     ("Look up a step worded differently", TOOL + ["find", "Given I open the login page", "--path", "demo"], True),
     ("Find step definitions that duplicate each other", TOOL + ["dupes", "--path", "demo"], False),
+    ("Preview merging those duplicates (add --apply to write it)", TOOL + ["merge", "demo"], False),
     ("Check the finished feature files", TOOL + ["check", "demo/features", "--path", "demo"], False),
     ("Check a draft feature and draft code for its missing steps",
      TOOL + ["check", "demo/drafts", "--path", "demo", "--stubs"], True),

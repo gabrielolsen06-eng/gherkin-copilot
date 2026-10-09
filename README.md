@@ -10,6 +10,7 @@ and helps you:
 | `index` | Lists every step definition with its file and line |
 | `find "STEP"` | Says whether a line of Gherkin binds to a step, and suggests close matches if it doesn't |
 | `dupes` | Spots step definitions that say the same thing in slightly different words |
+| `merge` | Merges those duplicates: rewrites feature files to use one wording and deletes the other step (preview first, `--apply` to write) |
 | `check FEATURES` | Checks every line of your .feature files, and drafts Python code for missing steps (`--stubs`) |
 | `report [JSON]` | Turns a Cucumber JSON results file into a single HTML page, with screenshots, videos and traces linked |
 
@@ -111,7 +112,8 @@ demo/
 └── server.py       localhost-only static server with security headers
 ```
 
-Two steps in `demo/steps` are deliberate near-duplicates, so `dupes` has something to find.
+Two steps in `demo/steps` are deliberate near-duplicates, so `dupes` has something to find,
+and `cart.feature` uses one of them so `merge` has a line to rewrite.
 
 ## Using it on your own project
 
@@ -119,6 +121,7 @@ Two steps in `demo/steps` are deliberate near-duplicates, so `dupes` has somethi
 gherkin-copilot index path/to/your/project          # saves .gherkin-index.json
 gherkin-copilot find 'Given I open the login page'
 gherkin-copilot dupes
+gherkin-copilot merge path/to/your/project          # preview; add --apply to write
 gherkin-copilot check path/to/features --stubs
 ```
 
@@ -137,6 +140,30 @@ def the_order_total_is(page, text1):
     raise NotImplementedError('Step not written yet: the order total is "$29.99"')
 ```
 
+### Merging duplicates
+
+`merge` takes each pair that `dupes` reports and keeps one step: the one used in more
+feature lines, or the one defined first on a tie (`--keep FUNCTION` to choose). Feature
+lines that use the other wording are rewritten, values included, and the other step's
+function is deleted:
+
+```
+✓ 0.64  keep  When I add "{product}" to the cart   [steps/cart_steps.py:11]
+        drop  When I put the "{product}" in my cart   [steps/cart_steps.py:16]
+        1 feature line rewritten, put_in_cart() removed
+
+--- a/demo/features/cart.feature
++++ b/demo/features/cart.feature
+-    When I put the "Sauce Labs Onesie" in my cart
++    When I add "Sauce Labs Onesie" to the cart
+```
+
+By default it only shows the diff. `--apply` writes it. A pair is left alone, with the
+reason shown, unless merging can't change what the tests do: both steps must use the same
+keyword and placeholders, their functions must have identical parameters and code, the
+removed function mustn't be called from anywhere else, and every rewritten line must bind
+to the kept step. Commit first so the change is easy to review and undo.
+
 Every command accepts `--json`. `find` and `check` exit with code 1 when something
 doesn't bind, so they can gate a pull request in CI or a pre-commit hook.
 
@@ -154,7 +181,7 @@ signed in" won't be flagged as duplicates. That's a job for the planned LLM feat
 ## Development
 
 ```bash
-python -m pytest tests       # tool tests (35)
+python -m pytest tests       # tool tests (44)
 python -m pytest demo        # browser scenarios (5)
 ```
 
@@ -168,7 +195,7 @@ Useful environment variables for the demo:
 
 ## Roadmap
 
-1. ~~`index`, `find`, `dupes`~~
+1. ~~`index`, `find`, `dupes`~~, ~~`merge`~~
 2. ~~`check` with stub generation, runnable demo~~
 3. ~~HTML report, traces and videos~~
 4. `generate STORY.txt`: draft scenarios from a user story with an LLM, using only existing steps

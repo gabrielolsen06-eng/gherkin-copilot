@@ -11,6 +11,6 @@ Feature: Cart
     And the cart should contain 2 items
 
   Scenario: Remove a product again
-    When I add "Sauce Labs Onesie" to the cart
+    When I put the "Sauce Labs Onesie" in my cart
     And I remove "Sauce Labs Onesie" from the cart
     Then the cart badge is hidden

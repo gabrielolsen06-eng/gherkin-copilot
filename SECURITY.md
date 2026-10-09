@@ -11,9 +11,11 @@ This page is written for whoever approves software on a managed work laptop.
   update check.
 - **No third-party runtime dependencies.** `pyproject.toml` lists none; it uses only the
   Python standard library.
-- **Writes one file only, and only when asked.** `index` writes `.gherkin-index.json`
-  (plain JSON data, loaded with `json.loads`, never `pickle` or `eval`). Use `--no-save`
-  to avoid even that.
+- **Writes files only when asked.** `index` writes `.gherkin-index.json` (plain JSON
+  data, loaded with `json.loads`, never `pickle` or `eval`). Use `--no-save` to avoid even
+  that. `merge` edits `.feature` and step files only with `--apply`; without it, it prints
+  the planned diff and changes nothing. It only edits files inside the folder it's given,
+  and refuses any merge that could change what a test does.
 - **No shell commands.** The tool never spawns processes. `run_demo.py` runs Python
   subprocesses with argument lists, never through a shell.
 
@@ -85,7 +87,7 @@ Results from 2026-10-09:
 | `pip-audit --strict -r requirements.lock` (known vulnerabilities) | No known vulnerabilities found |
 | `bandit -r src demo run_demo.py` (static security analysis) | No medium or high findings. Two low, informational notes say `run_demo.py` uses `subprocess`. It only re-runs the current Python with fixed argument lists and no shell. |
 | `pip install --require-hashes -r requirements.lock` in a clean venv, then `pip check` | Installs cleanly, no broken requirements |
-| Tool tests / demo scenarios | 35 passed / 5 passed |
+| Tool tests / demo scenarios | 43 of 44 passed / 5 passed. The failure is `test_brave_found_on_mac`, which finds the real Brave in `/Applications` before the test's fake one; it isn't related to the tool. `bandit` and `pip-audit` were not re-run after `merge` was added. |
 
 To repeat these checks yourself, install `pip-audit` and `bandit` in a separate
 virtual environment and run the commands above.

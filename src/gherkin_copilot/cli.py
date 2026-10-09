@@ -3,6 +3,7 @@
     gherkin-copilot index [PATH]          list every step definition and save the index
     gherkin-copilot find "STEP TEXT"      exact and "did you mean" matches for a step
     gherkin-copilot dupes                 step definitions that look like duplicates
+    gherkin-copilot merge [PATH]          merge duplicate steps (preview; --apply to write)
     gherkin-copilot check [FEATURES]      check .feature files bind to real steps, draft stubs
     gherkin-copilot report [JSON]         turn a Cucumber JSON report into an HTML page
 """
@@ -10,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import sys
 from dataclasses import asdict
@@ -19,6 +21,7 @@ from gherkin_copilot import __version__
 from gherkin_copilot.checker import check_steps, iter_feature_files, make_stub, parse_feature
 from gherkin_copilot.indexer import StepDef, build_index, load_index, save_index
 from gherkin_copilot.matcher import find, find_duplicates
+from gherkin_copilot.merger import apply, plan_merges
 from gherkin_copilot.report import write_report
 
 DEFAULT_INDEX = Path(".gherkin-index.json")
@@ -126,6 +129,49 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 0 if all(r.status == "ok" for r in results) else 1
 
 
+def cmd_merge(args: argparse.Namespace) -> int:
+    root = Path(args.path or ".")
+    result = plan_merges(root, threshold=args.threshold, keep=frozenset(args.keep))
+    written = apply(result) if args.apply else []
+
+    if args.json:
+        print(json.dumps({
+            "applied": bool(args.apply),
+            "merges": [{"score": p.score, "keep": asdict(p.keep), "drop": asdict(p.drop), "ok": p.ok,
+                        "problems": p.problems,
+                        "rewritten_lines": [{"file": str(e.file), "line": e.line, "old": e.old.strip(), "new": e.new.strip()}
+                                            for e in p.edits]} for p in result.plans],
+            "files_changed": [str(f) for f in result.changes],
+        }, indent=2))
+        return 0 if all(p.ok for p in result.plans) else 1
+
+    if not result.plans:
+        print("No likely duplicates to merge.")
+        return 0
+    base = Path.cwd()
+    for p in result.plans:
+        print(f"{'✓' if p.ok else '✗'} {p.score:.2f}  keep  {p.keep.keyword.capitalize()} {p.keep.pattern}   [{p.keep.location}]")
+        print(f"        {'drop' if p.ok else '    '}  {p.drop.keyword.capitalize()} {p.drop.pattern}   [{p.drop.location}]")
+        for problem in p.problems:
+            print(f"        can't merge: {problem}")
+        if p.ok:
+            n = len(p.edits)
+            print(f"        {n} feature line{'' if n == 1 else 's'} rewritten, {p.drop.function}() removed")
+        print()
+    for first, second in result.skipped:
+        print(f"Skipped {first.function} / {second.function}: run merge again after this round.\n")
+
+    for path, (old, new) in result.changes.items():
+        shown = path.relative_to(base) if path.is_relative_to(base) else path
+        sys.stdout.writelines(difflib.unified_diff(
+            old.splitlines(keepends=True), new.splitlines(keepends=True), f"a/{shown}", f"b/{shown}"))
+    if written:
+        print(f"\nUpdated {len(written)} file(s). Re-run `gherkin-copilot index` to refresh the saved index.")
+    elif result.changes:
+        print("\nPreview only, nothing was changed. Re-run with --apply to make these changes.")
+    return 0 if all(p.ok for p in result.plans) else 1
+
+
 def cmd_report(args: argparse.Namespace) -> int:
     if not args.json_report.is_file():
         print(f"No report found at {args.json_report}. Run pytest with --cucumberjson first.", file=sys.stderr)
@@ -171,6 +217,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--threshold", type=float, default=0.6, help="similarity needed to report a pair")
     common(p)
     p.set_defaults(func=cmd_dupes)
+
+    p = sub.add_parser("merge", help="merge duplicate step definitions (preview by default)")
+    p.add_argument("path", nargs="?", help="project folder with step definitions and .feature files (default: .)")
+    p.add_argument("--threshold", type=float, default=0.6, help="similarity needed to treat a pair as duplicates")
+    p.add_argument("--keep", action="append", default=[], metavar="FUNCTION",
+                   help="prefer keeping this step function (can be repeated)")
+    p.add_argument("--apply", action="store_true", help="write the changes instead of only showing them")
+    p.add_argument("--json", action="store_true", help="machine-readable output")
+    p.set_defaults(func=cmd_merge)
 
     p = sub.add_parser("check", help="check that every step in .feature files has a definition")
     p.add_argument("features", nargs="?", default=".", help="feature file or folder (default: .)")
