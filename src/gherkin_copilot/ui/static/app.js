@@ -668,8 +668,11 @@ function helpFor(block, result, status) {
   } else {
     box.append(el("p", { class: "help-line" }, "No similar step exists. It needs new code."));
   }
+  const index = state.draft.blocks.indexOf(block);
+  box.append(el("button", { type: "button", class: "primary small build-code",
+    onclick: () => openStepCode(block, keywords()[index].base) }, "Build its code with action blocks…"));
   box.append(el("details", { class: "stub" },
-    el("summary", {}, "Code for this new step"),
+    el("summary", {}, "Or copy an empty template"),
     el("pre", {}, result.stub),
     el("button", { type: "button", class: "ghost small", onclick: () => copyText(result.stub, "Code copied") }, "Copy code")));
   return box;
@@ -1142,7 +1145,7 @@ function renderResults() {
 
 const ACTIONS = {
   create: "Created file", add: "Added scenario", edit: "Edited", delete: "Deleted", duplicate: "Duplicated",
-  restore: "Restored", merge: "Merged duplicates", "add steps": "Added step code",
+  restore: "Restored", merge: "Merged duplicates", "add steps": "Added step templates", "add step code": "Built step code",
 };
 
 async function loadHistory() {
@@ -1376,6 +1379,178 @@ function afterSave(kind, result, body) {
   loadSteps();
 }
 
+// --- action blocks: build the code of a new step ---------------------------------------
+
+const sc = { line: "", keyword: "", info: null, names: {}, actions: [], preview: null };
+
+async function openStepCode(block, keyword) {
+  const line = `${capitalize(keyword)} ${block.text}`;
+  let info;
+  try {
+    info = await api("/api/stepcode/draft", { project: state.active, line, keyword });
+  } catch (error) {
+    return toast(error.message);
+  }
+  Object.assign(sc, { line, keyword, info, names: {}, actions: [], preview: null });
+  for (const p of info.params) sc.names[p.name] = p.name;
+  sc.actions.push(newAction(info.params.length ? "fill" : "click"));
+  $("stepcode-line").replaceChildren(el("span", { class: "kw-pill" }, capitalize(keyword)), " ", info.text);
+  const files = $("stepcode-file");
+  files.replaceChildren(...info.files.map((f) => el("option", { value: f }, f)));
+  const folder = info.files[0]?.includes("/") ? info.files[0].slice(0, info.files[0].lastIndexOf("/") + 1) : "";
+  $("stepcode-newfile").value = `${folder}new_steps.py`;
+  const form = $("stepcode-form").elements;
+  form.target.value = info.files.length ? "existing" : "new";
+  form.target[0].disabled = !info.files.length;
+  syncStepCodeTarget();
+  renderStepCode();
+  showStepCodePreview(null);
+  $("stepcode-dialog").showModal();
+}
+
+function newAction(action) {
+  const meta = Object.fromEntries((sc.info?.actions || []).map((a) => [a.id, a]));
+  const first = sc.info?.params[0]?.name;
+  return {
+    action,
+    target: { by: action === "fill" ? "label" : "button", value: "" },
+    value: meta[action]?.value && first ? { param: first } : { text: "" },
+  };
+}
+
+function syncStepCodeTarget() {
+  const isNew = $("stepcode-form").elements.target.value === "new";
+  $("stepcode-file").hidden = isNew;
+  $("stepcode-newfile").hidden = !isNew;
+  $("stepcode-newfile-hint").hidden = !isNew;
+}
+
+function renderStepCode() {
+  const params = sc.info.params;
+  $("stepcode-params").replaceChildren(...(params.length ? [
+    el("h3", {}, "Name the step's values"),
+    el("p", { class: "field-hint" }, "These parts of the line change each time the step is used. Give them names you'll recognise."),
+    el("div", { class: "param-list" }, ...params.map((p) => {
+      const input = el("input", { value: sc.names[p.name], "aria-label": `Name for ${p.name}`, autocomplete: "off", spellcheck: "false" });
+      input.addEventListener("input", () => {
+        const old = sc.names[p.name];
+        sc.names[p.name] = input.value.trim();
+        for (const a of sc.actions) if (a.value?.param === old) a.value.param = sc.names[p.name];
+        renderActions();
+        scheduleStepCode();
+      });
+      return el("label", { class: "param" }, el("span", { class: `slot ${p.type}` }, p.type === "number" ? "number" : "text"), input);
+    })),
+  ] : []));
+  renderActions();
+  scheduleStepCode();
+}
+
+function renderActions() {
+  const actions = sc.info.actions, targets = sc.info.targets;
+  const meta = Object.fromEntries(actions.map((a) => [a.id, a]));
+  const paramNames = sc.info.params.map((p) => sc.names[p.name]);
+  const last = sc.actions.length - 1;
+  $("stepcode-actions").replaceChildren(...sc.actions.map((item, i) => {
+    const kind = el("select", { "aria-label": `Action ${i + 1}` }, ...actions.map((a) =>
+      el("option", { value: a.id, selected: a.id === item.action }, a.label)));
+    kind.addEventListener("change", () => {
+      item.action = kind.value;
+      if (meta[item.action].value && !item.value) item.value = { text: "" };
+      renderActions();
+      scheduleStepCode();
+    });
+    const parts = [kind];
+    if (meta[item.action].target) {
+      const by = el("select", { "aria-label": "How to find the element" }, ...targets.map((t) =>
+        el("option", { value: t.id, selected: t.id === item.target.by }, t.label)));
+      by.addEventListener("change", () => { item.target.by = by.value; scheduleStepCode(); });
+      const what = el("input", { value: item.target.value, placeholder: item.target.by === "css" ? "#checkout" : "e.g. Checkout",
+        "aria-label": "Element", autocomplete: "off", spellcheck: "false" });
+      what.addEventListener("input", () => { item.target.value = what.value; scheduleStepCode(); });
+      parts.push(by, what);
+    }
+    if (meta[item.action].value) {
+      const source = el("select", { "aria-label": "Value" },
+        el("option", { value: "", selected: !item.value?.param }, "this text:"),
+        ...paramNames.map((n) => el("option", { value: n, selected: item.value?.param === n }, `the step's “${n}”`)));
+      const text = el("input", { value: item.value?.text || "", placeholder: item.action === "goto" ? "https://…" : "text",
+        "aria-label": "Text", autocomplete: "off", hidden: !!item.value?.param });
+      source.addEventListener("change", () => {
+        item.value = source.value ? { param: source.value } : { text: text.value };
+        text.hidden = !!source.value;
+        scheduleStepCode();
+      });
+      text.addEventListener("input", () => { item.value = { text: text.value }; scheduleStepCode(); });
+      parts.push(source, text);
+    }
+    const move = (to) => () => { sc.actions.splice(to, 0, sc.actions.splice(i, 1)[0]); renderActions(); scheduleStepCode(); };
+    return el("li", { class: "action-row" },
+      el("span", { class: "action-num" }, String(i + 1)),
+      el("div", { class: "action-fields" }, ...parts),
+      el("span", { class: "block-tools" },
+        el("button", { type: "button", class: "icon", title: "Move up", "aria-label": "Move up", disabled: i === 0, onclick: move(i - 1) }, "↑"),
+        el("button", { type: "button", class: "icon", title: "Move down", "aria-label": "Move down", disabled: i === last, onclick: move(i + 1) }, "↓"),
+        el("button", { type: "button", class: "icon", title: "Remove", "aria-label": "Remove action",
+          onclick: () => { sc.actions.splice(i, 1); renderActions(); scheduleStepCode(); } }, "✕")));
+  }));
+}
+
+let stepCodeTimer, stepCodeSeq = 0;
+function scheduleStepCode() {
+  clearTimeout(stepCodeTimer);
+  stepCodeTimer = setTimeout(async () => {
+    const seq = ++stepCodeSeq;
+    try {
+      const data = await api("/api/stepcode/code", stepCodeBody());
+      if (seq !== stepCodeSeq) return;
+      $("stepcode-code").textContent = data.code || "";
+      $("stepcode-code").hidden = !data.code;
+      $("stepcode-problem").textContent = data.error || "";
+      $("stepcode-problem").hidden = !data.error;
+    } catch (error) {
+      $("stepcode-problem").textContent = error.message;
+      $("stepcode-problem").hidden = false;
+    }
+  }, 250);
+}
+
+function stepCodeBody() {
+  const isNew = $("stepcode-form").elements.target.value === "new";
+  return { project: state.active, line: sc.line, keyword: sc.keyword, names: sc.names, actions: sc.actions,
+    new_file: isNew, file: isNew ? $("stepcode-newfile").value : $("stepcode-file").value };
+}
+
+function showStepCodePreview(preview) {
+  sc.preview = preview;
+  $("stepcode-edit").hidden = !!preview;
+  $("stepcode-preview").hidden = !preview;
+  $("stepcode-back").hidden = !preview;
+  $("stepcode-error").hidden = true;
+  $("stepcode-submit").textContent = preview ? (preview.creates ? "Create file" : "Add to file") : "Preview changes";
+  if (preview) $("stepcode-diff").replaceChildren(...preview.diff.slice(2).map((line) =>
+    el("span", { class: line.startsWith("+") ? "add" : line.startsWith("-") ? "del" : line.startsWith("@@") ? "hunk" : "" }, `${line}\n`)));
+}
+
+async function submitStepCode(event) {
+  event.preventDefault();
+  try {
+    if (!sc.preview) {
+      sc.request = stepCodeBody();
+      return showStepCodePreview(await api("/api/stepcode/preview", sc.request));
+    }
+    const name = await ensureAuthor();
+    if (!name) return;
+    const result = await api("/api/stepcode/save", { ...sc.request, hash: sc.preview.hash, author: name });
+    $("stepcode-dialog").close();
+    toast(`Step code added to ${result.saved}`);
+    loadSteps();
+  } catch (error) {
+    $("stepcode-error").textContent = error.message;
+    $("stepcode-error").hidden = false;
+  }
+}
+
 // --- duplicates ----------------------------------------------------------------
 
 let dupesSeq = 0;
@@ -1486,10 +1661,16 @@ $("draft-kind").addEventListener("change", (e) => {
   syncDraftFields();
   changed();
 });
-$("typed-form").addEventListener("submit", (e) => {
-  e.preventDefault();
+function addTyped() {
   addTextBlock($("typed-input").value);
   $("typed-input").value = "";
+}
+$("typed-form").addEventListener("submit", (e) => { e.preventDefault(); addTyped(); });
+$("typed-input").addEventListener("keydown", (e) => {  // add at once, not on the form's later submit event
+  if (e.key === "Enter" && !e.isComposing) {
+    e.preventDefault();
+    addTyped();
+  }
 });
 $("build-clear").addEventListener("click", () => {
   if (state.draft.blocks.length && !confirm(state.draft.editing
@@ -1518,6 +1699,11 @@ $("change-back").addEventListener("click", () => showPreview(null));
 $("change-cancel").addEventListener("click", () => $("change-dialog").close());
 
 $("tests-form").addEventListener("submit", saveTestSettings);
+$("stepcode-form").addEventListener("submit", submitStepCode);
+$("stepcode-add").addEventListener("click", () => { sc.actions.push(newAction("click")); renderActions(); scheduleStepCode(); });
+$("stepcode-cancel").addEventListener("click", () => $("stepcode-dialog").close());
+$("stepcode-back").addEventListener("click", () => showStepCodePreview(null));
+$("stepcode-form").addEventListener("change", (e) => { if (e.target.name === "target") syncStepCodeTarget(); });
 $("run-all").addEventListener("click", () => startRun("all"));
 $("run-setup-btn").addEventListener("click", openInfoDialog);
 $("run-stop").addEventListener("click", () => api("/api/run/stop", { project: state.active }).catch((e) => toast(e.message)));

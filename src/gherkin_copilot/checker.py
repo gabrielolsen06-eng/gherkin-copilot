@@ -132,8 +132,11 @@ def _function_name(text: str) -> str:
     return name[:60].rstrip("_")
 
 
-def make_stub(step: FeatureStep) -> str:
-    """Draft a pytest-bdd step definition, turning quoted values and numbers into parameters."""
+def stub_parts(step: FeatureStep) -> tuple[str, list[tuple[str, str]], str]:
+    """(pattern, [(parameter, format)], function name) for a new step definition matching this line.
+
+    Quoted values and numbers become parameters: 'I pay "visa" 2 times' -> 'I pay "{text1}" {number2:d} times'.
+    """
     params: list[tuple[str, str]] = []
 
     def quoted(m: re.Match) -> str:
@@ -146,10 +149,17 @@ def make_stub(step: FeatureStep) -> str:
         return f"{{{params[-1][0]}{fmt}}}"
 
     pattern = NUMBER.sub(number, QUOTED.sub(quoted, step.text.replace("{", "{{").replace("}", "}}")))
+    function = _function_name(NUMBER.sub("", OUTLINE_PARAM.sub("", QUOTED.sub("", step.text))))
+    return pattern, params, function
+
+
+def make_stub(step: FeatureStep) -> str:
+    """Draft a pytest-bdd step definition, turning quoted values and numbers into parameters."""
+    pattern, params, function = stub_parts(step)
     args = ", ".join(["page"] + [p for p, _ in params])
     decorator = f"@{step.keyword}(parsers.parse({pattern!r}))" if params else f"@{step.keyword}({pattern!r})"
     return (
         f"{decorator}\n"
-        f"def {_function_name(NUMBER.sub('', OUTLINE_PARAM.sub('', QUOTED.sub('', step.text))))}({args}):\n"
+        f"def {function}({args}):\n"
         f"    raise NotImplementedError({('Step not written yet: ' + step.text)!r})\n"
     )

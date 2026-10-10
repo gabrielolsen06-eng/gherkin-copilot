@@ -53,6 +53,12 @@ This page is written for whoever approves software on a managed work laptop.
     the server validates and writes itself; it never writes text from the browser
     directly. Only the lines of that one scenario change, and saving is refused if the
     scenario or the file changed since the preview;
+  - step code built with action blocks, added to an existing step file or a new `.py`
+    file in the steps folder. The browser sends a list of actions from a fixed menu
+    (click, type into, check text…) with the element and text to use; the server writes
+    the Python. Everything typed is placed inside quoted Python strings, value names must
+    be plain identifiers, and the result is compiled and checked to match the scenario line
+    before it can be saved, so no text from the browser can become code;
   - a history of those changes, appended to `.gherkin-copilot/history.jsonl` inside the
     project. It holds the diffs, the scenario text before and after, and the name the user
     typed in. It never contains anything beyond what's already in the project's files. The app reads
@@ -145,7 +151,7 @@ Results from 2026-10-09:
 | `pip-audit --strict -r requirements.lock` (known vulnerabilities) | No known vulnerabilities found |
 | `bandit -r src demo run_demo.py` (static security analysis) | No medium or high findings. Two low, informational notes say `run_demo.py` uses `subprocess`. It only re-runs the current Python with fixed argument lists and no shell. |
 | `pip install --require-hashes -r requirements.lock` in a clean venv, then `pip check` | Installs cleanly, no broken requirements |
-| Tool tests / demo scenarios | 129 of 130 passed / 5 passed. The failure is `test_brave_found_on_mac`, which finds the real Brave in `/Applications` before the test's fake one; it isn't related to the tool. `bandit` and `pip-audit` were not re-run after `merge` was added. |
+| Tool tests / demo scenarios | 152 of 153 passed / 5 passed. The failure is `test_brave_found_on_mac`, which finds the real Brave in `/Applications` before the test's fake one; it isn't related to the tool. `bandit` and `pip-audit` were not re-run after `merge` was added. |
 
 To repeat these checks yourself, install `pip-audit` and `bandit` in a separate
 virtual environment and run the commands above.

@@ -53,7 +53,8 @@ and `bandit -r src demo run_demo.py` afterwards.
   scenario list/open-as-blocks/new/edit/delete/duplicate/restore (validates a structured
   spec, never writes raw browser text), `history.py` append-only
   `.gherkin-copilot/history.jsonl` in the project, `runner.py` runs the project's test
-  command and reads `cucumber.json` back, `static/` plain
+  command and reads `cucumber.json` back, `stepcode.py` action blocks → Playwright step code
+  (fixed action/locator menu, `repr` for all user text, compiled before saving), `static/` plain
   HTML/CSS/JS, `textContent` only, no frameworks or CDNs)
 - `demo/`: `app/` practice shop, `features/`, `drafts/` (deliberately unimplemented
   checkout scenario), `steps/` (two deliberate near-duplicate steps for the `dupes`/`merge` demo; `cart.feature`

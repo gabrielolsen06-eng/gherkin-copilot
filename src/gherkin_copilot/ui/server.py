@@ -21,7 +21,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 from gherkin_copilot import __version__
-from gherkin_copilot.ui import builder, dupes, editor, gherkin, history, runner
+from gherkin_copilot.ui import builder, dupes, editor, gherkin, history, runner, stepcode
 from gherkin_copilot.ui.catalog import describe
 from gherkin_copilot.ui.projects import Project, ProjectStore
 
@@ -110,6 +110,14 @@ class App:
             if route == "/api/check":
                 lines = builder.clean_lines(body.get("lines"))
                 return {"results": builder.check(project, lines, body.get("examples"))}
+            if route == "/api/stepcode/draft":
+                return {**stepcode.draft(text("line"), text("keyword")), **stepcode.catalogue(),
+                        "files": stepcode.step_files(project)}
+            if route == "/api/stepcode/code":
+                try:
+                    return stepcode.code(text("line"), text("keyword"), body.get("names"), body.get("actions"))
+                except ValueError as exc:  # shown next to the live preview while the user is still editing
+                    return {"code": None, "error": str(exc)}
             base, _, step = route.rpartition("/")
             if step not in {"preview", "save"}:
                 raise ApiError(HTTPStatus.NOT_FOUND, "Unknown action.")
@@ -122,6 +130,11 @@ class App:
                 changes = dupes.apply(project, body.get("threshold"), text("pair"), body.get("keep"), body.get("hash"))
                 history.record(project, "merge", author, changes, scenario=text("label"))
                 return {"saved": sorted(changes)}
+            if base == "/api/stepcode":
+                exists = lambda line: builder.check(project, builder.clean_lines([line]))[0]["status"] != "missing"
+                change = stepcode.plan(project, text("line"), text("keyword"), body.get("names"), body.get("actions"),
+                                       text("file"), body.get("new_file") is True, exists)
+                return self._flow(project, step, change, body, "add step code", author)
             if base == "/api/stubs":
                 change = builder.plan_stubs(project, text("file"), body.get("lines"), body.get("only"),
                                             body.get("examples"))

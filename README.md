@@ -200,7 +200,15 @@ The Gherkin text builds up live on the right. When you're done:
   your step files (with any imports they need). They fail with “Step not written yet” until
   someone writes the body.
 
-Both show exactly what will change and only write when you confirm. If the file changed
+- **Build its code with action blocks** (on any line that doesn't exist yet) writes the real
+  code for the new step, no Python needed. Name the parts of the line that change (e.g.
+  `"Ada"` → `first_name`), then add actions in order: go to a page, click, type into,
+  choose an option, tick a checkbox, press a key, check text / visibility / how many / the
+  address. Find elements the way a user sees them (a button's text, a field's label) or by
+  CSS selector. The Playwright code updates live, and saves into an existing or a new step
+  file, so the step runs straight away.
+
+All of these show exactly what will change and only write when you confirm. If the file changed
 in the meantime, saving is refused so nothing is overwritten. Your draft is kept in the
 browser per project, so a reload doesn't lose it.
 
@@ -276,7 +284,7 @@ signed in" won't be flagged as duplicates. That's a job for the planned LLM feat
 ## Development
 
 ```bash
-python -m pytest tests       # tool tests (130)
+python -m pytest tests       # tool tests (153)
 python -m pytest demo        # browser scenarios (5)
 ```
 

@@ -276,6 +276,50 @@
   </form>
 </dialog>
 
+<dialog id="stepcode-dialog" class="wide">
+  <form id="stepcode-form" method="dialog">
+    <h2>Build the code for a new step</h2>
+    <p class="stepcode-line" id="stepcode-line"></p>
+    <div id="stepcode-edit" class="stepcode-edit">
+      <section id="stepcode-params" class="stepcode-params"></section>
+      <section>
+        <h3>What should this step do?</h3>
+        <p class="field-hint">Add the actions a person would do, in order. Describe elements the way a user sees them
+          where you can (a button's text, a field's label). For anything else, right-click it in the browser, choose
+          Inspect, and use its id or class as a CSS selector, like <code>#checkout</code> or <code>.cart_list</code>.</p>
+        <ol id="stepcode-actions" class="actions"></ol>
+        <button type="button" class="ghost small" id="stepcode-add">+ Add action</button>
+      </section>
+      <section>
+        <h3>Code</h3>
+        <pre id="stepcode-code" class="code"></pre>
+        <p class="warn-box" id="stepcode-problem" hidden></p>
+      </section>
+      <section class="stepcode-save">
+        <h3>Save it to</h3>
+        <div class="radios">
+          <label class="radio"><input type="radio" name="target" value="existing" checked> An existing step file</label>
+          <label class="radio"><input type="radio" name="target" value="new"> A new step file</label>
+        </div>
+        <select id="stepcode-file" aria-label="Step file"></select>
+        <input id="stepcode-newfile" aria-label="New step file" autocomplete="off" spellcheck="false" hidden>
+        <p class="field-hint" id="stepcode-newfile-hint" hidden>A new file only runs if your conftest.py loads it. The
+          demo loads every file in its steps folder; other projects may list files in <code>pytest_plugins</code>.</p>
+      </section>
+    </div>
+    <div id="stepcode-preview" hidden>
+      <p class="field-hint">Here's exactly what will change. Nothing has been written yet.</p>
+      <pre id="stepcode-diff" class="diff"></pre>
+    </div>
+    <p class="error-box" id="stepcode-error" hidden></p>
+    <div class="dialog-actions">
+      <button type="button" class="ghost" id="stepcode-cancel">Cancel</button>
+      <button type="button" class="ghost" id="stepcode-back" hidden>Back</button>
+      <button type="submit" class="primary" id="stepcode-submit">Preview changes</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="author-dialog">
   <form id="author-form" method="dialog">
     <h2>Who's making changes?</h2>

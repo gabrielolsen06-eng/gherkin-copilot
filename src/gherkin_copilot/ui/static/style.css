@@ -564,3 +564,23 @@ button:disabled:not(.tab) { opacity: 0.45; }
 .tests-form label { display: grid; gap: 5px; font-weight: 600; font-size: 0.9rem; }
 .tests-form label.check { display: flex; align-items: center; gap: 8px; font-weight: 500; }
 #panel-results .panel-head { margin-bottom: 16px; }
+
+/* --- action blocks --- */
+dialog.wide { width: min(880px, calc(100vw - 32px)); }
+.stepcode-line { margin: 0; padding: 10px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; font-weight: 600; }
+.stepcode-line .kw-pill { background: var(--when); }
+.stepcode-edit { display: grid; gap: 16px; }
+.stepcode-edit h3, .stepcode-params h3 { margin: 0 0 4px; font-size: 0.95rem; }
+.param-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.param { display: flex !important; align-items: center; gap: 6px; font-weight: 400 !important; }
+.param input { width: 160px; }
+.actions { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
+.action-row { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--when); border-radius: 8px; padding: 6px 8px; }
+.action-num { color: var(--muted); font-weight: 700; min-width: 1.2em; text-align: right; }
+.action-fields { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
+.action-fields input { flex: 1; min-width: 120px; }
+.code { margin: 6px 0 0; padding: 10px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; font-size: 0.8rem; overflow-x: auto; white-space: pre; }
+.warn-box { background: var(--num-bg); color: var(--num-ink); border-radius: 8px; padding: 8px 12px; margin: 6px 0 0; font-size: 0.9rem; }
+.stepcode-save { display: grid; gap: 8px; }
+.stepcode-save select, .stepcode-save input:not([type=radio]) { width: 100%; }
+.build-code { justify-self: start; }
