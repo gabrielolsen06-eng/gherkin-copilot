@@ -22,7 +22,7 @@ DRAFT = [
 @pytest.fixture
 def demo(tmp_path):
     root = tmp_path / "demo"
-    shutil.copytree(DEMO, root, ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copytree(DEMO, root, ignore=shutil.ignore_patterns("__pycache__", ".DS_Store", ".gherkin-copilot"))
     return Project("demo", "Demo", str(root), str(root / "features"))
 
 

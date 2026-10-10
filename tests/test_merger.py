@@ -19,19 +19,19 @@ def project(tmp_path, steps, feature):
 
 
 def demo_copy(tmp_path):
-    shutil.copytree(DEMO, tmp_path / "demo", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copytree(DEMO, tmp_path / "demo", ignore=shutil.ignore_patterns("__pycache__", ".DS_Store", ".gherkin-copilot"))
     return tmp_path / "demo"
 
 
 def test_preview_writes_nothing(tmp_path):
     demo = demo_copy(tmp_path)
-    before = {p: p.read_text() for p in demo.rglob("*") if p.is_file()}
+    before = {p: p.read_bytes() for p in demo.rglob("*") if p.is_file()}
     result = plan_merges(demo)
     assert [(p.keep.function, p.drop.function, p.ok) for p in result.plans] == [
         ("open_login_page", "user_on_login_page", True),
         ("add_to_cart", "put_in_cart", True),
     ]
-    assert {p: p.read_text() for p in demo.rglob("*") if p.is_file()} == before
+    assert {p: p.read_bytes() for p in demo.rglob("*") if p.is_file()} == before
 
 
 def test_apply_on_demo_rewrites_lines_and_removes_duplicates(tmp_path, capsys):

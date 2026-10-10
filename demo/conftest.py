@@ -18,8 +18,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from browsers import browser_path_from_env  # noqa: E402
 from server import start_in_background  # noqa: E402
 
-# Step definitions live in steps/ and are shared by every feature file.
-pytest_plugins = ["steps.login_steps", "steps.cart_steps"]
+# Step definitions live in steps/ and are shared by every feature file. Every module in
+# the folder is loaded, so a new step file is available without registering it here.
+STEPS_DIR = Path(__file__).resolve().parent / "steps"
+pytest_plugins = [f"steps.{p.stem}" for p in sorted(STEPS_DIR.glob("*.py")) if p.stem != "__init__"]
 
 
 @pytest.fixture(scope="session")
