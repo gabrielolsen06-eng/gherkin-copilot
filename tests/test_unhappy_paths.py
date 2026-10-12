@@ -1,4 +1,5 @@
-"""Regression tests for the 2026-10-11 review: missing paths, bad files, Windows consoles."""
+"""Regression tests for the 2026-10-11 review and its 2026-10-12 re-review: missing paths, bad files,
+Windows consoles, literal plain-string steps."""
 
 import io
 import json
@@ -10,7 +11,10 @@ from pathlib import Path
 
 import pytest
 
+from gherkin_copilot import cli
 from gherkin_copilot.cli import main
+from gherkin_copilot.indexer import build_index
+from gherkin_copilot.matcher import find, is_exact_match
 from gherkin_copilot.report import load_report
 
 DEMO = Path(__file__).parent.parent / "demo"
@@ -104,3 +108,62 @@ def test_stale_index_warns(tmp_path, capsys, monkeypatch):
     os.utime(project / "steps" / "cart_steps.py", (later, later))
     main(["find", "Given I am on the login page"])
     assert "cart_steps.py changed after the saved index was made" in capsys.readouterr().err
+
+
+# N1: pytest-bdd matches a plain string literally, braces and all; behave reads {name} as a placeholder
+def test_plain_string_steps_match_literally(tmp_path):
+    (tmp_path / "bdd_steps.py").write_text(
+        "from pytest_bdd import given\n\n"
+        "@given(\"I have {x} apples\")\ndef apples():\n    pass\n\n"
+        "@given(\"the json is {{}}\")\ndef empty_json():\n    pass\n")
+    (tmp_path / "behave_steps.py").write_text(
+        "from behave import given\n\n@given(\"I own {n} pears\")\ndef pears(context, n):\n    pass\n")
+    steps = {s.function: s for s in build_index(tmp_path)}
+    assert is_exact_match("Given I have {x} apples", steps["apples"])
+    assert not is_exact_match("Given I have 5 apples", steps["apples"])
+    assert is_exact_match("Given the json is {{}}", steps["empty_json"])
+    assert not is_exact_match("Given the json is {}", steps["empty_json"])
+    assert is_exact_match("Given I own 3 pears", steps["pears"])
+    best = find("Given the json is {{}}", list(steps.values()))[0]
+    assert best.exact and best.step.function == "empty_json"
+
+
+# N2: a line number that is infinite, NaN or too big for a float is junk, not a crash
+@pytest.mark.parametrize("line", ["1e400", "Infinity", "-Infinity", "NaN", "\"1e400\"", "1" + "0" * 400])
+def test_report_ignores_line_numbers_that_are_not_finite(tmp_path, capsys, line):
+    report = tmp_path / "cucumber.json"
+    step = '{"keyword": "Given ", "name": "x", "line": ' + line + ', "result": {"status": "passed"}}'
+    report.write_text('[{"name": "F", "elements": [{"type": "scenario", "name": "S", "line": ' + line
+                      + ', "steps": [' + step + ']}]}]')
+    scenario = load_report(report)[0].scenarios[0]
+    assert scenario.line == 0 and scenario.steps[0].line == 0
+    code, _, err = run(["report", str(report), "-o", str(tmp_path / "r.html")], capsys)
+    assert code == 0 and err == ""
+
+
+# N3: a wrong value inside an otherwise valid index gets the same friendly message as bad JSON
+def test_index_with_a_bad_created_time(tmp_path, capsys):
+    index = tmp_path / "index.json"
+    index.write_text('{"root": ".", "created": "abc", "steps": []}')
+    code, _, err = run(["find", "Given x", "--index", str(index)], capsys)
+    assert code == 2 and "isn't a valid index file" in err and "could not convert" not in err
+
+
+# N4: only the loaders' errors count as bad input; a bug elsewhere is an internal error with details
+@pytest.mark.parametrize("error", [KeyError("step"), TypeError("bug"), ValueError("bug")])
+def test_bugs_are_internal_errors_not_usage_errors(capsys, monkeypatch, error):
+    def broken(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(cli, "find", broken)
+    code, _, err = run(["find", "Given I am on the login page", "--path", str(DEMO)], capsys)
+    assert code == 3 and "Traceback" in err and "internal error" in err
+
+
+# N5: messages count properly and show forward-slash paths
+def test_index_message_and_paths(tmp_path, capsys):
+    (tmp_path / "one.py").write_text("from pytest_bdd import given\n\n@given(\"x\")\ndef x():\n    pass\n")
+    index = tmp_path / "sub" / "index.json"
+    index.parent.mkdir()
+    assert main(["index", str(tmp_path), "--index", str(index)]) == 0
+    assert f"1 step definition indexed, saved to {index.as_posix()}" in capsys.readouterr().err

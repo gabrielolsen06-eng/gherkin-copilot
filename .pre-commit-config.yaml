@@ -1,23 +1,32 @@
 # Checks run on every commit. Set up once (with the dev tools installed, see requirements-dev.txt):
 #   .venv-dev/bin/pre-commit install
-# These use the tools from your active environment, so nothing extra is downloaded at commit time.
+# These call the tools in .venv-dev (and pytest in .venv) directly, so they work from the VS Code
+# commit button without an activated environment, and nothing extra is downloaded at commit time.
+# On Windows, change bin/ to Scripts/ below.
 repos:
   - repo: local
     hooks:
       - id: ruff
         name: ruff
-        entry: ruff check
+        entry: .venv-dev/bin/ruff check
         language: system
         types: [python]
       - id: mypy
         name: mypy --strict
-        entry: mypy
+        entry: .venv-dev/bin/mypy
         language: system
         types: [python]
         pass_filenames: false
       - id: bandit
         name: bandit
-        entry: bandit -q -r src demo run_demo.py
+        entry: .venv-dev/bin/bandit -q -r src demo run_demo.py
         language: system
         types: [python]
+        pass_filenames: false
+      # A stray generated step file once broke 12 tests without any of the hooks above noticing
+      - id: pytest
+        name: pytest
+        entry: .venv/bin/python -m pytest tests -q -p no:cacheprovider
+        language: system
+        files: \.(py|feature|toml)$
         pass_filenames: false

@@ -16,7 +16,8 @@ import difflib
 import json
 import sys
 import traceback
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
 
@@ -36,6 +37,19 @@ class UsageError(Exception):
     """A problem with what the user asked for: printed as one line, exit code 2."""
 
 
+@contextmanager
+def _input_file() -> Iterator[None]:
+    """Around a loader only: its ValueError means a malformed input file, so report it as one line (exit 2)."""
+    try:
+        yield
+    except ValueError as exc:
+        raise UsageError(str(exc)) from exc
+
+
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}{'' if n == 1 else 's'}"
+
+
 def _existing_path(text: str | None, what: str) -> Path:
     path = Path(text or ".")
     if not path.exists():
@@ -46,12 +60,13 @@ def _existing_path(text: str | None, what: str) -> Path:
 def _load_steps(args: argparse.Namespace) -> list[StepDef]:
     """Use the saved index unless a path was given or no index exists yet."""
     if args.path is None and args.index.exists():
-        index = load_index(args.index)
+        with _input_file():
+            index = load_index(args.index)
         newer = next((p for p in iter_python_files(index.root) if p.stat().st_mtime > index.created), None) \
             if index.root and index.root.is_dir() else None
         if newer:
-            print(f"Note: {newer} changed after the saved index was made. Run `gherkin-copilot index` again, "
-                  "or pass --path to scan fresh.", file=sys.stderr)
+            print(f"Note: {newer.as_posix()} changed after the saved index was made. "
+                  "Run `gherkin-copilot index` again, or pass --path to scan fresh.", file=sys.stderr)
         return index.steps
     return build_index(_existing_path(args.path, "Folder"))
 
@@ -81,8 +96,8 @@ def cmd_index(args: argparse.Namespace) -> int:
             print(f"       {s.location}  ({s.kind}, {s.function})")
     if not args.no_save:
         save_index(steps, args.index, root)
-    print(f"\n{len(steps)} step definitions indexed", end="", file=sys.stderr)
-    print("" if args.no_save else f", saved to {args.index}", file=sys.stderr)
+    print(f"\n{_plural(len(steps), 'step definition')} indexed", end="", file=sys.stderr)
+    print("" if args.no_save else f", saved to {args.index.as_posix()}", file=sys.stderr)
     return 0
 
 
@@ -116,9 +131,9 @@ def cmd_dupes(args: argparse.Namespace) -> int:
                          indent=2))
         return 0
     if not pairs:
-        print(f"No likely duplicates among {len(steps)} step definitions.")
+        print(f"No likely duplicates among {_plural(len(steps), 'step definition')}.")
         return 0
-    print(f"{len(pairs)} possible duplicate pair(s):\n")
+    print(f"{_plural(len(pairs), 'possible duplicate pair')}:\n")
     for p in pairs:
         print(f"  {p.score:.2f}  {_describe(p.first)}")
         print(f"        {_describe(p.second)}\n")
@@ -158,7 +173,9 @@ def cmd_check(args: argparse.Namespace) -> int:
         raise UsageError(f"No .feature files found in {root}")
     results = []
     for feature in features:
-        results.extend(check_steps(parse_feature(feature, feature.relative_to(base).as_posix()), steps))
+        with _input_file():
+            parsed = parse_feature(feature, feature.relative_to(base).as_posix())
+        results.extend(check_steps(parsed, steps))
 
     if args.json:
         print(json.dumps([{"file": r.step.file, "line": r.step.line, "step": r.step.raw, "status": r.status,
@@ -176,10 +193,10 @@ def _merge_json(result: MergeResult, applied: bool) -> str:
         "applied": applied,
         "merges": [{"score": p.score, "keep": asdict(p.keep), "drop": asdict(p.drop), "ok": p.ok,
                     "problems": p.problems,
-                    "rewritten_lines": [{"file": str(e.file), "line": e.line,
+                    "rewritten_lines": [{"file": e.file.as_posix(), "line": e.line,
                                          "old": e.old.strip(), "new": e.new.strip()} for e in p.edits]}
                    for p in result.plans],
-        "files_changed": [str(f) for f in result.changes],
+        "files_changed": [f.as_posix() for f in result.changes],
     }, indent=2)
 
 
@@ -190,8 +207,7 @@ def _print_merge_plans(result: MergeResult) -> None:
         for problem in p.problems:
             print(f"        can't merge: {problem}")
         if p.ok:
-            n = len(p.edits)
-            print(f"        {n} feature line{'' if n == 1 else 's'} rewritten, {p.drop.function}() removed")
+            print(f"        {_plural(len(p.edits), 'feature line')} rewritten, {p.drop.function}() removed")
         print()
     for first, second in result.skipped:
         print(f"Skipped {first.function} / {second.function}: run merge again after this round.\n")
@@ -200,7 +216,7 @@ def _print_merge_plans(result: MergeResult) -> None:
 def _print_merge_diff(result: MergeResult) -> None:
     base = Path.cwd()
     for path, (old, new) in result.changes.items():
-        shown = path.relative_to(base) if path.is_relative_to(base) else path
+        shown = (path.relative_to(base) if path.is_relative_to(base) else path).as_posix()
         sys.stdout.writelines(difflib.unified_diff(
             old.splitlines(keepends=True), new.splitlines(keepends=True), f"a/{shown}", f"b/{shown}"))
 
@@ -208,7 +224,8 @@ def _print_merge_diff(result: MergeResult) -> None:
 def cmd_merge(args: argparse.Namespace) -> int:
     root = _existing_path(args.path, "Folder")
     features = _existing_path(args.features, "Features folder") if args.features else None
-    result = plan_merges(root, threshold=args.threshold, keep=frozenset(args.keep), features=features)
+    with _input_file():  # it reads every .feature file
+        result = plan_merges(root, threshold=args.threshold, keep=frozenset(args.keep), features=features)
     written = apply(result) if args.apply else []
     code = 0 if all(p.ok for p in result.plans) else 1
     if args.json:
@@ -220,7 +237,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
     _print_merge_plans(result)
     _print_merge_diff(result)
     if written:
-        print(f"\nUpdated {len(written)} file(s). Re-run `gherkin-copilot index` to refresh the saved index.")
+        print(f"\nUpdated {_plural(len(written), 'file')}. Re-run `gherkin-copilot index` to refresh the saved index.")
     elif result.changes:
         print("\nPreview only, nothing was changed. Re-run with --apply to make these changes.")
     return code
@@ -231,10 +248,11 @@ def cmd_report(args: argparse.Namespace) -> int:
         print(f"No report found at {args.json_report}. Run pytest with --cucumberjson first.", file=sys.stderr)
         return 2
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    features = write_report(args.json_report, args.output, args.artifacts)
+    with _input_file():
+        features = write_report(args.json_report, args.output, args.artifacts)
     scenarios = [s for f in features for s in f.scenarios]
     passed = sum(s.status == "passed" for s in scenarios)
-    print(f"{passed}/{len(scenarios)} scenarios passed. Report: {args.output}")
+    print(f"{passed}/{len(scenarios)} scenarios passed. Report: {args.output.as_posix()}")
     if args.open:
         import webbrowser
 
@@ -343,8 +361,6 @@ def main(argv: list[str] | None = None) -> int:
         message = str(exc)
     except OSError as exc:
         message = f"{exc.strerror or exc}: {exc.filename}" if exc.filename else str(exc)
-    except (ValueError, KeyError, TypeError) as exc:  # malformed index / report / feature files
-        message = str(exc) or type(exc).__name__
     except Exception:  # a bug: show the details, and an exit code CI can tell apart from findings (1)
         traceback.print_exc()
         print("gherkin-copilot: internal error, please report it with the details above", file=sys.stderr)

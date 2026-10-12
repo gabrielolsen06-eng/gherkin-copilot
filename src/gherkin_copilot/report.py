@@ -11,6 +11,7 @@ inline and every value from the report is HTML-escaped.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 from dataclasses import dataclass, field
@@ -73,15 +74,14 @@ class Feature:
 
 
 def _number(value: object) -> float:
-    """A number from JSON that might be missing, a string, or junk."""
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return float(value)
-    if isinstance(value, str):
-        try:
-            return float(value)
-        except ValueError:
-            return 0.0
-    return 0.0
+    """A number from JSON that might be missing, a string, junk, too big, infinite or NaN."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return 0.0
+    try:
+        number = float(value)
+    except (ValueError, OverflowError):  # OverflowError: an int too big for a float
+        return 0.0
+    return number if math.isfinite(number) else 0.0
 
 
 def _seconds(duration: object) -> float:

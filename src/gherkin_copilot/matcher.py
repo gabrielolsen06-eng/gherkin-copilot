@@ -3,7 +3,8 @@
 Two kinds of matching:
 
 * exact: would this step text actually bind to the definition at runtime?
-  (parse-style patterns are converted to regexes, regex patterns are used as is)
+  (parse-style patterns are converted to regexes, regex patterns are used as is,
+  plain strings must match word for word)
 * fuzzy: how similar is the wording, ignoring argument values and filler words?
   Used for "did you mean ...?" suggestions and duplicate detection.
 """
@@ -73,6 +74,8 @@ def _parse_to_regex(pattern: str) -> str:
 
 
 def to_regex(step: StepDef) -> re.Pattern[str] | None:
+    if step.kind == "string":  # the indexer only keeps "string" where braces are literal (pytest-bdd)
+        return re.compile(rf"^{re.escape(step.pattern)}$")
     source = step.pattern if step.kind == "regex" else _parse_to_regex(step.pattern)
     source = source.removeprefix("^").removesuffix("$")
     try:
@@ -94,7 +97,7 @@ def normalize_pattern(step: StepDef) -> str:
         while REGEX_GROUP.search(text):
             text = REGEX_GROUP.sub(ARG, text)
         text = text.replace("\\", "")
-    else:
+    elif step.kind == "parse":
         text = PARSE_TOKEN.sub(lambda m: ARG if m.group(1) is not None else m.group()[0], text)
     return _clean(QUOTED.sub(lambda q: ARG if ARG in q.group() else q.group(), text))
 

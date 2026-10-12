@@ -9,3 +9,5 @@ build/
 demo/**/.gherkin-copilot/
 .DS_Store
 .venv-dev/
+# Office lock files (e.g. ~$deck.pptx while PowerPoint has it open)
+~$*

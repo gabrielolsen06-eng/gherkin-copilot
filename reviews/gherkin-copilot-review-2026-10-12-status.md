@@ -1,0 +1,21 @@
+# Status of the 2026-10-12 re-review
+
+The re-review ("gherkin-copilot: re-review after fixes", 2026-10-12, scored 8.2 / 10) was
+written against commit `ac14430`. This file records what was done about its new findings
+(N0–N5). Every code fix has a regression test in `tests/test_unhappy_paths.py`.
+
+| # | Finding | Status |
+|---|---|---|
+| N0 | Generated `demo/steps/test_build.py`, `demo/features/test_build.feature` and a PowerPoint lock file committed; 12 tests fail, CI red | Fixed. All three removed from git, `~$*` ignored. Pre-commit is installed and now runs the tests too; the hooks call `.venv-dev/bin/…` and `.venv/bin/python` directly, so they also work from the VS Code commit button without an activated environment. |
+| N1 | pytest-bdd plain-string steps with `{}` matched as parse patterns | Fixed. `matcher.to_regex` matches `string` steps literally (`re.escape`), and fuzzy matching no longer treats their braces as placeholders. behave files are unchanged: the indexer already marks their `{name}` strings as parse patterns. |
+| N2 | Infinite, NaN or huge line numbers in a Cucumber report crash | Fixed. `report._number` returns 0 for anything that isn't a finite number. This also covers the app's results view (`ui/runner.py`), which uses the same loader. |
+| N3 | Bad `created` value in an index gives a bare float error | Fixed. `load_index` reports any bad value as "isn't a valid index file". |
+| N4 | `cli.main` catches KeyError / TypeError / ValueError around every command | Fixed. Only the loaders (index, report, feature files, merge planning) are wrapped by `cli._input_file()`, which turns their ValueError into a usage error (exit 2). Anything else is an internal error: traceback and exit 3. |
+| N5 | OS-native paths in `merge --json`, the stale-index note and the merge diff; "1 step definitions" | Fixed. `.as_posix()` everywhere, and counts are pluralised properly. |
+
+## Not done here
+
+- **Licence (M5):** still open by choice, waiting on a check of the owner's employment contract.
+- **Deleted step files and the stale-index note (M2):** still not noticed; storing each file's
+  mtime in the index would fix it.
+- **`# language:` and Examples beyond the first row (L7):** documented limits, unchanged.

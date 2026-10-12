@@ -315,7 +315,7 @@ signed in" won't be flagged as duplicates. That's a job for the planned LLM feat
 ## Development
 
 ```bash
-python -m pytest tests       # tool tests (251)
+python -m pytest tests       # tool tests (263)
 python -m pytest demo        # browser scenarios (6)
 ```
 
@@ -328,11 +328,11 @@ python -m venv .venv-dev && .venv-dev/bin/pip install -r requirements-dev.txt
 .venv-dev/bin/mypy                                       # strict type checking
 .venv-dev/bin/bandit -q -r src demo run_demo.py          # security lint
 .venv-dev/bin/pip-audit --strict -r requirements.lock   # known vulnerabilities
-.venv-dev/bin/pre-commit install                         # run ruff, mypy and bandit on every commit
+.venv-dev/bin/pre-commit install                         # run ruff, mypy, bandit and the tests on every commit
 ```
 
 `.github/workflows/ci.yml` runs all of these plus the tests on Ubuntu and Windows
-(Python 3.11 and 3.13) and the browser demo, once the project is on GitHub.
+(Python 3.11 and 3.13) and the browser demo on every push.
 
 Useful environment variables for the demo:
 

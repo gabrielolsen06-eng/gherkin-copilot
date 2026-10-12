@@ -170,5 +170,5 @@ def load_index(path: Path) -> Index:
         root = data.get("root")
         return Index([StepDef(**item) for item in data["steps"]], Path(root) if root else None,
                      float(data.get("created") or 0))
-    except (json.JSONDecodeError, UnicodeDecodeError, KeyError, TypeError, AttributeError) as exc:
+    except (ValueError, KeyError, TypeError, AttributeError) as exc:  # ValueError covers bad JSON and bad numbers
         raise ValueError(f"{path} isn't a valid index file. Run `gherkin-copilot index` to rebuild it.") from exc

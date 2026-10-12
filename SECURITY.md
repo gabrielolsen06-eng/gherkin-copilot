@@ -145,7 +145,8 @@ point pip at it with `--index-url`; the hashes still guarantee the same files.
 ## Checks run on this version
 
 Results from 2026-10-12, after working through the independent review in
-`reviews/` (see `gherkin-copilot-review-2026-10-11-status.md`):
+`reviews/` and its re-review the same day (see `gherkin-copilot-review-2026-10-11-status.md`
+and `gherkin-copilot-review-2026-10-12-status.md`):
 
 | Check | Result |
 |---|---|
@@ -153,17 +154,19 @@ Results from 2026-10-12, after working through the independent review in
 | `bandit -q -r src demo run_demo.py` (static security analysis) | No findings. The three places that start a process (`run_demo.py` and the app's Run button in `ui/runner.py`) use fixed argument lists and no shell, and are annotated with why |
 | `mypy --strict` | No issues in 19 source files |
 | `ruff check` (rules in `pyproject.toml`) | No issues |
-| Tool tests | 251 passed (macOS, Python 3.14), including tests for missing paths, malformed files, Windows code pages and generated inputs |
-| Branch coverage (`coverage run -m pytest tests`) | 91% |
+| Tool tests | 263 passed (macOS, Python 3.14), including tests for missing paths, malformed files, non-finite numbers, Windows code pages and generated inputs |
+| Branch coverage (`coverage run -m pytest tests`) | 92% |
 | Demo scenarios in a real browser (Brave) | 6 passed |
 | `pip install --require-hashes -r requirements.lock` in a clean venv, then `pip check` | Installs cleanly, no broken requirements (checked 2026-10-09; the lock file hasn't changed since) |
 
-The same checks run on every push in CI (`.github/workflows/ci.yml`), including the tests on
+Ruff, mypy, bandit and the tests also run as pre-commit hooks. The same checks run on every push in CI (`.github/workflows/ci.yml`), including the tests on
 Windows. To repeat them yourself, see "Development" in the README.
 
 **Error handling:** the command line tool turns bad input (missing paths, files that
 aren't valid JSON or UTF-8) into a one-line message with exit code 2, and never prints a
-traceback for it (OWASP ASVS V7.4). Unexpected internal errors exit with 3.
+traceback for it (OWASP ASVS V7.4). Only the file loaders' errors count as bad input:
+unexpected internal errors print their details and exit with 3, so a bug can't pass for a
+user mistake.
 
 ## Reporting a problem
 

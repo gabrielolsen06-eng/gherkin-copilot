@@ -39,8 +39,8 @@ After changing `src/`, reinstall with `python -m pip install --no-deps --no-buil
 .venv-dev/bin/bandit -q -r src demo run_demo.py && .venv-dev/bin/pip-audit --strict -r requirements.lock
 ```
 
-All four must stay clean. Exit codes: 0 ok, 1 finding, 2 bad input (`UsageError` / ValueError in
-`cli.main`), 3 internal error. Displayed paths use `.as_posix()`. CI: `.github/workflows/ci.yml`.
+All four must stay clean. Exit codes: 0 ok, 1 finding, 2 bad input (`UsageError`; wrap loaders in
+`cli._input_file()` to turn their ValueError into one), 3 internal error. Displayed paths use `.as_posix()`. CI: `.github/workflows/ci.yml`.
 
 ### Dependencies
 

@@ -193,6 +193,8 @@ def test_cli_preview_and_json(tmp_path, capsys):
     assert main(["merge", str(demo), "--json", "--apply"]) == 0
     data = json.loads(capsys.readouterr().out)
     assert data["applied"] and len(data["merges"]) == 2 and len(data["files_changed"]) == 3
+    shown = data["files_changed"] + [e["file"] for m in data["merges"] for e in m["rewritten_lines"]]
+    assert shown and not any("\\" in path for path in shown)  # forward slashes on Windows too
     assert main(["merge", str(demo)]) == 0
     assert "No likely duplicates" in capsys.readouterr().out
 
