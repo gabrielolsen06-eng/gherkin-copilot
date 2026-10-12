@@ -60,3 +60,20 @@ def test_duplicates_on_example_project():
         frozenset(("open_login_page", "user_on_login_page")),
         frozenset(("add_to_cart", "put_in_cart")),
     }
+
+
+@pytest.mark.parametrize("threshold", [0.4, 0.6, 0.8])
+def test_fast_duplicate_search_matches_comparing_every_pair(threshold):
+    import random
+    from itertools import combinations
+
+    from gherkin_copilot.matcher import similarity
+
+    rng = random.Random(7)
+    words = "add remove open cart page login user product item order total badge checkout error list".split()
+    steps = [StepDef("given", " ".join(rng.sample(words, rng.randint(2, 6))), "string", f"f{i}", "s.py", i)
+             for i in range(150)]
+    brute = {(a.function, b.function, similarity(normalize_pattern(a), normalize_pattern(b)))
+             for a, b in combinations(steps, 2)}
+    expected = {t for t in brute if t[2] >= threshold}
+    assert {(p.first.function, p.second.function, p.score) for p in find_duplicates(steps, threshold)} == expected

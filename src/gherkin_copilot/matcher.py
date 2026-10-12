@@ -130,11 +130,28 @@ def find(text: str, steps: list[StepDef], limit: int = 5, min_score: float = 0.4
 
 
 def find_duplicates(steps: list[StepDef], threshold: float = 0.6) -> list[DuplicatePair]:
-    """Pairs of step definitions whose wording is suspiciously similar."""
-    normalized = [(s, normalize_pattern(s)) for s in steps]
+    """Pairs of step definitions whose wording is suspiciously similar.
+
+    Every pair is a candidate, so the expensive character comparison is skipped
+    whenever a cheap upper bound already shows the pair can't reach the threshold:
+    first from word overlap alone (character similarity is at most 1), then from
+    SequenceMatcher's quick estimates. The results are the same as comparing every
+    pair in full; 1,000 steps take seconds instead of most of a minute.
+    """
+    slack = 0.0005  # scores are rounded to 3 places, so keep bounds a hair generous
+    normalized = [(s, n, set(n.split())) for s in steps for n in [normalize_pattern(s)]]
     pairs = []
-    for (a, na), (b, nb) in combinations(normalized, 2):
-        score = similarity(na, nb)
+    for (a, na, wa), (b, nb, wb) in combinations(normalized, 2):
+        if not na or not nb:
+            continue
+        words = len(wa & wb) / len(wa | wb)
+        if 0.5 + 0.5 * words + slack < threshold:
+            continue
+        matcher = SequenceMatcher(None, na, nb)
+        if (0.5 * matcher.real_quick_ratio() + 0.5 * words + slack < threshold
+                or 0.5 * matcher.quick_ratio() + 0.5 * words + slack < threshold):
+            continue
+        score = round(0.5 * matcher.ratio() + 0.5 * words, 3)
         if score >= threshold:
             pairs.append(DuplicatePair(a, b, score))
     pairs.sort(key=lambda p: -p.score)
