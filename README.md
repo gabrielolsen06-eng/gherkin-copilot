@@ -331,7 +331,7 @@ python -m venv .venv-dev && .venv-dev/bin/pip install -r requirements-dev.txt
 .venv-dev/bin/pre-commit install                         # run ruff, mypy and bandit on every commit
 ```
 
-`.github/workflows/ci.yml` runs all of these plus the tests on Ubuntu, Windows and macOS
+`.github/workflows/ci.yml` runs all of these plus the tests on Ubuntu and Windows
 (Python 3.11 and 3.13) and the browser demo, once the project is on GitHub.
 
 Useful environment variables for the demo:

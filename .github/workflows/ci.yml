@@ -28,7 +28,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # macOS is where it's developed (and costs 10x the Actions minutes on a private repo)
+        os: [ubuntu-latest, windows-latest]
         python: ["3.11", "3.13"]
     steps:
       - uses: actions/checkout@v4

@@ -43,8 +43,8 @@ records what was done about each finding on 2026-10-12. Every fix has a regressi
 
 ## Also done
 
-- CI (`.github/workflows/ci.yml`): ruff, mypy, bandit, pip-audit; tests on Ubuntu, Windows and
-  macOS with Python 3.11 and 3.13; the browser demo with its report as an artifact.
+- CI (`.github/workflows/ci.yml`): ruff, mypy, bandit, pip-audit; tests on Ubuntu and Windows with
+  Python 3.11 and 3.13 (macOS is the development machine); the browser demo with its report as an artifact.
 - Pre-commit hooks (ruff, mypy, bandit) and pinned dev tools in `requirements-dev.txt`.
 - Bandit fully clean; displayed paths use forward slashes on every platform.
 - The long-failing Brave detection test no longer depends on what's installed.
