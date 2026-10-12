@@ -1,0 +1,12 @@
+# Direct dependencies. requirements.lock pins these and everything they need, with hashes.
+# To upgrade, edit this file and regenerate the lock (pip-tools, in a separate environment):
+#   pip-compile --generate-hashes --allow-unsafe --strip-extras -o requirements.lock requirements.in
+pytest==9.1.1
+pytest-bdd==9.0.0
+pytest-playwright==0.10.0
+playwright==1.63.0
+# lets `pip install --no-build-isolation` install local tools such as gherkin-copilot
+setuptools>=78.1.1
+# pytest needs colorama on Windows; pinned for every platform so the lock file
+# installs with --require-hashes on Windows, macOS and Linux alike.
+colorama==0.4.6

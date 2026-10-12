@@ -1,0 +1,5 @@
+"""Turn every scenario in features/ into a pytest test, including feature files added later."""
+
+from pytest_bdd import scenarios
+
+scenarios(".")  # the whole bdd_features_base_dir (features/), subfolders included

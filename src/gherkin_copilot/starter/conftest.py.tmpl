@@ -1,0 +1,21 @@
+"""Shared setup for every scenario.
+
+Step definitions live in steps/ and are shared by every feature file. Every module in that
+folder is loaded here, so a new step file works without registering it anywhere.
+"""
+
+import os
+from pathlib import Path
+
+import pytest
+
+STEPS_DIR = Path(__file__).resolve().parent / "steps"
+pytest_plugins = [f"steps.{p.stem}" for p in sorted(STEPS_DIR.glob("*.py")) if p.stem != "__init__"]
+
+
+@pytest.fixture(scope="session")
+def browser_type_launch_args(browser_type_launch_args):
+    """BROWSER_PATH=... runs a Chromium-based browser that has no --browser-channel name,
+    such as Brave or a company-approved build."""
+    path = os.environ.get("BROWSER_PATH")
+    return {**browser_type_launch_args, "executable_path": path} if path else browser_type_launch_args

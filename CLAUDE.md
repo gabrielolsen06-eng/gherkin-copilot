@@ -26,7 +26,7 @@ source .venv/bin/activate
 python -m pytest tests                    # tool unit tests
 python run_demo.py --brave --headed       # full demo in Brave (owner's browser on macOS)
 python run_demo.py --brave --no-open      # same, without opening the HTML report
-gherkin-copilot index|find|dupes|merge|check|report|ui --help
+gherkin-copilot init|index|find|dupes|merge|check|report|ui --help
 gherkin-copilot ui                        # the app, on 127.0.0.1:8765
 ```
 
@@ -47,11 +47,14 @@ All four must stay clean. Exit codes: 0 ok, 1 finding, 2 bad input (`UsageError`
 Edit `requirements.in`, then regenerate the lock with pip-tools (in a separate venv):
 `pip-compile --generate-hashes --allow-unsafe --strip-extras -o requirements.lock requirements.in`.
 Keep `colorama` pinned (pytest needs it on Windows). Run `pip-audit -r requirements.lock`
-and `bandit -r src demo run_demo.py` afterwards.
+and `bandit -r src demo run_demo.py` afterwards. Then copy the lock to
+`src/gherkin_copilot/starter/requirements.lock.tmpl` and the pins to `requirements.in.tmpl`
+(the project `init` creates); `tests/test_init.py` fails until both match.
 
 ## Layout
 
-- `src/gherkin_copilot/`: `indexer.py` (find step defs via ast), `matcher.py` (exact and
+- `src/gherkin_copilot/`: `scaffold.py` + `starter/` (`init`: starter project from `*.tmpl`
+  files shipped as package data; only creates files, never overwrites), `indexer.py` (find step defs via ast), `matcher.py` (exact and
   fuzzy matching), `checker.py` (feature-file parsing, stubs), `merger.py` (merge duplicate
   steps; the only code that edits user files, and only with `--apply`), `report.py` (Cucumber JSON
   to HTML, no JS), `cli.py`, `ui/` (the local web app: `server.py` stdlib HTTP server with

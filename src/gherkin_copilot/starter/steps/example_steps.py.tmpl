@@ -1,0 +1,20 @@
+"""Example steps. Delete this file, and features/example.feature, once you have your own.
+
+They prove the setup works (Python, pytest-bdd, Playwright and the browser) without a
+website: the test writes its own page, so nothing goes over the network.
+"""
+
+from html import escape
+
+from playwright.sync_api import Page, expect
+from pytest_bdd import given, parsers, then
+
+
+@given(parsers.parse('a page with the heading "{heading}"'))
+def page_with_heading(page: Page, heading: str):
+    page.set_content(f"<h1>{escape(heading)}</h1>")
+
+
+@then(parsers.parse('I see the heading "{heading}"'))
+def see_heading(page: Page, heading: str):
+    expect(page.get_by_role("heading", name=heading)).to_be_visible()

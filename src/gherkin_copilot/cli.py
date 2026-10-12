@@ -1,5 +1,6 @@
 """Command line interface.
 
+    gherkin-copilot init [PATH]           start a new BDD project (pytest-bdd + Playwright)
     gherkin-copilot index [PATH]          list every step definition and save the index
     gherkin-copilot find "STEP TEXT"      exact and "did you mean" matches for a step
     gherkin-copilot dupes                 step definitions that look like duplicates
@@ -27,6 +28,7 @@ from gherkin_copilot.indexer import StepDef, build_index, load_index, save_index
 from gherkin_copilot.matcher import find, find_duplicates
 from gherkin_copilot.merger import MergeResult, apply, plan_merges
 from gherkin_copilot.report import write_report
+from gherkin_copilot.scaffold import create
 
 DEFAULT_INDEX = Path(".gherkin-index.json")
 MARKS = {"ok": "✓", "missing": "✗", "ambiguous": "!"}
@@ -257,6 +259,45 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0 if passed == len(scenarios) else 1
 
 
+def cmd_init(args: argparse.Namespace) -> int:
+    root = Path(args.path or ".")
+    if root.exists() and not root.is_dir():
+        raise UsageError(f"Not a folder: {root.as_posix()}")
+    name = " ".join((args.name or root.resolve().name).split())  # it goes on one line of the README
+    if not name:
+        raise UsageError("Give the project a name with --name")
+    result = create(root, name, dry_run=args.dry_run)
+    if args.json:
+        print(json.dumps({"root": root.as_posix(), "dry_run": args.dry_run,
+                          "created": result.created, "skipped": result.skipped}, indent=2))
+        return 0
+    shown = root.as_posix()
+    if not result.created:
+        print(f"Nothing to create: every starter file is already in {shown}.")
+        return 0
+    print(f"{'Would create' if args.dry_run else 'Created'} {_plural(len(result.created), 'file')} in {shown}:")
+    for path in result.created:
+        print(f"  + {path}")
+    if result.skipped:
+        print(f"\nKept {_plural(len(result.skipped), 'file')} that already existed (never overwritten). "
+              "Check they still load steps/ as README.md describes:")
+        for path in result.skipped:
+            print(f"  = {path}")
+    if args.dry_run:
+        print("\nNothing was written. Run again without --dry-run to create these files.")
+        return 0
+    print(f"""
+Next:
+  cd {shown}
+  python -m venv .venv
+  source .venv/bin/activate          (Windows: .venv\\Scripts\\activate)
+  python -m pip install --require-hashes -r requirements.lock
+  python -m pytest --browser-channel msedge
+
+README.md explains the rest: pointing it at your application, adding scenarios, conventions, CI.""")
+    return 0
+
+
 def cmd_ui(args: argparse.Namespace) -> int:
     from gherkin_copilot.ui.projects import DEFAULT_FILE, ProjectStore
     from gherkin_copilot.ui.server import make_server
@@ -290,6 +331,13 @@ def build_parser() -> argparse.ArgumentParser:
     def common(p: argparse.ArgumentParser) -> None:
         p.add_argument("--index", type=Path, default=DEFAULT_INDEX, help="index file (default: %(default)s)")
         p.add_argument("--json", action="store_true", help="machine-readable output")
+
+    p = sub.add_parser("init", help="start a new BDD project: pytest-bdd, Playwright, a shared step library")
+    p.add_argument("path", nargs="?", help="folder to create it in; created if missing (default: .)")
+    p.add_argument("--name", help="project name for its README (default: the folder's name)")
+    p.add_argument("--dry-run", action="store_true", help="list the files it would create, write nothing")
+    p.add_argument("--json", action="store_true", help="machine-readable output")
+    p.set_defaults(func=cmd_init)
 
     p = sub.add_parser("index", help="scan step definitions and save an index")
     p.add_argument("path", nargs="?", help="project folder or file to scan (default: .)")

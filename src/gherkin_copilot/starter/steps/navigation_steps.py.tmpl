@@ -1,0 +1,9 @@
+"""Getting around the application. Paths are relative to base_url in pytest.ini."""
+
+from playwright.sync_api import Page
+from pytest_bdd import given, parsers
+
+
+@given(parsers.parse('I am on the "{path}" page'))
+def on_page(page: Page, path: str):
+    page.goto(path)

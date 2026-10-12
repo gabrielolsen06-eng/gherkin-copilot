@@ -15,7 +15,11 @@ This page is written for whoever approves software on a managed work laptop.
   data, loaded with `json.loads`, never `pickle` or `eval`). Use `--no-save` to avoid even
   that. `merge` edits `.feature` and step files only with `--apply`; without it, it prints
   the planned diff and changes nothing. It only edits files inside the folder it's given,
-  and refuses any merge that could change what a test does.
+  and refuses any merge that could change what a test does. `init` creates a starter
+  project's files inside the folder it's given; it never overwrites or edits a file that
+  already exists (each file is opened in create-only mode), and `--dry-run` writes nothing.
+  The files are fixed templates that ship with the tool; the only value filled in is the
+  project name, in its README.
 - **No shell commands.** The command line tool never starts other programs. The only
   exception is the app's **Run tests** button (see below), which runs the test command you
   saved for a project. `run_demo.py` runs Python subprocesses with argument lists, never
@@ -154,9 +158,10 @@ and `gherkin-copilot-review-2026-10-12-status.md`):
 | `bandit -q -r src demo run_demo.py` (static security analysis) | No findings. The three places that start a process (`run_demo.py` and the app's Run button in `ui/runner.py`) use fixed argument lists and no shell, and are annotated with why |
 | `mypy --strict` | No issues in 19 source files |
 | `ruff check` (rules in `pyproject.toml`) | No issues |
-| Tool tests | 268 passed (macOS, Python 3.14; also run on Windows and Ubuntu in CI), including tests for missing paths, malformed files, non-finite numbers, Windows code pages and generated inputs |
+| Tool tests | 274 passed (macOS, Python 3.14; also run on Windows and Ubuntu in CI), including tests for missing paths, malformed files, non-finite numbers, Windows code pages, generated inputs and the project `init` creates |
 | Branch coverage (`coverage run -m pytest tests`) | 92% |
 | Demo scenarios in a real browser (Brave) | 6 passed |
+| A project made by `init`, run in a real browser | Passes in Brave locally and in Chromium in CI, with warnings treated as errors. Its `requirements.lock` is identical to this repo's (a test checks), so the audit above covers it |
 | `pip install --require-hashes -r requirements.lock` in a clean venv, then `pip check` | Installs cleanly, no broken requirements (checked 2026-10-09; the lock file hasn't changed since) |
 
 Ruff, mypy, bandit and the tests also run as pre-commit hooks. The same checks run on every push in CI (`.github/workflows/ci.yml`), including the tests on

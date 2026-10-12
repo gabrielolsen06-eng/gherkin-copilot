@@ -7,6 +7,7 @@ and helps you:
 
 | Command | What it does |
 |---|---|
+| `init [FOLDER]` | Starts a new BDD project: pytest-bdd + Playwright, a shared step library, an example that runs offline, and the conventions in its README |
 | `index` | Lists every step definition with its file and line |
 | `find "STEP"` | Says whether a line of Gherkin binds to a step, and suggests close matches if it doesn't |
 | `dupes` | Spots step definitions that say the same thing in slightly different words |
@@ -121,6 +122,34 @@ in") next to imperative ones that spell out each value.
 
 Two steps in `demo/steps` are deliberate near-duplicates, so `dupes` has something to find,
 and `cart.feature` uses one of them so `merge` has a line to rewrite.
+
+## Starting a new project
+
+```bash
+gherkin-copilot init payments-tests           # or --dry-run to see the list first
+```
+
+This creates a ready-to-run pytest-bdd + Playwright project:
+
+```
+payments-tests/
+  README.md              setup, running, adding scenarios, conventions, CI commands
+  features/example.feature
+  steps/                 the shared step library (every file here is loaded automatically)
+    example_steps.py
+    navigation_steps.py
+  tests/test_features.py turns every scenario in features/ into a test
+  conftest.py            loads steps/; BROWSER_PATH picks any Chromium-based browser
+  pytest.ini             base_url for the application under test
+  requirements.in / requirements.lock   pinned, hash-checked dependencies (same as this repo's)
+  .gitignore
+```
+
+The example scenario needs no website and no network: the test writes its own page. It
+proves Python, pytest-bdd, Playwright and the browser work on that machine, which is the
+first thing to check on a locked-down laptop (`python -m pytest --browser-channel msedge`
+uses the Edge that's already installed). `init` only ever adds files: anything that already
+exists is kept and listed.
 
 ## Using it on your own project
 
@@ -315,7 +344,7 @@ signed in" won't be flagged as duplicates.
 ## Development
 
 ```bash
-python -m pytest tests       # tool tests (268)
+python -m pytest tests       # tool tests (274)
 python -m pytest demo        # browser scenarios (6)
 ```
 

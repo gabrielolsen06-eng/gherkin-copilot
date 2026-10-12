@@ -1,0 +1,84 @@
+# {{name}}
+
+Automated acceptance tests. Scenarios are written in plain English (Gherkin) in `features/`;
+the code behind each step lives in one shared library in `steps/`. They run with
+[pytest-bdd](https://pytest-bdd.readthedocs.io) and [Playwright](https://playwright.dev/python/).
+
+## Set up (once)
+
+You need Python 3.11 or newer.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+python -m pip install --require-hashes -r requirements.lock
+```
+
+`--require-hashes` installs exactly the versions in `requirements.lock` and refuses any
+file that doesn't match its recorded hash.
+
+Playwright needs a browser. Use one that's already installed, so nothing is downloaded:
+`--browser-channel msedge` (Edge) or `--browser-channel chrome` (Chrome). For any other
+Chromium-based browser, set `BROWSER_PATH` to its executable. Where downloads are allowed,
+`python -m playwright install chromium` fetches Playwright's own.
+
+## Run the tests
+
+```bash
+python -m pytest --browser-channel msedge             # every scenario
+python -m pytest --browser-channel msedge --headed    # watch the browser
+python -m pytest --browser-channel msedge -k heading  # only scenarios whose name matches
+```
+
+The example in `features/example.feature` needs no website. It only proves that Python,
+pytest-bdd, Playwright and the browser work on this machine. Delete it, and
+`steps/example_steps.py`, once your first real scenario passes.
+
+## Point it at your application
+
+Set `base_url` in `pytest.ini` (or pass `--base-url` for one run). Steps then use paths
+relative to it, so `Given I am on the "/login" page` opens `<base_url>/login`.
+
+## Add a scenario
+
+1. Write it in a `.feature` file in `features/`. Every scenario there runs automatically.
+2. Run `gherkin-copilot check features --stubs`. It lists every line that has no step yet
+   and drafts the code for it.
+3. Add the new steps to the right file in `steps/`, grouped by area (`login_steps.py`,
+   `basket_steps.py`...). Every file in `steps/` is loaded automatically.
+
+Or use the app: run `gherkin-copilot ui`, add this folder as a project (steps folder
+`steps`, features folder `features`), and set its test command to
+`python -m pytest --browser-channel msedge` to run scenarios from the app.
+
+## Conventions
+
+- **One shared step library.** Every feature uses the steps in `steps/`. Before writing a
+  step, search for one that already exists: `gherkin-copilot find "Given I am logged in"`.
+  Never copy a step into a new file for one scenario.
+- **Say what, not how.** `Given I am logged in as a customer`, not three lines of typing
+  into fields. The step's code knows the details, so a changed login page means one fix.
+- **`Given` sets the scene, `When` acts, `Then` only checks.** A `Then` step never clicks
+  or types.
+- **One behaviour per scenario,** with a name that says what should happen.
+- **Keep the library tidy.** `gherkin-copilot dupes` finds steps that say the same thing in
+  different words, and `gherkin-copilot merge` combines them.
+
+## In CI
+
+These commands work in any pipeline (Azure DevOps, GitLab, Jenkins, GitHub Actions). CI
+machines usually have no browser, so the second line installs Playwright's.
+
+```bash
+python -m pip install --require-hashes -r requirements.lock
+python -m playwright install --with-deps chromium
+gherkin-copilot check features          # fails if a line has no step, or matches two
+python -m pytest --cucumberjson=reports/cucumber.json --output=reports/artifacts --screenshot=only-on-failure --tracing=retain-on-failure
+gherkin-copilot report reports/cucumber.json -o reports/report.html
+```
+
+The `gherkin-copilot` lines need the tool installed on the CI machine; leave them out if
+it isn't. Keep `reports/` as the pipeline's artifact: `report.html` shows every scenario,
+with a screenshot and a trace for each failure.
+
+This project was created with `gherkin-copilot init`.

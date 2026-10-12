@@ -28,5 +28,5 @@ repos:
         name: pytest
         entry: .venv/bin/python -m pytest tests -q -p no:cacheprovider
         language: system
-        files: \.(py|feature|toml)$
+        files: \.(py|feature|toml|tmpl|lock|in)$
         pass_filenames: false
