@@ -72,3 +72,30 @@ jobs:
         with:
           name: demo-report
           path: reports/
+
+  edge:
+    # The work-laptop path: Windows, the Edge that's already installed, no browser download,
+    # and the project's venv used without activating it (PowerShell script policies often block that)
+    name: New project on Windows with the installed Edge
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      # One command per step: a multi-line PowerShell step only fails on its last command's exit code
+      - run: python -m pip install --require-hashes -r requirements.lock
+      - run: python -m pip install --no-deps --no-build-isolation .
+      - run: gherkin-copilot init "$env:RUNNER_TEMP\starter"
+      - name: Create the project's venv, as its README says
+        working-directory: ${{ runner.temp }}/starter
+        run: python -m venv .venv
+      - name: Install its hash-checked dependencies
+        working-directory: ${{ runner.temp }}/starter
+        run: .venv\Scripts\python -m pip install --require-hashes -r requirements.lock
+      - name: Every scenario line has a step
+        working-directory: ${{ runner.temp }}/starter
+        run: gherkin-copilot check features
+      - name: Run the example in the installed Edge (no `playwright install`)
+        working-directory: ${{ runner.temp }}/starter
+        run: .venv\Scripts\python -m pytest --browser-channel msedge -W error -v
