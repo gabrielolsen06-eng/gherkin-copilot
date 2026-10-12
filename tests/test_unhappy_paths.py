@@ -107,7 +107,27 @@ def test_stale_index_warns(tmp_path, capsys, monkeypatch):
     later = time.time() + 5
     os.utime(project / "steps" / "cart_steps.py", (later, later))
     main(["find", "Given I am on the login page"])
-    assert "cart_steps.py changed after the saved index was made" in capsys.readouterr().err
+    assert "steps/cart_steps.py changed after the saved index was made" in capsys.readouterr().err
+
+
+# M2 follow-up: a deleted or renamed step file is noticed too (a rename keeps the old mtime)
+def test_stale_index_notices_deleted_and_renamed_files(tmp_path, capsys, monkeypatch):
+    project = tmp_path / "project"
+    shutil.copytree(DEMO / "steps", project / "steps")
+    monkeypatch.chdir(tmp_path)
+    earlier = time.time() - 60
+    for path in (project / "steps").rglob("*.py"):
+        os.utime(path, (earlier, earlier))
+    assert main(["index", str(project)]) == 0
+    capsys.readouterr()
+
+    (project / "steps" / "cart_steps.py").rename(project / "steps" / "basket_steps.py")
+    main(["find", "Given I am on the login page"])
+    assert "steps/cart_steps.py was deleted or moved after the saved index was made" in capsys.readouterr().err
+
+    (project / "steps" / "basket_steps.py").unlink()
+    main(["find", "Given I am on the login page"])
+    assert "steps/cart_steps.py was deleted or moved" in capsys.readouterr().err
 
 
 # N1: pytest-bdd matches a plain string literally, braces and all; behave reads {name} as a placeholder

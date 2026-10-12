@@ -16,8 +16,6 @@ written against commit `ac14430`. This file records what was done about its new 
 ## Not done here
 
 - **Licence (M5):** still open by choice, waiting on a check of the owner's employment contract.
-- **Deleted step files and the stale-index note (M2):** still not noticed; storing each file's
-  mtime in the index would fix it.
 - **`# language:` and Examples beyond the first row (L7):** documented limits, unchanged.
 
 ## Found by the first Windows CI run
@@ -30,3 +28,11 @@ The first push ran the tests on Windows for the first time. Three failed:
   treats backslashes differently (path separators on Windows). Tested for both platforms.
 - **Test bugs:** the Brave test set `HOME`, which `Path.home()` ignores on Windows, and the
   projects test used `/no/such/folder`, which isn't an absolute path on Windows.
+
+## Follow-ups
+
+- **Stale index (M2):** now also notices a step file that was deleted or renamed since the index
+  was made (a rename keeps the old mtime, so the time check alone missed it). No change to the
+  index format: it already records which file each step came from.
+- **CI:** `actions/checkout`, `setup-python` and `upload-artifact` moved to v7 (Node 24); GitHub
+  deprecated the Node 20 versions.

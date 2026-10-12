@@ -23,7 +23,7 @@ from pathlib import Path
 
 from gherkin_copilot import __version__
 from gherkin_copilot.checker import FeatureStep, StepResult, check_steps, iter_feature_files, make_stub, parse_feature
-from gherkin_copilot.indexer import StepDef, build_index, iter_python_files, load_index, save_index
+from gherkin_copilot.indexer import StepDef, build_index, load_index, save_index
 from gherkin_copilot.matcher import find, find_duplicates
 from gherkin_copilot.merger import MergeResult, apply, plan_merges
 from gherkin_copilot.report import write_report
@@ -62,11 +62,8 @@ def _load_steps(args: argparse.Namespace) -> list[StepDef]:
     if args.path is None and args.index.exists():
         with _input_file():
             index = load_index(args.index)
-        newer = next((p for p in iter_python_files(index.root) if p.stat().st_mtime > index.created), None) \
-            if index.root and index.root.is_dir() else None
-        if newer:
-            print(f"Note: {newer.as_posix()} changed after the saved index was made. "
-                  "Run `gherkin-copilot index` again, or pass --path to scan fresh.", file=sys.stderr)
+        if reason := index.stale_reason():
+            print(f"Note: {reason}. Run `gherkin-copilot index` again, or pass --path to scan fresh.", file=sys.stderr)
         return index.steps
     return build_index(_existing_path(args.path, "Folder"))
 

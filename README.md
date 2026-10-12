@@ -315,7 +315,7 @@ signed in" won't be flagged as duplicates. That's a job for the planned LLM feat
 ## Development
 
 ```bash
-python -m pytest tests       # tool tests (267)
+python -m pytest tests       # tool tests (268)
 python -m pytest demo        # browser scenarios (6)
 ```
 

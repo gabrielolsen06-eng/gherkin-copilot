@@ -46,6 +46,18 @@ class Index:
     root: Path | None = None
     created: float = field(default=0.0)
 
+    def stale_reason(self) -> str | None:
+        """Why the saved steps may be out of date, or None if they look current."""
+        if not self.root or not self.root.is_dir():
+            return None
+        for path in iter_python_files(self.root):  # changed or added since
+            if path.stat().st_mtime > self.created:
+                return f"{path.relative_to(self.root).as_posix()} changed after the saved index was made"
+        for file in dict.fromkeys(s.file for s in self.steps):  # deleted or renamed (a rename keeps the old mtime)
+            if not (self.root / file).is_file():
+                return f"{file} was deleted or moved after the saved index was made"
+        return None
+
 
 def _decorator_name(node: ast.expr) -> str | None:
     """Return 'given' for @given, @pytest_bdd.given, @behave.given, etc."""
