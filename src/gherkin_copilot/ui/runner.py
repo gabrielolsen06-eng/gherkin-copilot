@@ -26,6 +26,7 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from gherkin_copilot.report import ARTIFACT_KINDS, _short_error, attach_artifacts, load_report
 from gherkin_copilot.ui import gherkin
@@ -96,29 +97,29 @@ class Run:
     project_id: str
     label: str
     started: float
-    log: deque = field(default_factory=lambda: deque(maxlen=LOG_LINES))
+    log: deque[str] = field(default_factory=lambda: deque(maxlen=LOG_LINES))
     status: str = "running"  # running / finished / stopped / error
     exit_code: int | None = None
     ended: float | None = None
     done: int = 0
-    process: subprocess.Popen | None = None
+    process: subprocess.Popen[str] | None = None
     stop_requested: bool = False
 
-    def describe(self) -> dict:
+    def describe(self) -> dict[str, Any]:
         return {"label": self.label, "status": self.status, "exit_code": self.exit_code, "started": self.started,
                 "ended": self.ended, "done": self.done, "log": list(self.log)[-400:]}
 
 
 class Runner:
-    def __init__(self):
+    def __init__(self) -> None:
         self._runs: dict[str, Run] = {}
         self._lock = threading.Lock()
 
-    def status(self, project_id: str) -> dict | None:
+    def status(self, project_id: str) -> dict[str, Any] | None:
         run = self._runs.get(project_id)
         return run.describe() if run else None
 
-    def start(self, project: Project, scope: str, file: str = "", name: str = "") -> dict:
+    def start(self, project: Project, scope: str, file: str = "", name: str = "") -> dict[str, Any]:
         if not project.test_command.strip():
             raise ValueError("Set this project's test command first (Details at the top).")
         env, args = parse_command(project.test_command)
@@ -158,7 +159,7 @@ class Runner:
         if scope == "scenario":
             if not any(b.name == name for b in blocks):
                 raise ValueError("That scenario isn't in the file. Save your changes first.")
-            return {python_name(name)}, f"{file} › {name}"
+            return {python_name(name)}, f"{file} › {name}"  # noqa: RUF001 (a breadcrumb, shown to people)
         raise ValueError("Choose what to run.")
 
     def _exec(self, run: Run, args: list[str], env: dict[str, str], cwd: Path, deadline: float) -> int:
@@ -169,7 +170,7 @@ class Runner:
         timer = threading.Timer(max(deadline - time.time(), 1), process.terminate)
         timer.start()
         try:
-            for line in process.stdout:
+            for line in process.stdout or ():
                 line = line.rstrip("\n")
                 run.log.append(line)
                 if RESULT_LINE.match(line):
@@ -226,7 +227,7 @@ class Runner:
                                               encoding="utf-8")
 
 
-def latest_results(project: Project) -> dict | None:
+def latest_results(project: Project) -> dict[str, Any] | None:
     out = results_dir(project)
     report = out / "cucumber.json"
     meta = json.loads((out / "run.json").read_text(encoding="utf-8")) if (out / "run.json").is_file() else {}
@@ -259,7 +260,8 @@ ARTIFACT_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".webm": "video/web
 def artifact(project: Project, relative: str) -> tuple[bytes, str]:
     out = results_dir(project).resolve()
     path = (out / relative).resolve()
-    if out not in path.parents or path.suffix.lower() not in ARTIFACT_TYPES or path.suffix.lower() not in ARTIFACT_KINDS \
+    suffix = path.suffix.lower()
+    if out not in path.parents or suffix not in ARTIFACT_TYPES or suffix not in ARTIFACT_KINDS \
             or not path.is_file():
         raise ValueError("No such file in the results.")
     return path.read_bytes(), ARTIFACT_TYPES[path.suffix.lower()]

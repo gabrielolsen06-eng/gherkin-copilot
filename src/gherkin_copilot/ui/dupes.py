@@ -11,9 +11,10 @@ import difflib
 import hashlib
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
 from gherkin_copilot.indexer import StepDef
-from gherkin_copilot.merger import MergePlan, file_changes, plan_merges
+from gherkin_copilot.merger import MergePlan, MergeResult, file_changes, plan_merges
 from gherkin_copilot.ui.catalog import segments
 from gherkin_copilot.ui.projects import Project
 
@@ -28,9 +29,10 @@ def pair_id(plan: MergePlan) -> str:
 
 def _threshold(value: object) -> float:
     try:
-        return min(max(float(value), 0.3), 0.95)
-    except (TypeError, ValueError):
-        return 0.6
+        number = float(value) if isinstance(value, (int, float, str)) else 0.6
+    except ValueError:
+        number = 0.6
+    return min(max(number, 0.3), 0.95)
 
 
 def _keep(keep: object) -> frozenset[str]:
@@ -42,15 +44,15 @@ def _keep(keep: object) -> frozenset[str]:
     return frozenset(keep)
 
 
-def _plans(project: Project, threshold: object, keep: object = None):
+def _plans(project: Project, threshold: object, keep: object = None) -> MergeResult:
     return plan_merges(Path(project.steps), _threshold(threshold), _keep(keep), features=Path(project.features))
 
 
-def _step(step: StepDef, uses: int) -> dict:
+def _step(step: StepDef, uses: int) -> dict[str, Any]:
     return {**asdict(step), "segments": segments(step), "uses": uses}
 
 
-def overview(project: Project, threshold: object, keep: object = None) -> dict:
+def overview(project: Project, threshold: object, keep: object = None) -> dict[str, Any]:
     result = _plans(project, threshold, keep)
     return {
         "threshold": _threshold(threshold),
@@ -90,7 +92,7 @@ def _one(project: Project, threshold: object, pair: str, keep: object) -> dict[P
     return file_changes([plan], Path(project.steps).resolve())
 
 
-def preview(project: Project, threshold: object, pair: str, keep: object) -> dict:
+def preview(project: Project, threshold: object, pair: str, keep: object) -> dict[str, Any]:
     changes = _one(project, threshold, pair, keep)
     files = []
     for path, (before, after) in sorted(changes.items()):

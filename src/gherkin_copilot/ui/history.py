@@ -13,8 +13,9 @@ import json
 import os
 import secrets
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from gherkin_copilot.ui.projects import Project
 
@@ -40,14 +41,14 @@ def clean_author(author: object) -> str:
 
 
 def record(project: Project, action: str, author: object, files: dict[str, tuple[str, str]],
-           scenario: str = "", file: str = "", before: str | None = None, after: str | None = None) -> dict:
+           scenario: str = "", file: str = "", before: str | None = None, after: str | None = None) -> dict[str, Any]:
     """Append one entry. ``files`` maps shown path -> (before, after) file contents."""
-    diff = []
+    diff: list[str] = []
     for shown, (old, new) in sorted(files.items()):
         diff += difflib.unified_diff(old.splitlines(), new.splitlines(), f"a/{shown}", f"b/{shown}", lineterm="")
     entry = {
         "id": secrets.token_hex(6),
-        "time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "time": datetime.now(UTC).isoformat(timespec="seconds"),
         "author": clean_author(author),
         "action": action,
         "file": file or next(iter(sorted(files)), ""),
@@ -65,7 +66,7 @@ def record(project: Project, action: str, author: object, files: dict[str, tuple
     return entry
 
 
-def entries(project: Project, limit: int = 300) -> list[dict]:
+def entries(project: Project, limit: int = 300) -> list[dict[str, Any]]:
     """Newest first. Lines that aren't valid JSON (e.g. a bad merge of the file) are skipped."""
     path = history_file(project)
     if not path.is_file():
@@ -81,7 +82,7 @@ def entries(project: Project, limit: int = 300) -> list[dict]:
     return out[::-1][:limit]
 
 
-def find(project: Project, entry_id: str) -> dict:
+def find(project: Project, entry_id: str) -> dict[str, Any]:
     entry = next((e for e in entries(project, limit=10**9) if e["id"] == entry_id), None)
     if entry is None:
         raise ValueError("That history entry doesn't exist.")

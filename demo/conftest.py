@@ -15,8 +15,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from browsers import browser_path_from_env  # noqa: E402
-from server import start_in_background  # noqa: E402
+from browsers import browser_path_from_env
+from server import start_in_background
 
 # Step definitions live in steps/ and are shared by every feature file. Every module in
 # the folder is loaded, so a new step file is available without registering it here.

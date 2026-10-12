@@ -9,6 +9,7 @@ run this by hand for the test suite.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import threading
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -60,7 +61,5 @@ if __name__ == "__main__":
     port = parser.parse_args().port
     with make_server(port) as server:
         print(f"Demo shop running at http://{HOST}:{port}  (Ctrl+C to stop)")
-        try:
+        with contextlib.suppress(KeyboardInterrupt):
             server.serve_forever()
-        except KeyboardInterrupt:
-            pass

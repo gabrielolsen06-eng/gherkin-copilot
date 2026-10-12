@@ -27,24 +27,29 @@ ROOT = Path(__file__).resolve().parent
 TOOL = [sys.executable, "-m", "gherkin_copilot"]
 
 STEPS = [
-    ("Index every step definition in the demo suite", TOOL + ["index", "demo", "--no-save"], False),
-    ("Look up a step that exists", TOOL + ["find", 'When I add "Sauce Labs Onesie" to the cart', "--path", "demo"], False),
-    ("Look up a step worded differently", TOOL + ["find", "Given I open the login page", "--path", "demo"], True),
-    ("Find step definitions that duplicate each other", TOOL + ["dupes", "--path", "demo"], False),
-    ("Preview merging those duplicates (add --apply to write it)", TOOL + ["merge", "demo"], False),
-    ("Check the finished feature files", TOOL + ["check", "demo/features", "--path", "demo"], False),
+    ("Index every step definition in the demo suite", [*TOOL, "index", "demo", "--no-save"], False),
+    ("Look up a step that exists",
+     [*TOOL, "find", 'When I add "Sauce Labs Onesie" to the cart', "--path", "demo"], False),
+    ("Look up a step worded differently", [*TOOL, "find", "Given I open the login page", "--path", "demo"], True),
+    ("Find step definitions that duplicate each other", [*TOOL, "dupes", "--path", "demo"], False),
+    ("Preview merging those duplicates (add --apply to write it)", [*TOOL, "merge", "demo"], False),
+    ("Check the finished feature files", [*TOOL, "check", "demo/features", "--path", "demo"], False),
     ("Check a draft feature and draft code for its missing steps",
-     TOOL + ["check", "demo/drafts", "--path", "demo", "--stubs"], True),
+     [*TOOL, "check", "demo/drafts", "--path", "demo", "--stubs"], True),
 ]
 
 
 def run(title: str, command: list[str], failure_expected: bool) -> bool:
+    """Run one demo step. An expected failure must be exit code 1 ("found something"), not a crash."""
     shown = ["gherkin-copilot", *command[3:]] if command[:3] == TOOL else ["pytest", *command[3:]]
     print(f"\n{'=' * 72}\n{title}\n$ {' '.join(shown)}\n{'=' * 72}", flush=True)
     code = subprocess.run(command, cwd=ROOT, check=False).returncode  # list args, no shell
-    if code and failure_expected:
-        print("(non-zero exit is expected here: it's how CI would catch this)")
-    return code == 0 or failure_expected
+    if code == 1 and failure_expected:
+        print("(exit code 1 is expected here: it's how CI would catch this)")
+        return True
+    if code not in (0, 1):
+        print(f"(exit code {code}: the command failed, see the message above)")
+    return code == 0
 
 
 def main() -> int:
@@ -58,6 +63,7 @@ def main() -> int:
     if "--brave" in extra:  # Brave isn't a Playwright channel; conftest finds its executable
         extra.remove("--brave")
         os.environ["DEMO_BROWSER"] = "brave"
+    # a list, not a generator: every step must run even after one fails, so all() can't short-circuit
     ok = all([run(*step) for step in STEPS])
     (ROOT / "reports").mkdir(exist_ok=True)
     pytest_cmd = [
@@ -68,8 +74,8 @@ def main() -> int:
         *extra,
     ]
     ok = run("Run the BDD scenarios in a real browser", pytest_cmd, False) and ok
-    report_cmd = TOOL + ["report", "reports/cucumber.json", "-o", "reports/report.html"]
-    run("Build the HTML report", report_cmd + (["--open"] if open_report else []), not ok)
+    report_cmd = [*TOOL, "report", "reports/cucumber.json", "-o", "reports/report.html"]
+    run("Build the HTML report", [*report_cmd, *(["--open"] if open_report else [])], not ok)
     print(f"\nDemo {'finished successfully' if ok else 'had failures'}. Review the results in reports/report.html")
     return 0 if ok else 1
 

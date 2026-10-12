@@ -17,7 +17,8 @@ from gherkin_copilot.indexer import StepDef, iter_project_files
 from gherkin_copilot.matcher import Match, find, is_exact_match
 
 STEP_LINE = re.compile(r"^(Given|When|Then|And|But|\*)\s+(.+)$")
-SECTION = re.compile(r"^(Feature|Background|Scenario Outline|Scenario Template|Scenario|Example|Rule|Examples|Scenarios):")
+SECTION = re.compile(
+    r"^(Feature|Background|Scenario Outline|Scenario Template|Scenario|Example|Rule|Examples|Scenarios):")
 OUTLINE_PARAM = re.compile(r"<([^<>]+)>")
 QUOTED = re.compile(r'"[^"]*"')
 NUMBER = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?(?![\w.])")
@@ -87,9 +88,13 @@ def parse_feature_text(text: str, shown_path: str = "<text>") -> list[FeatureSte
                 if examples_header is None:
                     examples_header = cells(stripped)
                 elif outline:  # fill outline parameters from the first Examples row
-                    values = dict(zip(examples_header, cells(stripped)))
+                    values = dict(zip(examples_header, cells(stripped), strict=False))
+
+                    def fill(m: re.Match[str], values: dict[str, str] = values) -> str:
+                        return values.get(m.group(1), m.group(0))
+
                     for s in outline:
-                        s.text = OUTLINE_PARAM.sub(lambda p: values.get(p.group(1), p.group(0)), s.text)
+                        s.text = OUTLINE_PARAM.sub(fill, s.text)
                     steps.extend(outline)
                     outline = []
             continue  # data tables under a step don't affect matching
@@ -141,11 +146,11 @@ def stub_parts(step: FeatureStep) -> tuple[str, list[tuple[str, str]], str]:
     """
     params: list[tuple[str, str]] = []
 
-    def quoted(m: re.Match) -> str:
+    def quoted(m: re.Match[str]) -> str:
         params.append((f"text{len(params) + 1}", ""))
         return f'"{{{params[-1][0]}}}"'
 
-    def number(m: re.Match) -> str:
+    def number(m: re.Match[str]) -> str:
         fmt = ":g" if "." in m.group() else ":d"
         params.append((f"number{len(params) + 1}", fmt))
         return f"{{{params[-1][0]}{fmt}}}"

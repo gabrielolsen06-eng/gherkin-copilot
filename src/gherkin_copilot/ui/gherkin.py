@@ -92,7 +92,7 @@ def parse(text: str) -> FeatureFile:
 
     for number, raw in enumerate(lines, start=1):
         stripped = raw.strip()
-        if in_doc is not None:  # inside a doc string: keep everything verbatim
+        if in_doc is not None and step is not None and current is not None:  # inside a doc string: keep it verbatim
             step.attachment.append(_relative(raw, current.indent + "  "))
             current.end = number
             if stripped.startswith(in_doc):
@@ -160,7 +160,7 @@ def _relative(raw: str, step_indent: str) -> str:
 # --- writing ------------------------------------------------------------------
 
 def _row(values: list[str], widths: list[int]) -> str:
-    padded = [v.replace("|", "\\|").ljust(w) for v, w in zip(values, widths)]
+    padded = [v.replace("|", "\\|").ljust(w) for v, w in zip(values, widths, strict=True)]
     return "| " + " | ".join(padded) + " |"
 
 

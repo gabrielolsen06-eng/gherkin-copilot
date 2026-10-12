@@ -4,11 +4,11 @@ import time
 from pathlib import Path
 
 import pytest
+from test_ui import request
 
 from gherkin_copilot.ui import runner
 from gherkin_copilot.ui.projects import Project, ProjectStore
 from gherkin_copilot.ui.server import start_in_background
-from test_ui import request
 
 FEATURE = """Feature: Sums
   Scenario: Adding works
@@ -151,7 +151,8 @@ def test_settings_and_artifacts_over_http(project, tmp_path):
         shots.mkdir(parents=True)
         (shots / "shot.png").write_bytes(b"\x89PNG")
         (runner.results_dir(project).parent / "history.jsonl").write_text("{}\n")
-        get = lambda path: request(port, "GET", f"/api/artifact?project={added.id}&path={path}")
+        def get(path):
+            return request(port, "GET", f"/api/artifact?project={added.id}&path={path}")
         assert get("artifacts/test-x/shot.png")[:2] == (200, "image/png")
         assert get("../history.jsonl")[0] == 400
         assert get("run.json")[0] == 400

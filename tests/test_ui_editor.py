@@ -3,11 +3,11 @@ import shutil
 from pathlib import Path
 
 import pytest
+from test_ui import request
 
 from gherkin_copilot.ui import builder, editor, gherkin, history
 from gherkin_copilot.ui.projects import Project, ProjectStore
 from gherkin_copilot.ui.server import start_in_background
-from test_ui import request
 
 DEMO = Path(__file__).parent.parent / "demo"
 OUTLINE = "Rejected logins show a helpful error"
@@ -164,12 +164,12 @@ def test_edit_refuses_if_the_scenario_moved(demo):
 def test_background_stays_a_background(demo):
     with pytest.raises(ValueError, match="can't become"):
         editor.plan_edit(demo, "cart.feature", 4, "", spec())
-    change, _, after = editor.plan_edit(demo, "cart.feature", 4, "", spec(kind="Background", name="", tags=""))
+    _change, _, after = editor.plan_edit(demo, "cart.feature", 4, "", spec(kind="Background", name="", tags=""))
     assert after == '  Background:\n    Given I am logged in as "standard_user"\n'
 
 
 def test_delete_and_duplicate(demo):
-    change, before = editor.plan_delete(demo, "cart.feature", 13, "Remove a product again")
+    change, _before = editor.plan_delete(demo, "cart.feature", 13, "Remove a product again")
     builder.apply_change(change, change.hash)
     text = feature_text(demo, "cart.feature")
     assert "Remove a product again" not in text and text.endswith("    And the cart should contain 2 items\n")
@@ -231,7 +231,8 @@ def test_edit_over_http_records_history_and_restores(demo, tmp_path):
     project = store.add("Demo", demo.steps, demo.features)
     server, app, _ = start_in_background(store)
     port = server.server_address[1]
-    post = lambda path, body: json.loads(request(port, "POST", path, {"project": project.id, **body}, app.token)[2])
+    def post(path, body):
+        return json.loads(request(port, "POST", path, {"project": project.id, **body}, app.token)[2])
     try:
         listed = json.loads(request(port, "GET", f"/api/scenarios?project={project.id}")[2])
         assert [f["file"] for f in listed["files"]] == ["cart.feature", "login.feature"]
@@ -250,7 +251,7 @@ def test_edit_over_http_records_history_and_restores(demo, tmp_path):
         post("/api/history/restore/save", {"id": entries[0]["id"], "hash": restore["hash"], "author": "Ann"})
         assert feature_text(demo, "login.feature") == (DEMO / "features/login.feature").read_text()
 
-        status, _, data, _ = request(port, "GET", f"/api/scenario/open?project={project.id}&file=../x.feature&start=1&name=x")
+        status, _, _data, _ = request(port, "GET", f"/api/scenario/open?project={project.id}&file=../x.feature&start=1&name=x")
         assert status == 400
     finally:
         server.shutdown()

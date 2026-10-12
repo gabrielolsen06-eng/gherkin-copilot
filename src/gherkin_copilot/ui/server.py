@@ -17,7 +17,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 
 from gherkin_copilot import __version__
@@ -98,7 +98,8 @@ class App:
             if route == "/api/projects/tests":
                 if text("test_command").strip():
                     runner.parse_command(text("test_command"))
-                self.store.update_tests(text("id"), text("test_command"), text("run_from"), body.get("capture") is not False)
+                self.store.update_tests(text("id"), text("test_command"), text("run_from"),
+                                        body.get("capture") is not False)
                 return self.projects()
 
             project = self.project(body.get("project"))
@@ -131,7 +132,9 @@ class App:
                 history.record(project, "merge", author, changes, scenario=text("label"))
                 return {"saved": sorted(changes)}
             if base == "/api/stepcode":
-                exists = lambda line: builder.check(project, builder.clean_lines([line]))[0]["status"] != "missing"
+                def exists(line: str) -> bool:
+                    return bool(builder.check(project, builder.clean_lines([line]))[0]["status"] != "missing")
+
                 change = stepcode.plan(project, text("line"), text("keyword"), body.get("names"), body.get("actions"),
                                        text("file"), body.get("new_file") is True, exists)
                 return self._flow(project, step, change, body, "add step code", author)
@@ -140,7 +143,8 @@ class App:
                                             body.get("examples"))
                 return self._flow(project, step, change, body, "add steps", author)
             if base == "/api/scenario":
-                change, rendered = editor.plan_new(project, text("mode"), text("file"), text("feature"), body.get("spec"))
+                change, rendered = editor.plan_new(project, text("mode"), text("file"), text("feature"),
+                                                   body.get("spec"))
                 return self._flow(project, step, change, body, "create" if change.creates else "add", author,
                                   scenario=self._name(rendered), after=rendered)
             if base == "/api/scenario/edit":
@@ -157,9 +161,9 @@ class App:
                                   after=after)
             if base == "/api/history/restore":
                 entry = history.find(project, text("id"))
-                change, before, after = editor.plan_restore(project, entry)
+                change, earlier, current = editor.plan_restore(project, entry)
                 return self._flow(project, step, change, body, "restore", author,
-                                  scenario=self._name(after or before or ""), before=before, after=after)
+                                  scenario=self._name(current or earlier or ""), before=earlier, after=current)
         except ValueError as exc:
             raise ApiError(HTTPStatus.BAD_REQUEST, str(exc)) from exc
         raise ApiError(HTTPStatus.NOT_FOUND, "Unknown action.")
@@ -171,7 +175,8 @@ class App:
 
     @staticmethod
     def _flow(project: Project, step: str, change: builder.FileChange, body: dict[str, Any], action: str,
-              author: object, scenario: str = "", before: str | None = None, after: str | None = None) -> dict[str, Any]:
+              author: object, scenario: str = "", before: str | None = None,
+              after: str | None = None) -> dict[str, Any]:
         """Preview a change, or save it (if it still matches the preview) and record it in the history."""
         if change.before == change.after and not change.creates:
             raise ValueError("There's nothing to save: the file would stay exactly the same.")
@@ -192,7 +197,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
         sys_version = ""
 
         def _host_ok(self) -> bool:
-            port = self.server.server_address[1]
+            port = cast(tuple[str, int], self.server.server_address)[1]
             return self.headers.get("Host", "") in {f"{HOST}:{port}", f"localhost:{port}"}
 
         def _send(self, status: HTTPStatus, body: bytes, content_type: str) -> None:

@@ -3,7 +3,7 @@ from pathlib import Path
 
 from gherkin_copilot.checker import check_steps, make_stub, parse_feature
 from gherkin_copilot.cli import main
-from gherkin_copilot.indexer import StepDef, build_index
+from gherkin_copilot.indexer import StepDef
 
 DEMO = Path(__file__).parent.parent / "demo"
 

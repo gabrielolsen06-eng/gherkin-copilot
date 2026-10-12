@@ -23,7 +23,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from gherkin_copilot.checker import STEP_LINE, binds, iter_feature_files, parse_feature
+from gherkin_copilot.checker import STEP_LINE, FeatureStep, binds, iter_feature_files, parse_feature
 from gherkin_copilot.indexer import StepDef, build_index, iter_python_files
 from gherkin_copilot.matcher import PARSE_FIELD, find_duplicates, is_exact_match
 
@@ -97,9 +97,9 @@ def render(step: StepDef, values: dict[str, str]) -> str:
 
 def _function_node(tree: ast.Module, step: StepDef) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
     for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == step.function:
-            if any(d.lineno == step.line for d in node.decorator_list):
-                return node
+        if (isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == step.function
+                and any(d.lineno == step.line for d in node.decorator_list)):
+            return node
     return None
 
 
@@ -114,7 +114,8 @@ def _decorator_options(node: ast.FunctionDef | ast.AsyncFunctionDef, step: StepD
     options = {kw.arg or "**kwargs": ast.unparse(kw.value) for kw in deco.keywords}
     options.update({f"argument {i}": ast.unparse(a) for i, a in enumerate(deco.args[1:], start=2)})
     if isinstance(deco.args[0], ast.Call):  # parsers.parse("...", extra_types=...)
-        options.update({f"{kw.arg or '**kwargs'} (in the parser)": ast.unparse(kw.value) for kw in deco.args[0].keywords})
+        options.update({f"{kw.arg or '**kwargs'} (in the parser)": ast.unparse(kw.value)
+                        for kw in deco.args[0].keywords})
     return options
 
 
@@ -127,9 +128,8 @@ def _references(root: Path, name: str) -> list[str]:
         except (SyntaxError, UnicodeDecodeError):
             continue
         for node in ast.walk(tree):
-            hit = (isinstance(node, ast.Name) and node.id == name) or (
-                isinstance(node, ast.Attribute) and node.attr == name)
-            if hit:
+            if isinstance(node, (ast.Name, ast.Attribute)) and \
+                    (node.id if isinstance(node, ast.Name) else node.attr) == name:
                 found.append(f"{path.relative_to(root)}:{node.lineno}")
     return found
 
@@ -149,7 +149,7 @@ def _remove_function(source: str, node: ast.FunctionDef | ast.AsyncFunctionDef) 
 
 # --- planning -------------------------------------------------------------
 
-def _usage(feature_steps, steps: list[StepDef]) -> Counter:
+def _usage(feature_steps: list[FeatureStep], steps: list[StepDef]) -> Counter[StepDef]:
     return Counter(s for fs in feature_steps for s in steps if binds(fs, s))
 
 
@@ -162,7 +162,8 @@ def _check_code(plan: MergePlan, root: Path) -> None:
         return
     keep_options, drop_options = _decorator_options(keep_node, plan.keep), _decorator_options(drop_node, plan.drop)
     differing = [f"{k}: {keep_options.get(k, 'not set')} vs {drop_options.get(k, 'not set')}"
-                 for k in sorted(keep_options.keys() | drop_options.keys()) if keep_options.get(k) != drop_options.get(k)]
+                 for k in sorted(keep_options.keys() | drop_options.keys())
+                 if keep_options.get(k) != drop_options.get(k)]
     if differing:
         plan.problems.append(f"their decorators differ ({'; '.join(differing)})")
     if _signature_and_body(keep_node) != _signature_and_body(drop_node):
@@ -175,12 +176,15 @@ def _check_code(plan: MergePlan, root: Path) -> None:
         plan.problems.append(f"{plan.drop.function} is used elsewhere: {', '.join(callers)}")
 
 
-def _plan_edits(plan: MergePlan, feature_steps) -> None:
+def _plan_edits(plan: MergePlan, feature_steps: list[FeatureStep]) -> None:
     for fs in feature_steps:
         if not binds(fs, plan.drop):
             continue
         path = Path(fs.file)
-        word, raw_text = STEP_LINE.match(fs.raw).groups()
+        line = STEP_LINE.match(fs.raw)
+        if line is None:
+            continue
+        word, raw_text = line.groups()
         values = capture(plan.drop, raw_text.strip())
         if values is None:
             plan.problems.append(f"{path}:{fs.line}: couldn't read the values in this line")
@@ -224,7 +228,8 @@ def plan_merges(root: Path, threshold: float = 0.6, keep: frozenset[str] = froze
         plans.append(plan)
 
         if a.keyword != b.keyword:
-            plan.problems.append(f"one is a {a.keyword.capitalize()} step and the other a {b.keyword.capitalize()} step")
+            plan.problems.append(
+                f"one is a {a.keyword.capitalize()} step and the other a {b.keyword.capitalize()} step")
             continue
         names_a, names_b = placeholder_names(a), placeholder_names(b)
         if names_a is None or names_b is None or sorted(names_a) != sorted(names_b):

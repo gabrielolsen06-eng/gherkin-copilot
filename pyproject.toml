@@ -4,11 +4,25 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gherkin-copilot"
-version = "0.1.0"
-description = "Index, search and de-duplicate Gherkin step definitions in Python BDD projects."
+dynamic = ["version"]
+description = "Write Gherkin scenarios faster by reusing the steps you already have: index, search, de-duplicate and check pytest-bdd and behave steps, with a local web app."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = []
+authors = [{ name = "Gabriel Olsen" }]
+keywords = ["gherkin", "bdd", "cucumber", "pytest-bdd", "behave", "playwright", "testing"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Framework :: Pytest",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Testing :: BDD",
+    "Typing :: Typed",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
@@ -16,12 +30,41 @@ dev = ["pytest>=8"]
 [project.scripts]
 gherkin-copilot = "gherkin_copilot.cli:main"
 
+[tool.setuptools.dynamic]
+version = { attr = "gherkin_copilot.__version__" }
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
+"gherkin_copilot" = ["py.typed"]
 "gherkin_copilot.ui" = ["static/*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+# Dev-only tools (installed separately, never runtime dependencies): see CLAUDE.md
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["build", "reports"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src/gherkin_copilot"]
+
+[tool.coverage.run]
+source = ["src/gherkin_copilot"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

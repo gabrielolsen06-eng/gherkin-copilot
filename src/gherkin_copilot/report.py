@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from html import escape
 from pathlib import Path
+from typing import Any
 
 STATUS_ORDER = ["failed", "undefined", "pending", "skipped", "passed"]
 ARTIFACT_KINDS = {".png": "screenshots", ".jpg": "screenshots", ".webm": "videos", ".zip": "traces"}
@@ -71,22 +72,28 @@ class Feature:
         return next((s for s in STATUS_ORDER if s in statuses), "passed")
 
 
-def _seconds(duration) -> float:
+def _number(value: object) -> float:
+    """A number from JSON that might be missing, a string, or junk."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return 0.0
+    return 0.0
+
+
+def _seconds(duration: object) -> float:
     """Cucumber JSON durations are nanoseconds."""
-    try:
-        return int(duration or 0) / 1_000_000_000
-    except (TypeError, ValueError):
-        return 0.0
+    return _number(duration) / 1_000_000_000
 
 
 def _line(value: object) -> int:
-    try:
-        return int(value or 0)  # type: ignore[call-overload]
-    except (TypeError, ValueError):
-        return 0
+    return int(_number(value))
 
 
-def _step(s: dict) -> Step:
+def _step(s: dict[str, Any]) -> Step:
     result = s.get("result") or {}
     return Step(
         keyword=str(s.get("keyword", "")).strip(),
@@ -107,7 +114,7 @@ def load_report(path: Path) -> list[Feature]:
         raise ValueError(f"{path} isn't a valid Cucumber JSON report ({exc}).") from exc
 
 
-def _features(data: list) -> list[Feature]:
+def _features(data: list[Any]) -> list[Feature]:
     features = []
     for f in data:
         scenarios = []
@@ -132,7 +139,8 @@ def _features(data: list) -> list[Feature]:
                 tags=[str(t.get("name", "")) for t in el.get("tags", [])],
                 steps=steps,
             ))
-        features.append(Feature(str(f.get("name", "")), str(f.get("uri", "")), str(f.get("description", "")), scenarios))
+        features.append(Feature(str(f.get("name", "")), str(f.get("uri", "")), str(f.get("description", "")),
+                                scenarios))
     return features
 
 
@@ -230,7 +238,8 @@ def render_html(features: list[Feature], out_dir: Path, source: str) -> str:
         ("Pass rate", f"{pass_rate:.0f}%"),
         ("Duration", _fmt_seconds(total_time)),
     ]
-    tiles_html = "".join(f'<div class="tile"><div class="tv">{escape(v)}</div><div class="tl">{escape(k)}</div></div>' for k, v in tiles)
+    tiles_html = "".join(f'<div class="tile"><div class="tv">{escape(v)}</div><div class="tl">{escape(k)}</div></div>'
+                         for k, v in tiles)
 
     sections = []
     for f in features:
@@ -247,7 +256,8 @@ def render_html(features: list[Feature], out_dir: Path, source: str) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; media-src 'self'">
+<meta http-equiv="Content-Security-Policy"
+  content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; media-src 'self'">
 <title>Test report</title>
 <style>{CSS}</style>
 </head>
@@ -274,35 +284,51 @@ def write_report(json_path: Path, out_path: Path, artifacts_dir: Path | None = N
 
 
 CSS = """
-:root { --ok:#1f9d55; --bad:#d64545; --warn:#c98a00; --muted:#66717a; --line:#e3e7ea; --bg:#f6f8f9; --card:#fff; --ink:#1b2328;
+:root { --ok:#1f9d55; --bad:#d64545; --warn:#c98a00; --muted:#66717a; --line:#e3e7ea; --bg:#f6f8f9; --card:#fff;
+  --ink:#1b2328;
   color-scheme: light dark; font-family: system-ui, -apple-system, sans-serif; color: var(--ink); }
-@media (prefers-color-scheme: dark) { :root { --line:#2c353b; --bg:#12171a; --card:#1a2126; --ink:#e6ebee; --muted:#93a0a8; } }
+@media (prefers-color-scheme: dark) { :root { --line:#2c353b; --bg:#12171a; --card:#1a2126; --ink:#e6ebee;
+  --muted:#93a0a8; } }
 body { margin:0; background:var(--bg); }
 .top { padding:20px 24px; color:#fff; background:var(--ok); }
-.top.failed { background:var(--bad); } .top.skipped { background:var(--muted); }
-.top h1 { margin:0; font-size:1.4rem; } .top p { margin:4px 0 0; opacity:.9; font-size:.9rem; }
+.top.failed { background:var(--bad); }
+.top.skipped { background:var(--muted); }
+.top h1 { margin:0; font-size:1.4rem; }
+.top p { margin:4px 0 0; opacity:.9; font-size:.9rem; }
 main { max-width:1000px; margin:0 auto; padding:20px 16px 60px; }
 .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:24px; }
 .tile { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
-.tv { font-size:1.5rem; font-weight:700; font-variant-numeric:tabular-nums; } .tl { color:var(--muted); font-size:.8rem; }
+.tv { font-size:1.5rem; font-weight:700; font-variant-numeric:tabular-nums; }
+.tl { color:var(--muted); font-size:.8rem; }
 .feature h2 { font-size:1.1rem; display:flex; gap:8px; align-items:center; margin:28px 0 6px; }
-.uri { color:var(--muted); font-weight:400; font-size:.8rem; } .desc { color:var(--muted); margin:0 0 10px; }
-.scenario { background:var(--card); border:1px solid var(--line); border-left:4px solid var(--ok); border-radius:8px; margin:8px 0; }
-.scenario.failed, .scenario.undefined { border-left-color:var(--bad); } .scenario.skipped, .scenario.pending { border-left-color:var(--warn); }
+.uri { color:var(--muted); font-weight:400; font-size:.8rem; }
+.desc { color:var(--muted); margin:0 0 10px; }
+.scenario { background:var(--card); border:1px solid var(--line); border-left:4px solid var(--ok); border-radius:8px;
+  margin:8px 0; }
+.scenario.failed, .scenario.undefined { border-left-color:var(--bad); }
+.scenario.skipped, .scenario.pending { border-left-color:var(--warn); }
 summary { cursor:pointer; padding:10px 12px; display:flex; gap:8px; align-items:center; }
-.sname { flex:1; font-weight:600; } .example { color:var(--muted); font-weight:400; font-size:.85rem; }
+.sname { flex:1; font-weight:600; }
+.example { color:var(--muted); font-weight:400; font-size:.85rem; }
 .dur { color:var(--muted); font-size:.8rem; font-variant-numeric:tabular-nums; margin-left:auto; }
-.badge { font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; padding:2px 7px; border-radius:999px; color:#fff; background:var(--ok); }
-.badge.failed, .badge.undefined { background:var(--bad); } .badge.skipped, .badge.pending { background:var(--warn); }
+.badge { font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; padding:2px 7px; border-radius:999px;
+  color:#fff; background:var(--ok); }
+.badge.failed, .badge.undefined { background:var(--bad); }
+.badge.skipped, .badge.pending { background:var(--warn); }
 .tag { font-size:.75rem; color:var(--muted); border:1px solid var(--line); border-radius:4px; padding:0 5px; }
 .steps { list-style:none; margin:0; padding:0 12px 10px 14px; }
-.step { display:flex; flex-wrap:wrap; gap:6px; align-items:baseline; padding:5px 0; border-top:1px solid var(--line); }
+.step { display:flex; flex-wrap:wrap; gap:6px; align-items:baseline; padding:5px 0; border-top:1px solid var(--line);
+  }
 .dot { width:8px; height:8px; border-radius:50%; background:var(--ok); flex:none; align-self:center; }
-.step.failed .dot, .step.undefined .dot { background:var(--bad); } .step.skipped .dot, .step.pending .dot { background:var(--warn); }
+.step.failed .dot, .step.undefined .dot { background:var(--bad); }
+.step.skipped .dot, .step.pending .dot { background:var(--warn); }
 .kw { font-weight:700; color:var(--muted); }
-.error { flex-basis:100%; margin:4px 0 0; padding:8px 10px; background:rgba(214,69,69,.1); color:var(--bad); border-radius:6px; white-space:pre-wrap; font-size:.85rem; }
-details.trace { flex-basis:100%; } details.trace summary { padding:4px 0; font-size:.8rem; color:var(--muted); }
-details.trace pre { max-height:300px; overflow:auto; font-size:.75rem; background:var(--bg); padding:8px; border-radius:6px; }
+.error { flex-basis:100%; margin:4px 0 0; padding:8px 10px; background:rgba(214,69,69,.1); color:var(--bad);
+  border-radius:6px; white-space:pre-wrap; font-size:.85rem; }
+details.trace { flex-basis:100%; }
+details.trace summary { padding:4px 0; font-size:.8rem; color:var(--muted); }
+details.trace pre { max-height:300px; overflow:auto; font-size:.75rem; background:var(--bg); padding:8px;
+  border-radius:6px; }
 .media { display:flex; flex-wrap:wrap; gap:10px; padding:0 12px 12px; }
 .media img, .media video { max-width:100%; width:440px; border:1px solid var(--line); border-radius:6px; }
 .tracecmd { padding:0 12px 12px; margin:0; font-size:.8rem; color:var(--muted); }

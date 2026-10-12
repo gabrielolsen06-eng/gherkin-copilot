@@ -3,11 +3,11 @@ import shutil
 from pathlib import Path
 
 import pytest
+from test_ui import request
 
 from gherkin_copilot.ui import builder, editor
 from gherkin_copilot.ui.projects import Project, ProjectStore
 from gherkin_copilot.ui.server import start_in_background
-from test_ui import request
 
 DEMO = Path(__file__).parent.parent / "demo"
 DRAFT = [

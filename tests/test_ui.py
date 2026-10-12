@@ -14,7 +14,7 @@ DEMO = Path(__file__).parent.parent / "demo"
 
 @pytest.fixture
 def app(tmp_path):
-    server, app, url = start_in_background(ProjectStore(tmp_path / "projects.json"))
+    server, app, _url = start_in_background(ProjectStore(tmp_path / "projects.json"))
     yield app, server.server_address[1]
     server.shutdown()
     server.server_close()
@@ -71,13 +71,14 @@ def test_add_switch_list_steps_and_remove(app, tmp_path):
     app, port = app
     other = tmp_path / "other"
     other.mkdir()
-    add = lambda name, steps: request(port, "POST", "/api/projects/add", {"name": name, "steps": steps}, app.token)
+    def add(name, steps):
+        return request(port, "POST", "/api/projects/add", {"name": name, "steps": steps}, app.token)
 
     assert add("Demo shop", str(DEMO))[0] == 200
-    status, _, data, _ = add("Demo shop", str(other))  # same name gets its own id
+    _, _, data, _ = add("Demo shop", str(other))  # same name gets its own id
     assert json.loads(data)["active"] == "demo-shop-2"
 
-    status, _, data, _ = request(port, "GET", "/api/steps?project=demo-shop")
+    _status, _, data, _ = request(port, "GET", "/api/steps?project=demo-shop")
     steps = json.loads(data)["steps"]
     assert len(steps) == 12
     assert request(port, "GET", "/api/steps?project=demo-shop-2")[2] == b'{"steps": []}'

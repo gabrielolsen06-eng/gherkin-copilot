@@ -10,19 +10,22 @@ only on confirm, refused if the file changed in between.
 from __future__ import annotations
 
 import re
+from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
 from gherkin_copilot.checker import check_steps, iter_feature_files, parse_feature
 from gherkin_copilot.indexer import StepDef, build_index
 from gherkin_copilot.merger import capture
 from gherkin_copilot.ui import gherkin
-from gherkin_copilot.ui.builder import FILE_NAME, FileChange, clean_lines, _inside, _one_line
+from gherkin_copilot.ui.builder import FILE_NAME, FileChange, _inside, _one_line, clean_lines
 from gherkin_copilot.ui.catalog import segments
 from gherkin_copilot.ui.projects import Project
 
 KINDS = {"Scenario", "Example", "Scenario Outline", "Scenario Template", "Background"}
 TAG = re.compile(r"^@[^\s@]+$")
-NOT_DESCRIPTION = re.compile(r"^(Given|When|Then|And|But|\*|Examples|Scenarios|Scenario|Example|Background|Rule|Feature)\b|^[|@#]|^\"\"\"|^```")
+NOT_DESCRIPTION = re.compile(
+    r"^(Given|When|Then|And|But|\*|Examples|Scenarios|Scenario|Example|Background|Rule|Feature)\b|^[|@#]|^\"\"\"|^```")
 MAX_ROWS = 500
 
 
@@ -101,7 +104,7 @@ def clean_spec(spec: object, indent: str = "  ") -> gherkin.Block:
     if not lines:
         raise ValueError("Add at least one step before saving.")
     steps = []
-    for line, raw in zip(lines, steps_in):
+    for line, raw in zip(lines, steps_in, strict=True):
         word, text = line.split(None, 1)
         steps.append(gherkin.Step(word, text, 0, _attachment(raw.get("attachment"))))
     examples = _examples(spec.get("examples") or [])
@@ -123,7 +126,7 @@ def _feature_path(project: Project, file: str) -> Path:
     return path
 
 
-def list_scenarios(project: Project) -> dict:
+def list_scenarios(project: Project) -> dict[str, Any]:
     folder = Path(project.features)
     index = build_index(Path(project.steps))
     files = []
@@ -157,7 +160,7 @@ def _step_values(step: StepDef, text: str) -> dict[str, str] | None:
         return None
 
 
-def open_scenario(project: Project, file: str, start: object, name: object) -> dict:
+def open_scenario(project: Project, file: str, start: object, name: object) -> dict[str, Any]:
     path = _feature_path(project, file)
     feature = gherkin.parse(path.read_text(encoding="utf-8"))
     block = _find_block(feature, start, name)
@@ -174,7 +177,8 @@ def open_scenario(project: Project, file: str, start: object, name: object) -> d
             "written": s.keyword,
             "text": s.text,
             "attachment": s.attachment,
-            "step": {**match.__dict__, "segments": segments(match)} if values is not None else None,
+            "step": ({**asdict(match), "segments": segments(match)}
+                     if match is not None and values is not None else None),
             "values": values or {},
         })
     return {
@@ -231,7 +235,8 @@ def plan_new(project: Project, mode: str, file: str, feature_name: str, spec: ob
     raise ValueError("Choose a new file or an existing one.")
 
 
-def _existing(project: Project, file: str, start: object, name: object):
+def _existing(project: Project, file: str, start: object,
+              name: object) -> tuple[Path, str, gherkin.FeatureFile, gherkin.Block]:
     path = _feature_path(project, file)
     text = path.read_text(encoding="utf-8")
     feature = gherkin.parse(text)
@@ -272,7 +277,7 @@ def plan_duplicate(project: Project, file: str, start: object, name: object) -> 
     return _change(project, path, text, gherkin.insert_after(text, block.end, rendered)), rendered
 
 
-def plan_restore(project: Project, entry: dict) -> tuple[FileChange, str | None, str | None]:
+def plan_restore(project: Project, entry: dict[str, Any]) -> tuple[FileChange, str | None, str | None]:
     """Put one scenario back the way it was before a recorded change."""
     before, after, file = entry.get("before"), entry.get("after"), entry.get("file", "")
     if before is None and after is None:
@@ -288,6 +293,8 @@ def plan_restore(project: Project, entry: dict) -> tuple[FileChange, str | None,
         if current is None:
             raise ValueError("That scenario isn't in the file any more, so there's nothing to restore it over.")
     if current is None:  # it was deleted: add it back at the end
+        if before is None:
+            raise ValueError("There's no earlier version of this scenario to restore.")
         new_text = text.rstrip("\n") + "\n\n" + before.rstrip("\n") + "\n"
     elif before is None:  # it was created: restoring the earlier state removes it
         new_text = gherkin.replace_span(text, current.start, current.end, None)

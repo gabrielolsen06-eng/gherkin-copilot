@@ -16,6 +16,7 @@ import hashlib
 import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 
 from gherkin_copilot.checker import check_steps, make_stub, parse_feature_text
 from gherkin_copilot.indexer import build_index, index_file, iter_python_files
@@ -39,7 +40,7 @@ class FileChange:
     def hash(self) -> str:
         return _hash(self.before)
 
-    def describe(self) -> dict:
+    def describe(self) -> dict[str, Any]:
         diff = difflib.unified_diff(self.before.splitlines(), self.after.splitlines(),
                                     f"a/{self.shown}", f"b/{self.shown}", lineterm="")
         return {"file": self.shown, "creates": self.creates, "hash": self.hash, "diff": list(diff)}
@@ -72,7 +73,7 @@ def _one_line(text: str, what: str) -> str:
     return text
 
 
-def check(project: Project, lines: list[str], examples: object = None) -> list[dict]:
+def check(project: Project, lines: list[str], examples: object = None) -> list[dict[str, Any]]:
     """Status of each draft line, in order: ok / missing / ambiguous, with suggestions and a stub.
 
     For an outline, pass its Examples tables: placeholders are filled from the first row.
@@ -110,7 +111,7 @@ def project_files(project: Project) -> dict[str, list[str]]:
 
 
 def _module_names(tree: ast.Module) -> set[str]:
-    names = set()
+    names: set[str] = set()
     for node in tree.body:
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             names.update((a.asname or a.name).split(".")[0] for a in node.names)
@@ -119,7 +120,7 @@ def _module_names(tree: ast.Module) -> set[str]:
     return names
 
 
-def plan_stubs(project: Project, file: str, lines: list[str], only: object = None,
+def plan_stubs(project: Project, file: str, lines: object, only: object = None,
                examples: object = None) -> FileChange:
     """Stubs for the draft's missing lines; ``only`` limits them to those positions.
 
@@ -141,7 +142,8 @@ def plan_stubs(project: Project, file: str, lines: list[str], only: object = Non
     existing = _module_names(tree)
     renamed = []
     for stub in stubs:  # don't shadow a function that's already in the file
-        name = re.search(r"^def (\w+)\(", stub, re.M).group(1)
+        found = re.search(r"^def (\w+)\(", stub, re.M)
+        name = found.group(1) if found else "step"
         new, n = name, 2
         while new in existing:
             new, n = f"{name}_{n}", n + 1
@@ -154,7 +156,7 @@ def plan_stubs(project: Project, file: str, lines: list[str], only: object = Non
     out = before.rstrip("\n").splitlines()
     if missing:
         imports = [n for n in tree.body if isinstance(n, (ast.Import, ast.ImportFrom))]
-        at = imports[-1].end_lineno if imports else 0
+        at = (imports[-1].end_lineno or 0) if imports else 0
         out.insert(at, f"from pytest_bdd import {', '.join(missing)}")
     after = "\n".join(out) + "\n\n\n" + "\n\n\n".join(s.rstrip("\n") for s in renamed) + "\n"
     return FileChange(path, str(path.relative_to(folder)), before, after, creates=False)

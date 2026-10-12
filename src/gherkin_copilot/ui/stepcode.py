@@ -17,7 +17,9 @@ from __future__ import annotations
 import ast
 import keyword as py_keyword
 import re
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from gherkin_copilot.checker import FeatureStep, stub_parts
 from gherkin_copilot.indexer import StepDef, index_file, iter_python_files
@@ -49,7 +51,8 @@ ACTIONS = {
     "expect_visible": ("Check it's visible", True, False, "expect({target}).to_be_visible()"),
     "expect_hidden": ("Check it's hidden", True, False, "expect({target}).to_be_hidden()"),
     "expect_count": ("Check how many there are", True, True, "expect({target}).to_have_count({count})"),
-    "expect_url": ("Check the address contains", False, True, "expect(page).to_have_url(re.compile(re.escape({value})))"),
+    "expect_url": ("Check the address contains", False, True,
+                   "expect(page).to_have_url(re.compile(re.escape({value})))"),
     "wait": ("Wait for it to appear", True, False, "{target}.wait_for()"),
 }
 MAX_ACTIONS = 50
@@ -58,7 +61,7 @@ IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]{0,40}$")
 NEW_FILE = re.compile(r"^[a-z0-9_]{1,60}\.py$")
 
 
-def catalogue() -> dict:
+def catalogue() -> dict[str, Any]:
     """What the editor can offer."""
     return {
         "actions": [{"id": k, "label": v[0], "target": v[1], "value": v[2]} for k, v in ACTIONS.items()],
@@ -74,7 +77,7 @@ def _text(value: object, what: str) -> str:
     return value
 
 
-def draft(line: str, keyword: str) -> dict:
+def draft(line: str, keyword: str) -> dict[str, Any]:
     """The new step's wording, values and function name, worked out from a scenario line."""
     if keyword not in {"given", "when", "then"}:
         raise ValueError("Unknown keyword.")
@@ -87,12 +90,13 @@ def draft(line: str, keyword: str) -> dict:
             "params": [{"name": name, "type": "number" if fmt else "text"} for name, fmt in params]}
 
 
-def _renamed(info: dict, names: object) -> tuple[str, list[tuple[str, str]]]:
+def _renamed(info: dict[str, Any], names: object) -> tuple[str, list[tuple[str, str]]]:
     """Apply the user's names for the step's values: {text1} -> {first_name}."""
     names = names or {}
     if not isinstance(names, dict):
         raise ValueError("Value names must be an object.")
-    pattern, params = info["pattern"], []
+    pattern: str = info["pattern"]
+    params: list[tuple[str, str]] = []
     for p in info["params"]:
         new = names.get(p["name"], p["name"])
         if not isinstance(new, str) or not IDENTIFIER.match(new) or py_keyword.iskeyword(new) or new == "page":
@@ -118,7 +122,7 @@ def _value(value: object, params: list[tuple[str, str]], what: str) -> str:
     return repr(_text(value, what))
 
 
-def code(line: str, keyword: str, names: object, actions: object) -> dict:
+def code(line: str, keyword: str, names: object, actions: object) -> dict[str, Any]:
     """The full step definition for these actions. Raises ValueError with a readable message."""
     info = draft(line, keyword)
     pattern, params = _renamed(info, names)
@@ -136,7 +140,8 @@ def code(line: str, keyword: str, names: object, actions: object) -> dict:
             target = item.get("target")
             if not isinstance(target, dict) or target.get("by") not in TARGETS:
                 raise ValueError(f"Action {n} ({label}): choose how to find the element.")
-            parts["target"] = TARGETS[target["by"]][1].format(v=repr(_text(target.get("value"), f"action {n}'s element")))
+            element = _text(target.get("value"), f"action {n}'s element")
+            parts["target"] = TARGETS[target["by"]][1].format(v=repr(element))
         if needs_value:
             parts["value"] = _value(item.get("value"), params, f"Action {n} ({label})")
             # a count needs a number: a number value is one already, anything else is converted
@@ -172,7 +177,7 @@ def _imports_needed(source: str, existing: set[str]) -> list[str]:
 
 
 def plan(project: Project, line: str, keyword: str, names: object, actions: object, file: str,
-         new_file: bool, already_exists) -> FileChange:
+         new_file: bool, already_exists: Callable[[str], bool]) -> FileChange:
     """Where the code goes: appended to an existing step file, or a new one in the steps folder."""
     if already_exists(line):
         raise ValueError("This step already exists. Remove the line's text block and use the existing step instead.")
@@ -183,7 +188,8 @@ def plan(project: Project, line: str, keyword: str, names: object, actions: obje
         relative = file.strip().replace("\\", "/")
         parent, _, name = relative.rpartition("/")
         if not NEW_FILE.match(name):
-            raise ValueError("Name the new file with lowercase letters, numbers and _, ending in .py (e.g. checkout_steps.py).")
+            raise ValueError("Name the new file with lowercase letters, numbers and _, "
+                             "ending in .py (e.g. checkout_steps.py).")
         path = _inside(folder, relative, ".py") if parent else folder / name
         if not path.parent.is_dir():
             raise ValueError("That folder doesn't exist in the steps folder.")

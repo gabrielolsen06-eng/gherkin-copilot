@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "demo"))
-import browsers  # noqa: E402
+import browsers
 
 
 def test_explicit_path_wins(monkeypatch):

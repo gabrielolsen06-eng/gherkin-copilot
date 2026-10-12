@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
 from gherkin_copilot.indexer import StepDef, build_index
 from gherkin_copilot.matcher import PARSE_FIELD
@@ -19,6 +21,7 @@ def segments(step: StepDef) -> list[dict[str, str]]:
         return [{"text": step.pattern}]
     out: list[dict[str, str]] = []
     pattern = step.pattern
+    unescape: Callable[[str], str]
     if step.kind == "regex":
         pattern = pattern.removeprefix("^").removesuffix("$")
         finder, unescape = REGEX_GROUP, _readable
@@ -46,5 +49,5 @@ def _readable(regex_text: str) -> str:
     return re.sub(r"\\(.)", r"\1", re.sub(r"(\w)\?", r"\1", regex_text))
 
 
-def describe(folder: Path) -> list[dict]:
+def describe(folder: Path) -> list[dict[str, Any]]:
     return [{**asdict(s), "segments": segments(s)} for s in build_index(folder)]

@@ -15,6 +15,7 @@ import argparse
 import difflib
 import json
 import sys
+import traceback
 from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
@@ -55,6 +56,10 @@ def _load_steps(args: argparse.Namespace) -> list[StepDef]:
     return build_index(_existing_path(args.path, "Folder"))
 
 
+def _describe(step: StepDef) -> str:
+    return f"{step.keyword.capitalize()} {step.pattern}   [{step.location}]"
+
+
 def _mark(status: str) -> str:
     """✓ / ✗, or plain words when the output can't show them (e.g. a Windows log file)."""
     mark = MARKS[status]
@@ -93,13 +98,13 @@ def cmd_find(args: argparse.Namespace) -> int:
     if exact:
         print("Matches:")
         for m in exact:
-            print(f"  {_mark('ok')} {m.step.keyword.capitalize()} {m.step.pattern}   [{m.step.location}]")
+            print(f"  {_mark('ok')} {_describe(m.step)}")
     else:
         print("No step definition matches this text.")
     if fuzzy:
         print("\nDid you mean:" if not exact else "\nSimilar steps:")
         for m in fuzzy:
-            print(f"  {m.score:.2f}  {m.step.keyword.capitalize()} {m.step.pattern}   [{m.step.location}]")
+            print(f"  {m.score:.2f}  {_describe(m.step)}")
     return 0 if exact else 1
 
 
@@ -107,15 +112,16 @@ def cmd_dupes(args: argparse.Namespace) -> int:
     steps = _load_steps(args)
     pairs = find_duplicates(steps, threshold=args.threshold)
     if args.json:
-        print(json.dumps([{"score": p.score, "first": asdict(p.first), "second": asdict(p.second)} for p in pairs], indent=2))
+        print(json.dumps([{"score": p.score, "first": asdict(p.first), "second": asdict(p.second)} for p in pairs],
+                         indent=2))
         return 0
     if not pairs:
         print(f"No likely duplicates among {len(steps)} step definitions.")
         return 0
     print(f"{len(pairs)} possible duplicate pair(s):\n")
     for p in pairs:
-        print(f"  {p.score:.2f}  {p.first.keyword.capitalize()} {p.first.pattern}   [{p.first.location}]")
-        print(f"        {p.second.keyword.capitalize()} {p.second.pattern}   [{p.second.location}]\n")
+        print(f"  {p.score:.2f}  {_describe(p.first)}")
+        print(f"        {_describe(p.second)}\n")
     return 0
 
 
@@ -129,9 +135,9 @@ def _print_results(results: list[StepResult]) -> None:
         print(f"  {_mark(r.status)} {r.step.line:>3}  {r.step.raw}   {where}".rstrip())
         if r.status == "ambiguous":
             for s in r.bound:
-                print(f"           matches {s.keyword.capitalize()} {s.pattern}   [{s.location}]")
+                print(f"           matches {_describe(s)}")
         for m in r.suggestions:
-            print(f"           did you mean ({m.score:.2f}) {m.step.keyword.capitalize()} {m.step.pattern}   [{m.step.location}]")
+            print(f"           did you mean ({m.score:.2f}) {_describe(m.step)}")
     counts = {k: sum(r.status == k for r in results) for k in ("ok", "missing", "ambiguous")}
     print(f"\n{len(results)} steps: {counts['ok']} ok, {counts['missing']} missing, {counts['ambiguous']} ambiguous")
 
@@ -176,7 +182,8 @@ def cmd_merge(args: argparse.Namespace) -> int:
             "applied": bool(args.apply),
             "merges": [{"score": p.score, "keep": asdict(p.keep), "drop": asdict(p.drop), "ok": p.ok,
                         "problems": p.problems,
-                        "rewritten_lines": [{"file": str(e.file), "line": e.line, "old": e.old.strip(), "new": e.new.strip()}
+                        "rewritten_lines": [{"file": str(e.file), "line": e.line,
+                                             "old": e.old.strip(), "new": e.new.strip()}
                                             for e in p.edits]} for p in result.plans],
             "files_changed": [str(f) for f in result.changes],
         }, indent=2))
@@ -187,8 +194,8 @@ def cmd_merge(args: argparse.Namespace) -> int:
         return 0
     base = Path.cwd()
     for p in result.plans:
-        print(f"{_mark('ok' if p.ok else 'missing')} {p.score:.2f}  keep  {p.keep.keyword.capitalize()} {p.keep.pattern}   [{p.keep.location}]")
-        print(f"        {'drop' if p.ok else '    '}  {p.drop.keyword.capitalize()} {p.drop.pattern}   [{p.drop.location}]")
+        print(f"{_mark('ok' if p.ok else 'missing')} {p.score:.2f}  keep  {_describe(p.keep)}")
+        print(f"        {'drop' if p.ok else '    '}  {_describe(p.drop)}")
         for problem in p.problems:
             print(f"        can't merge: {problem}")
         if p.ok:
@@ -299,7 +306,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("report", help="turn a Cucumber JSON report into a self-contained HTML page")
     p.add_argument("json_report", nargs="?", type=Path, default=Path("reports/cucumber.json"),
                    help="Cucumber JSON file (default: %(default)s)")
-    p.add_argument("-o", "--output", type=Path, default=Path("reports/report.html"), help="HTML file to write (default: %(default)s)")
+    p.add_argument("-o", "--output", type=Path, default=Path("reports/report.html"),
+                   help="HTML file to write (default: %(default)s)")
     p.add_argument("--artifacts", type=Path, default=Path("reports/artifacts"),
                    help="pytest-playwright --output folder with screenshots, videos and traces (default: %(default)s)")
     p.add_argument("--open", action="store_true", help="open the report in your default browser")
@@ -327,6 +335,10 @@ def main(argv: list[str] | None = None) -> int:
         message = f"{exc.strerror or exc}: {exc.filename}" if exc.filename else str(exc)
     except (ValueError, KeyError, TypeError) as exc:  # malformed index / report / feature files
         message = str(exc) or type(exc).__name__
+    except Exception:  # a bug: show the details, and an exit code CI can tell apart from findings (1)
+        traceback.print_exc()
+        print("gherkin-copilot: internal error, please report it with the details above", file=sys.stderr)
+        return 3
     print(f"gherkin-copilot: error: {message}", file=sys.stderr)
     return 2
 

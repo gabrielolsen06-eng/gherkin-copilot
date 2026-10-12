@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 from gherkin_copilot.cli import main
 from gherkin_copilot.report import attach_artifacts, load_report, render_html

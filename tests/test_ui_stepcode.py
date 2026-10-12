@@ -3,11 +3,11 @@ import shutil
 from pathlib import Path
 
 import pytest
+from test_ui import request
 
 from gherkin_copilot.ui import builder, stepcode
 from gherkin_copilot.ui.projects import Project, ProjectStore
 from gherkin_copilot.ui.server import start_in_background
-from test_ui import request
 
 DEMO = Path(__file__).parent.parent / "demo"
 LINE = 'When I enter my details "Ada" "Lovelace" 3'
@@ -74,7 +74,8 @@ def test_typed_text_never_becomes_code():
 
 
 def test_save_into_an_existing_file_adds_imports(demo):
-    exists = lambda line: builder.check(demo, [line])[0]["status"] != "missing"
+    def exists(line):
+        return builder.check(demo, [line])[0]["status"] != "missing"
     actions = [{"action": "click", "target": {"by": "css", "value": ".shopping_cart_link"}},
                {"action": "expect_url", "value": {"text": "cart"}}]
     change = stepcode.plan(demo, "When I open the cart page", "when", {}, actions, "login_steps.py", False, exists)
@@ -108,7 +109,8 @@ def test_build_over_http_runs_with_pytest(demo, tmp_path):
     project = store.add("Demo", demo.steps, demo.features)
     server, app, _ = start_in_background(store)
     port = server.server_address[1]
-    post = lambda path, body: request(port, "POST", path, {"project": project.id, **body}, app.token)
+    def post(path, body):
+        return request(port, "POST", path, {"project": project.id, **body}, app.token)
     try:
         info = json.loads(post("/api/stepcode/draft", {"line": "When I open the cart page", "keyword": "when"})[2])
         assert info["files"] == ["cart_steps.py", "login_steps.py"] and {a["id"] for a in info["actions"]} >= {"click"}
