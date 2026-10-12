@@ -13,6 +13,13 @@ STEPS_DIR = Path(__file__).resolve().parent / "steps"
 pytest_plugins = [f"steps.{p.stem}" for p in sorted(STEPS_DIR.glob("*.py")) if p.stem != "__init__"]
 
 
+def pytest_configure(config):
+    """pytest-bdd doesn't create the folder for --cucumberjson, so reports/cucumber.json would fail on a fresh checkout."""
+    path = config.getoption("cucumber_json_path", None)
+    if path:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+
+
 @pytest.fixture(scope="session")
 def browser_type_launch_args(browser_type_launch_args):
     """BROWSER_PATH=... runs a Chromium-based browser that has no --browser-channel name,

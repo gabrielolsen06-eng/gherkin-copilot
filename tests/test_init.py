@@ -85,10 +85,13 @@ def test_generated_project_binds_every_step_and_collects(tmp_path, capsys):
         compile(path.read_text(encoding="utf-8"), str(path), "exec")
 
     # pytest itself loads conftest.py, every step file and pytest.ini (running it needs a browser: CI does that)
-    done = subprocess.run([sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider", "-W", "error"],  # nosec B603
+    # --cucumberjson into a folder that doesn't exist yet, as every CI run on a fresh checkout does
+    done = subprocess.run([sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider", "-W", "error",  # nosec B603
+                           "--cucumberjson=reports/cucumber.json"],
                           cwd=tmp_path, capture_output=True, text=True, timeout=120, check=False)
     assert done.returncode == 0, done.stdout + done.stderr
     assert "tests/test_features.py::test_the_browser_shows_a_page" in done.stdout
+    assert (tmp_path / "reports" / "cucumber.json").is_file()
 
 
 def test_gitlab_pipeline_only_when_asked(tmp_path, capsys):
