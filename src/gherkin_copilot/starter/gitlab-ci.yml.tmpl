@@ -12,17 +12,18 @@
 
 acceptance-tests:
   image: mcr.microsoft.com/playwright/python:v1.63.0-noble
+  # The image's Python is made for this: the container is thrown away after each job, so
+  # packages go straight into it (the image has no venv module anyway).
   script:
-    - python3 -m venv .venv
-    - .venv/bin/python -m pip install --require-hashes -r requirements.lock
-    - .venv/bin/python -m pytest --junitxml=reports/junit.xml --cucumberjson=reports/cucumber.json --output=reports/artifacts --screenshot=only-on-failure --tracing=retain-on-failure
+    - python -m pip install --require-hashes -r requirements.lock
+    - python -m pytest --junitxml=reports/junit.xml --cucumberjson=reports/cucumber.json --output=reports/artifacts --screenshot=only-on-failure --tracing=retain-on-failure
   # Once gherkin-copilot is in your Artifactory, add these to `script` (before pytest) to fail
   # the pipeline when a scenario line has no step:
-  #   - .venv/bin/python -m pip install gherkin-copilot
-  #   - .venv/bin/gherkin-copilot check features
+  #   - python -m pip install gherkin-copilot
+  #   - gherkin-copilot check features
   # and this `after_script` for an HTML report of every run, passed or failed:
   # after_script:
-  #   - .venv/bin/gherkin-copilot report reports/cucumber.json -o reports/report.html
+  #   - gherkin-copilot report reports/cucumber.json -o reports/report.html
   artifacts:
     when: always
     expire_in: 30 days
