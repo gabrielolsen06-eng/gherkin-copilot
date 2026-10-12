@@ -144,17 +144,26 @@ point pip at it with `--index-url`; the hashes still guarantee the same files.
 
 ## Checks run on this version
 
-Results from 2026-10-09:
+Results from 2026-10-12, after working through the independent review in
+`reviews/` (see `gherkin-copilot-review-2026-10-11-status.md`):
 
 | Check | Result |
 |---|---|
 | `pip-audit --strict -r requirements.lock` (known vulnerabilities) | No known vulnerabilities found |
-| `bandit -r src demo run_demo.py` (static security analysis) | No medium or high findings. Two low, informational notes say `run_demo.py` uses `subprocess`. It only re-runs the current Python with fixed argument lists and no shell. |
-| `pip install --require-hashes -r requirements.lock` in a clean venv, then `pip check` | Installs cleanly, no broken requirements |
-| Tool tests / demo scenarios | 152 of 153 passed / 5 passed. The failure is `test_brave_found_on_mac`, which finds the real Brave in `/Applications` before the test's fake one; it isn't related to the tool. `bandit` and `pip-audit` were not re-run after `merge` was added. |
+| `bandit -q -r src demo run_demo.py` (static security analysis) | No findings. The three places that start a process (`run_demo.py` and the app's Run button in `ui/runner.py`) use fixed argument lists and no shell, and are annotated with why |
+| `mypy --strict` | No issues in 19 source files |
+| `ruff check` (rules in `pyproject.toml`) | No issues |
+| Tool tests | 251 passed (macOS, Python 3.14), including tests for missing paths, malformed files, Windows code pages and generated inputs |
+| Branch coverage (`coverage run -m pytest tests`) | 91% |
+| Demo scenarios in a real browser (Brave) | 6 passed |
+| `pip install --require-hashes -r requirements.lock` in a clean venv, then `pip check` | Installs cleanly, no broken requirements (checked 2026-10-09; the lock file hasn't changed since) |
 
-To repeat these checks yourself, install `pip-audit` and `bandit` in a separate
-virtual environment and run the commands above.
+The same checks run on every push in CI (`.github/workflows/ci.yml`), including the tests on
+Windows. To repeat them yourself, see "Development" in the README.
+
+**Error handling:** the command line tool turns bad input (missing paths, files that
+aren't valid JSON or UTF-8) into a one-line message with exit code 2, and never prints a
+traceback for it (OWASP ASVS V7.4). Unexpected internal errors exit with 3.
 
 ## Reporting a problem
 

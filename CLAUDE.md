@@ -32,6 +32,16 @@ gherkin-copilot ui                        # the app, on 127.0.0.1:8765
 
 After changing `src/`, reinstall with `python -m pip install --no-deps --no-build-isolation .`
 
+### Quality checks (dev-only tools in `.venv-dev`, never runtime dependencies)
+
+```bash
+.venv-dev/bin/ruff check src tests demo run_demo.py && .venv-dev/bin/mypy
+.venv-dev/bin/bandit -q -r src demo run_demo.py && .venv-dev/bin/pip-audit --strict -r requirements.lock
+```
+
+All four must stay clean. Exit codes: 0 ok, 1 finding, 2 bad input (`UsageError` / ValueError in
+`cli.main`), 3 internal error. Displayed paths use `.as_posix()`. CI: `.github/workflows/ci.yml`.
+
 ### Dependencies
 
 Edit `requirements.in`, then regenerate the lock with pip-tools (in a separate venv):
@@ -59,7 +69,8 @@ and `bandit -r src demo run_demo.py` afterwards.
 - `demo/`: `app/` practice shop, `features/`, `drafts/` (deliberately unimplemented
   checkout scenario), `steps/` (two deliberate near-duplicate steps for the `dupes`/`merge` demo; `cart.feature`
   uses one so `merge` rewrites a line),
-  `conftest.py`, `browsers.py` (finds Brave), `server.py`
+  `conftest.py` (loads every file in `steps/`), `browsers.py` (finds Brave), `server.py`. `demo/` is a
+  package: import as `demo.server`, `demo.browsers`, `demo.steps.*`
 - `tests/`: unit tests for the tool
 
 ## Conventions

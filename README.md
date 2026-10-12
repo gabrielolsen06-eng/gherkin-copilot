@@ -104,13 +104,19 @@ To look at the shop yourself: `python demo/server.py`, then open http://127.0.0.
 ```
 demo/
 ├── app/            the practice shop (static HTML/JS/CSS, no external resources)
-├── features/       login.feature, cart.feature: 5 scenarios, all passing
+├── features/       login.feature, cart.feature: 6 scenarios, all passing
 ├── drafts/         checkout.feature: a new scenario whose steps aren't written yet
 ├── steps/          step definitions shared by all features
 ├── tests/          collects the scenarios for pytest
 ├── conftest.py     starts the shop, browser options
 ├── browsers.py     finds Brave (or another Chromium browser) to drive
 └── server.py       localhost-only static server with security headers
+
+demo/ is a Python package, so its modules import as demo.server, demo.browsers and
+demo.steps.*. conftest.py loads every file in steps/, and tests/test_features.py runs every
+feature file, so new steps and features are picked up without registering them.
+login.feature shows a declarative scenario ("Given I am a registered customer / When I sign
+in") next to imperative ones that spell out each value.
 ```
 
 Two steps in `demo/steps` are deliberate near-duplicates, so `dupes` has something to find,
@@ -130,10 +136,14 @@ Example output from `check`:
 
 ```
 checkout.feature
-  ✓   7  Given I am logged in as "standard_user"   steps/login_steps.py:27
+  ✓   7  Given I am logged in as "standard_user"   steps/login_steps.py:26
   ✓   8  When I add "Sauce Labs Backpack" to the cart   steps/cart_steps.py:11
-  ✗   9  And I open the cart page
+  ✓   9  And I open the cart page   steps/cart_steps.py:38
+  ✗  10  And I go to checkout
+  ✗  11  And I enter my details "Ada" "Lovelace" "90210"
   ✗  12  Then the order total is "$29.99"
+
+6 steps: 3 ok, 3 missing, 0 ambiguous
 
 # --- Stubs for missing steps (pytest-bdd) ---
 @then(parsers.parse('the order total is "{text1}"'))
@@ -166,8 +176,29 @@ keyword and placeholders, their decorators must have the same options (such as
 removed function mustn't be called from anywhere else, and every rewritten line must bind
 to the kept step. Commit first so the change is easy to review and undo.
 
-Every command accepts `--json`. `find` and `check` exit with code 1 when something
-doesn't bind, so they can gate a pull request in CI or a pre-commit hook.
+Every command accepts `--json`, and exit codes are meant for CI:
+
+| Exit code | Meaning |
+|---|---|
+| 0 | All good |
+| 1 | Something doesn't bind (`find`, `check`) or can't be merged (`merge`): a finding |
+| 2 | A problem with the input: a path that doesn't exist, no `.feature` files found, a file that isn't a valid index / report / UTF-8 text. One line on stderr, no traceback |
+| 3 | An internal error (a bug): the details are printed so it can be reported |
+
+So a typo in a path fails a CI gate instead of passing it. Output never crashes on a
+Windows console or log file: the ✓ / ✗ marks become `OK` / `MISSING` when the output
+can't show them.
+
+The saved index (`.gherkin-index.json`) remembers which folder it came from and when. If a
+step file is newer, `find`, `dupes` and `check` say so; re-run `index` or pass `--path`.
+
+**Framework detection:** in a file that imports `pytest_bdd`, a plain-string step such as
+`@given("the payload is {}")` is matched literally, as pytest-bdd does. In behave files a
+plain string with `{name}` is a parse pattern, as behave does.
+
+**Limits of the feature-file reader:** `# language:` (non-English Gherkin keywords) isn't
+supported, and for a Scenario Outline only the first Examples row is used to check that
+each line binds.
 
 ## The app
 
@@ -284,9 +315,24 @@ signed in" won't be flagged as duplicates. That's a job for the planned LLM feat
 ## Development
 
 ```bash
-python -m pytest tests       # tool tests (153)
-python -m pytest demo        # browser scenarios (5)
+python -m pytest tests       # tool tests (251)
+python -m pytest demo        # browser scenarios (6)
 ```
+
+Linting, type checking and security scans use dev-only tools, kept out of the project's
+environment so the tool itself stays standard-library only:
+
+```bash
+python -m venv .venv-dev && .venv-dev/bin/pip install -r requirements-dev.txt
+.venv-dev/bin/ruff check src tests demo run_demo.py     # lint (rules in pyproject.toml)
+.venv-dev/bin/mypy                                       # strict type checking
+.venv-dev/bin/bandit -q -r src demo run_demo.py          # security lint
+.venv-dev/bin/pip-audit --strict -r requirements.lock   # known vulnerabilities
+.venv-dev/bin/pre-commit install                         # run ruff, mypy and bandit on every commit
+```
+
+`.github/workflows/ci.yml` runs all of these plus the tests on Ubuntu, Windows and macOS
+(Python 3.11 and 3.13) and the browser demo, once the project is on GitHub.
 
 Useful environment variables for the demo:
 
