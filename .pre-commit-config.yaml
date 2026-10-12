@@ -1,0 +1,23 @@
+# Checks run on every commit. Set up once (with the dev tools installed, see requirements-dev.txt):
+#   .venv-dev/bin/pre-commit install
+# These use the tools from your active environment, so nothing extra is downloaded at commit time.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff
+        entry: ruff check
+        language: system
+        types: [python]
+      - id: mypy
+        name: mypy --strict
+        entry: mypy
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: bandit
+        name: bandit
+        entry: bandit -q -r src demo run_demo.py
+        language: system
+        types: [python]
+        pass_filenames: false

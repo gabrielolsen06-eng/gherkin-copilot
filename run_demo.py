@@ -19,7 +19,7 @@ machines may not allow. Traces already include a frame-by-frame replay.
 from __future__ import annotations
 
 import os
-import subprocess
+import subprocess  # nosec B404: only re-runs this Python with fixed argument lists
 import sys
 from pathlib import Path
 
@@ -43,7 +43,7 @@ def run(title: str, command: list[str], failure_expected: bool) -> bool:
     """Run one demo step. An expected failure must be exit code 1 ("found something"), not a crash."""
     shown = ["gherkin-copilot", *command[3:]] if command[:3] == TOOL else ["pytest", *command[3:]]
     print(f"\n{'=' * 72}\n{title}\n$ {' '.join(shown)}\n{'=' * 72}", flush=True)
-    code = subprocess.run(command, cwd=ROOT, check=False).returncode  # list args, no shell
+    code = subprocess.run(command, cwd=ROOT, check=False).returncode  # nosec B603: fixed list args, no shell
     if code == 1 and failure_expected:
         print("(exit code 1 is expected here: it's how CI would catch this)")
         return True
