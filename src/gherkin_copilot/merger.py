@@ -110,7 +110,8 @@ def _signature_and_body(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
 def _decorator_options(node: ast.FunctionDef | ast.AsyncFunctionDef, step: StepDef) -> dict[str, str]:
     """Everything a step decorator says besides its wording, e.g. target_fixture or converters."""
     deco = next(d for d in node.decorator_list if d.lineno == step.line)
-    assert isinstance(deco, ast.Call)  # the indexer only records called decorators
+    if not isinstance(deco, ast.Call):  # the indexer only records called decorators
+        return {}
     options = {kw.arg or "**kwargs": ast.unparse(kw.value) for kw in deco.keywords}
     options.update({f"argument {i}": ast.unparse(a) for i, a in enumerate(deco.args[1:], start=2)})
     if isinstance(deco.args[0], ast.Call):  # parsers.parse("...", extra_types=...)
@@ -130,7 +131,7 @@ def _references(root: Path, name: str) -> list[str]:
         for node in ast.walk(tree):
             if isinstance(node, (ast.Name, ast.Attribute)) and \
                     (node.id if isinstance(node, ast.Name) else node.attr) == name:
-                found.append(f"{path.relative_to(root)}:{node.lineno}")
+                found.append(f"{path.relative_to(root).as_posix()}:{node.lineno}")
     return found
 
 

@@ -88,7 +88,7 @@ def index_file(path: Path, root: Path | None = None) -> list[StepDef]:
     except (SyntaxError, UnicodeDecodeError):
         return []
 
-    shown_path = str(path.relative_to(root)) if root else str(path)
+    shown_path = path.relative_to(root).as_posix() if root else str(path)
     # pytest-bdd matches a plain string literally; behave reads {name} in a plain string as a placeholder
     plain_strings_are_literal = _imports(tree, "pytest_bdd") and not _imports(tree, "behave")
     steps: list[StepDef] = []

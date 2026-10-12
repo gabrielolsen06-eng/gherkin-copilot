@@ -24,7 +24,7 @@ from gherkin_copilot import __version__
 from gherkin_copilot.checker import FeatureStep, StepResult, check_steps, iter_feature_files, make_stub, parse_feature
 from gherkin_copilot.indexer import StepDef, build_index, iter_python_files, load_index, save_index
 from gherkin_copilot.matcher import find, find_duplicates
-from gherkin_copilot.merger import apply, plan_merges
+from gherkin_copilot.merger import MergeResult, apply, plan_merges
 from gherkin_copilot.report import write_report
 
 DEFAULT_INDEX = Path(".gherkin-index.json")
@@ -158,7 +158,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         raise UsageError(f"No .feature files found in {root}")
     results = []
     for feature in features:
-        results.extend(check_steps(parse_feature(feature, str(feature.relative_to(base))), steps))
+        results.extend(check_steps(parse_feature(feature, feature.relative_to(base).as_posix()), steps))
 
     if args.json:
         print(json.dumps([{"file": r.step.file, "line": r.step.line, "step": r.step.raw, "status": r.status,
@@ -171,28 +171,19 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 0 if all(r.status == "ok" for r in results) else 1
 
 
-def cmd_merge(args: argparse.Namespace) -> int:
-    root = _existing_path(args.path, "Folder")
-    features = _existing_path(args.features, "Features folder") if args.features else None
-    result = plan_merges(root, threshold=args.threshold, keep=frozenset(args.keep), features=features)
-    written = apply(result) if args.apply else []
+def _merge_json(result: MergeResult, applied: bool) -> str:
+    return json.dumps({
+        "applied": applied,
+        "merges": [{"score": p.score, "keep": asdict(p.keep), "drop": asdict(p.drop), "ok": p.ok,
+                    "problems": p.problems,
+                    "rewritten_lines": [{"file": str(e.file), "line": e.line,
+                                         "old": e.old.strip(), "new": e.new.strip()} for e in p.edits]}
+                   for p in result.plans],
+        "files_changed": [str(f) for f in result.changes],
+    }, indent=2)
 
-    if args.json:
-        print(json.dumps({
-            "applied": bool(args.apply),
-            "merges": [{"score": p.score, "keep": asdict(p.keep), "drop": asdict(p.drop), "ok": p.ok,
-                        "problems": p.problems,
-                        "rewritten_lines": [{"file": str(e.file), "line": e.line,
-                                             "old": e.old.strip(), "new": e.new.strip()}
-                                            for e in p.edits]} for p in result.plans],
-            "files_changed": [str(f) for f in result.changes],
-        }, indent=2))
-        return 0 if all(p.ok for p in result.plans) else 1
 
-    if not result.plans:
-        print("No likely duplicates to merge.")
-        return 0
-    base = Path.cwd()
+def _print_merge_plans(result: MergeResult) -> None:
     for p in result.plans:
         print(f"{_mark('ok' if p.ok else 'missing')} {p.score:.2f}  keep  {_describe(p.keep)}")
         print(f"        {'drop' if p.ok else '    '}  {_describe(p.drop)}")
@@ -205,15 +196,34 @@ def cmd_merge(args: argparse.Namespace) -> int:
     for first, second in result.skipped:
         print(f"Skipped {first.function} / {second.function}: run merge again after this round.\n")
 
+
+def _print_merge_diff(result: MergeResult) -> None:
+    base = Path.cwd()
     for path, (old, new) in result.changes.items():
         shown = path.relative_to(base) if path.is_relative_to(base) else path
         sys.stdout.writelines(difflib.unified_diff(
             old.splitlines(keepends=True), new.splitlines(keepends=True), f"a/{shown}", f"b/{shown}"))
+
+
+def cmd_merge(args: argparse.Namespace) -> int:
+    root = _existing_path(args.path, "Folder")
+    features = _existing_path(args.features, "Features folder") if args.features else None
+    result = plan_merges(root, threshold=args.threshold, keep=frozenset(args.keep), features=features)
+    written = apply(result) if args.apply else []
+    code = 0 if all(p.ok for p in result.plans) else 1
+    if args.json:
+        print(_merge_json(result, bool(args.apply)))
+        return code
+    if not result.plans:
+        print("No likely duplicates to merge.")
+        return 0
+    _print_merge_plans(result)
+    _print_merge_diff(result)
     if written:
         print(f"\nUpdated {len(written)} file(s). Re-run `gherkin-copilot index` to refresh the saved index.")
     elif result.changes:
         print("\nPreview only, nothing was changed. Re-run with --apply to make these changes.")
-    return 0 if all(p.ok for p in result.plans) else 1
+    return code
 
 
 def cmd_report(args: argparse.Namespace) -> int:

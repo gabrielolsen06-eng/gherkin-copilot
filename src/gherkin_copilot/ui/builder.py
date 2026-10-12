@@ -104,9 +104,9 @@ def _inside(folder: Path, relative: str, suffix: str) -> Path:
 def project_files(project: Project) -> dict[str, list[str]]:
     features, steps = Path(project.features), Path(project.steps)
     return {
-        "features": sorted(str(p.relative_to(features)) for p in features.rglob("*.feature")
+        "features": sorted(p.relative_to(features).as_posix() for p in features.rglob("*.feature")
                            if ".venv" not in p.parts),
-        "steps": sorted(str(p.relative_to(steps)) for p in iter_python_files(steps) if index_file(p)),
+        "steps": sorted(p.relative_to(steps).as_posix() for p in iter_python_files(steps) if index_file(p)),
     }
 
 
@@ -159,7 +159,7 @@ def plan_stubs(project: Project, file: str, lines: object, only: object = None,
         at = (imports[-1].end_lineno or 0) if imports else 0
         out.insert(at, f"from pytest_bdd import {', '.join(missing)}")
     after = "\n".join(out) + "\n\n\n" + "\n\n\n".join(s.rstrip("\n") for s in renamed) + "\n"
-    return FileChange(path, str(path.relative_to(folder)), before, after, creates=False)
+    return FileChange(path, path.relative_to(folder).as_posix(), before, after, creates=False)
 
 
 def apply_change(change: FileChange, expected_hash: str) -> None:

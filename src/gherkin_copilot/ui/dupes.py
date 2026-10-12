@@ -72,7 +72,7 @@ def overview(project: Project, threshold: object, keep: object = None) -> dict[s
 def _shown(path: Path, project: Project) -> str:
     for folder in (Path(project.steps), Path(project.features)):
         if folder in path.parents:
-            return str(path.relative_to(folder))
+            return path.relative_to(folder).as_posix()
     return str(path)
 
 

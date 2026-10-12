@@ -197,7 +197,7 @@ def plan(project: Project, line: str, keyword: str, names: object, actions: obje
             raise ValueError(f"{relative} already exists. Choose it from the list instead.")
         header = "\n".join(_imports_needed(source, set()))
         after = f'"""Steps built with gherkin-copilot\'s action blocks."""\n\n{header}\n\n\n{source}'
-        return FileChange(path, str(path.relative_to(folder)), "", after, creates=True)
+        return FileChange(path, path.relative_to(folder).as_posix(), "", after, creates=True)
 
     path = _inside(folder, file, ".py")
     if not path.is_file() or not index_file(path):
@@ -216,9 +216,9 @@ def plan(project: Project, line: str, keyword: str, names: object, actions: obje
         at = nodes[-1].end_lineno if nodes else 0
         out[at:at] = imports
     after = "\n".join(out) + "\n\n\n" + source
-    return FileChange(path, str(path.relative_to(folder)), before, after, creates=False)
+    return FileChange(path, path.relative_to(folder).as_posix(), before, after, creates=False)
 
 
 def step_files(project: Project) -> list[str]:
     folder = Path(project.steps)
-    return sorted(str(p.relative_to(folder)) for p in iter_python_files(folder) if index_file(p))
+    return sorted(p.relative_to(folder).as_posix() for p in iter_python_files(folder) if index_file(p))

@@ -19,7 +19,7 @@ import os
 import re
 import shlex
 import shutil
-import subprocess
+import subprocess  # nosec B404: runs only the user's own saved pytest command, see SECURITY.md
 import sys
 import threading
 import time
@@ -248,7 +248,8 @@ def latest_results(project: Project) -> dict[str, Any] | None:
                 "example": s.example, "tags": s.tags, "line": s.line,
                 "steps": [{"keyword": st.keyword, "name": st.name, "status": st.status, "seconds": round(st.seconds, 2),
                            "error": _short_error(st.error) if st.error else ""} for st in s.steps],
-                "artifacts": {kind: [str(p.relative_to(out)) for p in paths] for kind, paths in s.artifacts.items()},
+                "artifacts": {kind: [p.relative_to(out).as_posix() for p in paths]
+                              for kind, paths in s.artifacts.items()},
             } for s in f.scenarios],
         } for f in features],
     }

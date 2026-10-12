@@ -141,7 +141,7 @@ def list_scenarios(project: Project) -> dict[str, Any]:
                            "steps": len(b.steps), "missing": states.count("missing"),
                            "ambiguous": states.count("ambiguous"),
                            "examples": sum(len(e.rows) for e in b.examples)})
-        files.append({"file": str(path.relative_to(folder)), "feature": feature.name, "tags": feature.tags,
+        files.append({"file": path.relative_to(folder).as_posix(), "feature": feature.name, "tags": feature.tags,
                       "description": feature.description, "blocks": blocks})
     return {"files": files}
 
@@ -231,7 +231,7 @@ def plan_new(project: Project, mode: str, file: str, feature_name: str, spec: ob
             raise ValueError("That file already has a Background.")
         rendered = gherkin.render(block)
         after = before.rstrip("\n") + "\n\n" + rendered
-        return FileChange(path, str(path.relative_to(folder)), before, after, creates=False), rendered
+        return FileChange(path, path.relative_to(folder).as_posix(), before, after, creates=False), rendered
     raise ValueError("Choose a new file or an existing one.")
 
 
@@ -244,7 +244,7 @@ def _existing(project: Project, file: str, start: object,
 
 
 def _change(project: Project, path: Path, before: str, after: str) -> FileChange:
-    return FileChange(path, str(path.relative_to(Path(project.features))), before, after, creates=False)
+    return FileChange(path, path.relative_to(Path(project.features)).as_posix(), before, after, creates=False)
 
 
 def plan_edit(project: Project, file: str, start: object, name: object, spec: object) -> tuple[FileChange, str, str]:
