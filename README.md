@@ -127,6 +127,7 @@ and `cart.feature` uses one of them so `merge` has a line to rewrite.
 
 ```bash
 gherkin-copilot init payments-tests           # or --dry-run to see the list first
+gherkin-copilot init payments-tests --ci gitlab   # also add a GitLab pipeline
 ```
 
 This creates a ready-to-run pytest-bdd + Playwright project:
@@ -150,6 +151,12 @@ proves Python, pytest-bdd, Playwright and the browser work on that machine, whic
 first thing to check on a locked-down laptop (`python -m pytest --browser-channel msedge`
 uses the Edge that's already installed). `init` only ever adds files: anything that already
 exists is kept and listed.
+
+With `--ci gitlab` it also adds a `.gitlab-ci.yml` that runs every scenario on each push in
+Playwright's Docker image (browsers included, so the pipeline downloads none), installs from
+the hash-checked lock (through Artifactory if `PIP_INDEX_URL` is set as a CI/CD variable),
+and shows the results in GitLab's Tests tab, keeping screenshots and traces of failures. This
+repo's CI runs that file's commands in the same image on every push.
 
 ## Using it on your own project
 
@@ -344,7 +351,7 @@ signed in" won't be flagged as duplicates.
 ## Development
 
 ```bash
-python -m pytest tests       # tool tests (274)
+python -m pytest tests       # tool tests (276)
 python -m pytest demo        # browser scenarios (6)
 ```
 

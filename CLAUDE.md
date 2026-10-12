@@ -49,7 +49,8 @@ Edit `requirements.in`, then regenerate the lock with pip-tools (in a separate v
 Keep `colorama` pinned (pytest needs it on Windows). Run `pip-audit -r requirements.lock`
 and `bandit -r src demo run_demo.py` afterwards. Then copy the lock to
 `src/gherkin_copilot/starter/requirements.lock.tmpl` and the pins to `requirements.in.tmpl`
-(the project `init` creates); `tests/test_init.py` fails until both match.
+(the project `init` creates), and the Playwright image tag in `starter/gitlab-ci.yml.tmpl`
+and `.github/workflows/ci.yml` if playwright changed; `tests/test_init.py` fails until all match.
 
 ## Layout
 

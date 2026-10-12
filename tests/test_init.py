@@ -5,6 +5,8 @@ import subprocess  # nosec B404: runs pytest on the generated project, fixed arg
 import sys
 from pathlib import Path
 
+import pytest
+
 from gherkin_copilot.cli import main
 from gherkin_copilot.scaffold import templates
 
@@ -87,3 +89,24 @@ def test_generated_project_binds_every_step_and_collects(tmp_path, capsys):
                           cwd=tmp_path, capture_output=True, text=True, timeout=120, check=False)
     assert done.returncode == 0, done.stdout + done.stderr
     assert "tests/test_features.py::test_the_browser_shows_a_page" in done.stdout
+
+
+def test_gitlab_pipeline_only_when_asked(tmp_path, capsys):
+    assert main(["init", str(tmp_path / "plain")]) == 0
+    assert not (tmp_path / "plain" / ".gitlab-ci.yml").exists()
+    code, out, _ = run(["init", str(tmp_path / "gl"), "--ci", "gitlab"], capsys)
+    pipeline = (tmp_path / "gl" / ".gitlab-ci.yml").read_text(encoding="utf-8")
+    assert code == 0 and "Created 12 files" in out and "  + .gitlab-ci.yml" in out
+    assert "--require-hashes -r requirements.lock" in pipeline and "junit: reports/junit.xml" in pipeline
+    with pytest.raises(SystemExit) as unknown:  # argparse rejects a CI system it doesn't know
+        main(["init", str(tmp_path / "x"), "--ci", "jenkins"])
+    assert unknown.value.code == 2 and not (tmp_path / "x").exists()
+
+
+def test_gitlab_image_matches_the_locked_playwright():
+    # Playwright's image only holds the browsers for its own version: a mismatch means a download in CI
+    lock = (REPO / "requirements.lock").read_text(encoding="utf-8")
+    version = next(line.split("==")[1].split()[0] for line in lock.splitlines() if line.startswith("playwright=="))
+    image = f"mcr.microsoft.com/playwright/python:v{version}-noble"
+    assert image in templates("gitlab")[".gitlab-ci.yml"]
+    assert image in (REPO / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")  # CI tests the same image

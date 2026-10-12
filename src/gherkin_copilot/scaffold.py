@@ -14,8 +14,9 @@ from importlib.resources.abc import Traversable
 from pathlib import Path
 
 SUFFIX = ".tmpl"
-RENAMED = {"gitignore": ".gitignore"}  # a dotfile in package data is easy to lose when packaging
+RENAMED = {"gitignore": ".gitignore", "gitlab-ci.yml": ".gitlab-ci.yml"}  # dotfiles in package data are easy to lose
 NAME = "{{name}}"
+CI_FILES = {"gitlab": ".gitlab-ci.yml"}  # pipeline files, only added when asked for with --ci
 
 
 @dataclass
@@ -25,8 +26,8 @@ class InitResult:
     skipped: list[str] = field(default_factory=list)  # already there, so left untouched
 
 
-def templates() -> dict[str, str]:
-    """Relative path -> contents, for every file in the starter project."""
+def templates(ci: str | None = None) -> dict[str, str]:
+    """Relative path -> contents, for every file in the starter project (plus ci's pipeline file)."""
     found: dict[str, str] = {}
 
     def walk(folder: Traversable, prefix: str) -> None:
@@ -38,13 +39,14 @@ def templates() -> dict[str, str]:
                 found[prefix + RENAMED.get(name, name)] = item.read_text(encoding="utf-8")
 
     walk(files("gherkin_copilot") / "starter", "")
-    return dict(sorted(found.items()))
+    unwanted = {path for name, path in CI_FILES.items() if name != ci}
+    return {path: text for path, text in sorted(found.items()) if path not in unwanted}
 
 
-def create(root: Path, name: str, dry_run: bool = False) -> InitResult:
+def create(root: Path, name: str, dry_run: bool = False, ci: str | None = None) -> InitResult:
     """Write the starter files under root, skipping any that exist. With dry_run, write nothing."""
     result = InitResult(root)
-    for relative, text in templates().items():
+    for relative, text in templates(ci).items():
         path = root / relative
         if path.exists():
             result.skipped.append(relative)

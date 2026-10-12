@@ -66,8 +66,12 @@ Or use the app: run `gherkin-copilot ui`, add this folder as a project (steps fo
 
 ## In CI
 
-These commands work in any pipeline (Azure DevOps, GitLab, Jenkins, GitHub Actions). CI
-machines usually have no browser, so the second line installs Playwright's.
+A project created with `gherkin-copilot init --ci gitlab` already has a `.gitlab-ci.yml`
+that runs every scenario on each push, in Playwright's Docker image (browsers included, so
+nothing is downloaded), and shows the results in the pipeline's Tests tab.
+
+For any other pipeline (Azure DevOps, Jenkins, GitHub Actions), these commands are enough.
+CI machines usually have no browser, so the second line installs Playwright's.
 
 ```bash
 python -m pip install --require-hashes -r requirements.lock

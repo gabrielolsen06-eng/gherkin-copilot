@@ -99,3 +99,31 @@ jobs:
       - name: Run the example in the installed Edge (no `playwright install`)
         working-directory: ${{ runner.temp }}/starter
         run: .venv\Scripts\python -m pytest --browser-channel msedge -W error -v
+
+  gitlab:
+    # The pipeline `init --ci gitlab` writes, run in the Docker image GitLab would use
+    name: GitLab pipeline from init, in Playwright's image
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright/python:v1.63.0-noble
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - name: Create a project with its GitLab pipeline (the tool is standard-library only, so it runs from source)
+        run: PYTHONPATH=src python3 -m gherkin_copilot init /tmp/starter --ci gitlab
+      - name: Run the pipeline's script lines exactly as written
+        working-directory: /tmp/starter
+        run: |
+          python3 - > pipeline.sh <<'PY'
+          lines = open(".gitlab-ci.yml", encoding="utf-8").read().splitlines()
+          for line in lines[lines.index("  script:") + 1:]:
+              if not line.startswith("    - "):
+                  break
+              print(line[6:])
+          PY
+          cat pipeline.sh
+          bash -ex pipeline.sh
+      - name: The results GitLab would keep are there
+        working-directory: /tmp/starter
+        run: test -s reports/junit.xml && test -s reports/cucumber.json

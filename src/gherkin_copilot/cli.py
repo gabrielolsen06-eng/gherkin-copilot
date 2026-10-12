@@ -28,7 +28,7 @@ from gherkin_copilot.indexer import StepDef, build_index, load_index, save_index
 from gherkin_copilot.matcher import find, find_duplicates
 from gherkin_copilot.merger import MergeResult, apply, plan_merges
 from gherkin_copilot.report import write_report
-from gherkin_copilot.scaffold import create
+from gherkin_copilot.scaffold import CI_FILES, create
 
 DEFAULT_INDEX = Path(".gherkin-index.json")
 MARKS = {"ok": "✓", "missing": "✗", "ambiguous": "!"}
@@ -266,7 +266,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     name = " ".join((args.name or root.resolve().name).split())  # it goes on one line of the README
     if not name:
         raise UsageError("Give the project a name with --name")
-    result = create(root, name, dry_run=args.dry_run)
+    result = create(root, name, dry_run=args.dry_run, ci=args.ci)
     if args.json:
         print(json.dumps({"root": root.as_posix(), "dry_run": args.dry_run,
                           "created": result.created, "skipped": result.skipped}, indent=2))
@@ -335,6 +335,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("init", help="start a new BDD project: pytest-bdd, Playwright, a shared step library")
     p.add_argument("path", nargs="?", help="folder to create it in; created if missing (default: .)")
     p.add_argument("--name", help="project name for its README (default: the folder's name)")
+    p.add_argument("--ci", choices=sorted(CI_FILES), help="also add a pipeline file for this CI system")
     p.add_argument("--dry-run", action="store_true", help="list the files it would create, write nothing")
     p.add_argument("--json", action="store_true", help="machine-readable output")
     p.set_defaults(func=cmd_init)
