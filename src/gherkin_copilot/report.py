@@ -206,8 +206,8 @@ def _scenario_html(s: Scenario, out_dir: Path) -> str:
     for video in s.artifacts.get("videos", []):
         media.append(f'<video src="{escape(_rel(video, out_dir))}" controls preload="metadata"></video>')
     traces = "".join(
-        f'<p class="tracecmd">Step-by-step replay: from the project folder, run '
-        f'<code>python -m playwright show-trace --host 127.0.0.1 --port 0 "{escape(_rel(t, Path.cwd()))}"</code>'
+        f'<p class="tracecmd">Step-by-step replay: run '
+        f'<code>python -m playwright show-trace --host 127.0.0.1 --port 0 "{escape(str(t.resolve()))}"</code>'
         f' (opens in your default browser)</p>'
         for t in s.artifacts.get("traces", [])
     )

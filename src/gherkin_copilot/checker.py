@@ -60,7 +60,7 @@ def parse_feature_text(text: str, shown_path: str = "<text>") -> list[FeatureSte
     steps: list[FeatureStep] = []
     outline: list[FeatureStep] = []  # steps waiting for their Examples table
     previous = "given"
-    in_docstring = False
+    docstring: str | None = None  # the fence of the doc string we're inside
     section = ""
     examples_header: list[str] | None = None
 
@@ -69,10 +69,13 @@ def parse_feature_text(text: str, shown_path: str = "<text>") -> list[FeatureSte
 
     for number, line in enumerate(lines, start=1):
         stripped = line.strip()
-        if stripped.startswith(('"""', "```")):
-            in_docstring = not in_docstring
+        if docstring is None and stripped.startswith(('"""', "```")):
+            docstring = stripped[:3]  # only the same fence closes it: a ``` block may contain """
             continue
-        if in_docstring or not stripped or stripped.startswith(("#", "@")):
+        if docstring is not None and stripped.startswith(docstring):
+            docstring = None
+            continue
+        if docstring is not None or not stripped or stripped.startswith(("#", "@")):
             continue
 
         if m := SECTION.match(stripped):

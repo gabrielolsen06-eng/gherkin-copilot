@@ -55,12 +55,18 @@ def strip_keyword(text: str) -> str:
     return GHERKIN_KEYWORD.sub("", text.strip(), count=1).strip()
 
 
+PARSE_TOKEN = re.compile(r"\{\{|\}\}|\{([^{}]*)\}")  # parse's escaped braces first, then {fields}
+
+
 def _parse_to_regex(pattern: str) -> str:
     out, pos = [], 0
-    for m in PARSE_FIELD.finditer(pattern):
+    for m in PARSE_TOKEN.finditer(pattern):
         out.append(re.escape(pattern[pos : m.start()]))
-        _, _, fmt = m.group(1).partition(":")
-        out.append(f"({PARSE_TYPES.get(fmt, '.+?')})")
+        if m.group(1) is None:  # {{ or }} is a literal brace
+            out.append(re.escape(m.group()[0]))
+        else:
+            _, _, fmt = m.group(1).partition(":")
+            out.append(f"({PARSE_TYPES.get(fmt, '.+?')})")
         pos = m.end()
     out.append(re.escape(pattern[pos:]))
     return "".join(out)
@@ -89,7 +95,7 @@ def normalize_pattern(step: StepDef) -> str:
             text = REGEX_GROUP.sub(ARG, text)
         text = text.replace("\\", "")
     else:
-        text = PARSE_FIELD.sub(ARG, text)
+        text = PARSE_TOKEN.sub(lambda m: ARG if m.group(1) is not None else m.group()[0], text)
     return _clean(QUOTED.sub(lambda q: ARG if ARG in q.group() else q.group(), text))
 
 
