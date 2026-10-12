@@ -80,7 +80,7 @@ def test_add_switch_list_steps_and_remove(app, tmp_path):
 
     _status, _, data, _ = request(port, "GET", "/api/steps?project=demo-shop")
     steps = json.loads(data)["steps"]
-    assert len(steps) == 12
+    assert len(steps) == 15
     assert request(port, "GET", "/api/steps?project=demo-shop-2")[2] == b'{"steps": []}'
 
     request(port, "POST", "/api/projects/active", {"id": "demo-shop"}, app.token)

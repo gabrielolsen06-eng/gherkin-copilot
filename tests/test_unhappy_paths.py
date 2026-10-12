@@ -48,7 +48,7 @@ def test_windows_console_falls_back_to_words(monkeypatch):
     assert main(["find", "Given I am on the login page", "--path", str(DEMO)]) == 0
     sys.stdout.flush()
     text = buffer.getvalue().decode("cp1252")
-    assert "  OK   5  Given I am on the login page" in text and "OK Given I am on the login page" in text
+    assert "  OK  12  Given I am on the login page" in text and "OK Given I am on the login page" in text
 
 
 # H4: Cucumber-JVM / Cucumber-JS report a Background as its own element before each scenario

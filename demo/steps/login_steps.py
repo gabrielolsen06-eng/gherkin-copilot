@@ -3,7 +3,6 @@
 from playwright.sync_api import Page, expect
 from pytest_bdd import given, parsers, then, when
 
-
 PASSWORD = "secret_sauce"  # nosec B105: public practice password shown on the demo shop and saucedemo.com login pages
 
 
@@ -31,11 +30,23 @@ def logged_in_as(page: Page, app_url: str, username: str):
     expect(page.locator(".title")).to_have_text("Products")
 
 
-@then("I should see the products page")
+@given("I am a registered customer", target_fixture="customer")
+def registered_customer() -> dict[str, str]:
+    """Declarative: the scenario says *who*, the step knows the details."""
+    return {"username": "standard_user", "password": PASSWORD}
+
+
+@when("I sign in")
+def sign_in(page: Page, app_url: str, customer: dict[str, str]):
+    page.goto(app_url)
+    log_in(page, customer["username"], customer["password"])
+
+
+@then("I see the products page")
 def products_page(page: Page):
     expect(page.locator(".title")).to_have_text("Products")
 
 
-@then(parsers.parse('I should see the error "{message}"'))
+@then(parsers.parse('I see the error "{message}"'))
 def error_message(page: Page, message: str):
     expect(page.locator("[data-test=error]")).to_contain_text(message)

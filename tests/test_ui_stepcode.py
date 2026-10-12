@@ -78,14 +78,14 @@ def test_save_into_an_existing_file_adds_imports(demo):
         return builder.check(demo, [line])[0]["status"] != "missing"
     actions = [{"action": "click", "target": {"by": "css", "value": ".shopping_cart_link"}},
                {"action": "expect_url", "value": {"text": "cart"}}]
-    change = stepcode.plan(demo, "When I open the cart page", "when", {}, actions, "login_steps.py", False, exists)
+    change = stepcode.plan(demo, "When I open the checkout page", "when", {}, actions, "login_steps.py", False, exists)
     builder.apply_change(change, change.hash)
     source = (Path(demo.steps) / "login_steps.py").read_text()
     compile(source, "login_steps.py", "exec")
-    assert "\nimport re\n" in source and "@when('I open the cart page')" in source
-    assert builder.check(demo, ["When I open the cart page"])[0]["status"] == "ok"
+    assert "\nimport re\n" in source and "@when('I open the checkout page')" in source
+    assert builder.check(demo, ["When I open the checkout page"])[0]["status"] == "ok"
     with pytest.raises(ValueError, match="already exists"):
-        stepcode.plan(demo, "When I open the cart page", "when", {}, actions, "login_steps.py", False, exists)
+        stepcode.plan(demo, "When I open the checkout page", "when", {}, actions, "login_steps.py", False, exists)
 
 
 def test_save_into_a_new_file(demo):
@@ -112,9 +112,9 @@ def test_build_over_http_runs_with_pytest(demo, tmp_path):
     def post(path, body):
         return request(port, "POST", path, {"project": project.id, **body}, app.token)
     try:
-        info = json.loads(post("/api/stepcode/draft", {"line": "When I open the cart page", "keyword": "when"})[2])
+        info = json.loads(post("/api/stepcode/draft", {"line": "When I open the checkout page", "keyword": "when"})[2])
         assert info["files"] == ["cart_steps.py", "login_steps.py"] and {a["id"] for a in info["actions"]} >= {"click"}
-        body = {"line": "When I open the cart page", "keyword": "when", "names": {}, "file": "cart_steps.py",
+        body = {"line": "When I open the checkout page", "keyword": "when", "names": {}, "file": "cart_steps.py",
                 "actions": [{"action": "click", "target": {"by": "css", "value": ".shopping_cart_link"}}]}
         live = json.loads(post("/api/stepcode/code", {**body, "actions": []})[2])
         assert live == {"code": None, "error": "Add at least one action."}

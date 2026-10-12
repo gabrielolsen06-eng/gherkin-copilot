@@ -35,7 +35,12 @@ def cart_badge_hidden(page: Page):
     expect(page.locator(".shopping_cart_badge")).to_be_hidden()
 
 
-@then(parsers.re(r"the cart should contain (?P<count>\d+) items?"))
-def cart_contains(page: Page, count: str):
+@when("I open the cart page")
+def open_cart(page: Page):
     page.click(".shopping_cart_link")
+    expect(page.locator(".cart_list")).to_be_visible()
+
+
+@then(parsers.re(r"the cart contains (?P<count>\d+) items?"))
+def cart_contains(page: Page, count: str):
     expect(page.locator(".cart_item")).to_have_count(int(count))

@@ -11,11 +11,13 @@ import shutil
 import sys
 from pathlib import Path
 
+MAC_APPLICATIONS = Path("/Applications")  # the system-wide folder (tests point this elsewhere)
+
 
 def brave_candidates() -> list[Path]:
     if sys.platform == "darwin":
         app = "Brave Browser.app/Contents/MacOS/Brave Browser"
-        return [Path("/Applications") / app, Path.home() / "Applications" / app]
+        return [MAC_APPLICATIONS / app, Path.home() / "Applications" / app]
     if sys.platform == "win32":
         exe = Path("BraveSoftware/Brave-Browser/Application/brave.exe")
         roots = [os.environ.get(v) for v in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA")]

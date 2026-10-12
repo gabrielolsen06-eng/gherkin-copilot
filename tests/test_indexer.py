@@ -62,7 +62,7 @@ def test_projects_inside_a_build_folder_are_scanned(tmp_path):
     (project / "steps" / "build").mkdir()
     (project / "steps" / "build" / "generated.py").write_text("from pytest_bdd import given\n@given('x')\ndef x(): ...\n")
     steps = build_index(project)
-    assert len(steps) == 12 and not any("generated" in s.file for s in steps)  # build/ *inside* the project is skipped
+    assert len(steps) == 15 and not any("generated" in s.file for s in steps)  # build/ *inside* the project is skipped
 
 
 def test_ignores_unrelated_decorators_and_bad_files(tmp_path):
@@ -84,7 +84,7 @@ def dynamic(): ...
 
 def test_example_project_and_round_trip(tmp_path):
     steps = build_index(EXAMPLE)
-    assert len(steps) == 12
+    assert len(steps) == 15
     assert all(s.file.startswith("steps/") for s in steps)
     out = tmp_path / "index.json"
     save_index(steps, out, EXAMPLE)

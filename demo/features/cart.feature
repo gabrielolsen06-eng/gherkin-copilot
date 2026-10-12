@@ -8,7 +8,8 @@ Feature: Cart
     When I add "Sauce Labs Backpack" to the cart
     And I add "Sauce Labs Bike Light" to the cart
     Then the cart badge shows 2
-    And the cart should contain 2 items
+    When I open the cart page
+    Then the cart contains 2 items
 
   Scenario: Remove a product again
     When I put the "Sauce Labs Onesie" in my cart

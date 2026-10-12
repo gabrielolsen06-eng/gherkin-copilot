@@ -9,19 +9,17 @@ DEMO_BROWSER_PATH to point at any Chromium-based browser executable.
 """
 
 import os
-import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from browsers import browser_path_from_env
-from server import start_in_background
+from demo.browsers import browser_path_from_env
+from demo.server import start_in_background
 
 # Step definitions live in steps/ and are shared by every feature file. Every module in
 # the folder is loaded, so a new step file is available without registering it here.
 STEPS_DIR = Path(__file__).resolve().parent / "steps"
-pytest_plugins = [f"steps.{p.stem}" for p in sorted(STEPS_DIR.glob("*.py")) if p.stem != "__init__"]
+pytest_plugins = [f"demo.steps.{p.stem}" for p in sorted(STEPS_DIR.glob("*.py")) if p.stem != "__init__"]
 
 
 @pytest.fixture(scope="session")

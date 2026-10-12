@@ -41,7 +41,7 @@ where = ["src"]
 "gherkin_copilot.ui" = ["static/*"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "."]  # "." so tests can import the demo package
 testpaths = ["tests"]
 
 # Dev-only tools (installed separately, never runtime dependencies): see CLAUDE.md

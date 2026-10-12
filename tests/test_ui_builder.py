@@ -14,7 +14,7 @@ DRAFT = [
     'Given I am logged in as "standard_user"',
     'When I add "Sauce Labs Backpack" to the cart',
     "Then the cart badge shows 1",
-    "And I open the cart page",
+    "And I open the checkout page",
     'And the order total is "$29.99"',
 ]
 
@@ -30,7 +30,7 @@ def test_check_reports_each_line(demo):
     results = builder.check(demo, DRAFT)
     assert [r["status"] for r in results] == ["ok", "ok", "ok", "missing", "missing"]
     assert results[0]["bound"][0]["function"] == "logged_in_as"
-    assert results[3]["stub"].startswith("@then('I open the cart page')")  # "And" follows the Then above it
+    assert results[3]["stub"].startswith("@then('I open the checkout page')")  # "And" follows the Then above it
 
     suggestion = builder.check(demo, ["Given I open the login page"])[0]["suggestions"][0]
     assert suggestion["function"] == "open_login_page" and suggestion["segments"] == [{"text": "I am on the login page"}]
@@ -99,18 +99,18 @@ def test_stubs_go_into_a_step_file_with_the_imports_they_need(demo):
     builder.apply_change(change, change.hash)
     source = login.read_text()
     compile(source, str(login), "exec")
-    assert "@then('I open the cart page')\ndef i_open_the_cart_page(page):" in source
+    assert "@then('I open the checkout page')\ndef i_open_the_checkout_page(page):" in source
     assert "@then(parsers.parse('the order total is \"{text1}\"'))" in source
     assert [r["status"] for r in builder.check(demo, DRAFT)] == ["ok"] * 5
 
 
 def test_stubs_add_missing_imports_and_avoid_name_clashes(tmp_path):
     (tmp_path / "steps.py").write_text(
-        "from pytest_bdd import given\n\n\n@given('x')\ndef i_open_the_cart_page():\n    pass\n")
+        "from pytest_bdd import given\n\n\n@given('x')\ndef i_open_the_checkout_page():\n    pass\n")
     project = Project("p", "P", str(tmp_path), str(tmp_path))
-    change = builder.plan_stubs(project, "steps.py", ["Given x", "When I open the cart page"])
+    change = builder.plan_stubs(project, "steps.py", ["Given x", "When I open the checkout page"])
     assert change.after.splitlines()[1] == "from pytest_bdd import when"
-    assert "def i_open_the_cart_page_2(page):" in change.after
+    assert "def i_open_the_checkout_page_2(page):" in change.after
     compile(change.after, "steps.py", "exec")
 
 

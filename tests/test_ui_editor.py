@@ -78,18 +78,18 @@ def test_list_scenarios_with_status(demo):
     cart = files["cart.feature"]["blocks"]
     assert [(b["kind"], b["name"], b["missing"]) for b in cart] == [
         ("Background", "", 0), ("Scenario", "Add two products", 0), ("Scenario", "Remove a product again", 0)]
-    outline = files["login.feature"]["blocks"][1]
+    outline = files["login.feature"]["blocks"][2]
     assert (outline["kind"], outline["examples"]) == ("Scenario Outline", 2)
 
 
 def test_open_turns_lines_into_blocks_with_values(demo):
-    data = editor.open_scenario(demo, "login.feature", 9, OUTLINE)
+    data = editor.open_scenario(demo, "login.feature", 16, OUTLINE)
     log_in = data["steps"][1]
     assert (log_in["keyword"], log_in["step"]["function"]) == ("when", "log_in")
     assert log_in["values"] == {"username": "<username>", "password": "<password>"}
     assert data["examples"][0]["header"] == ["username", "password", "error"]
     with pytest.raises(ValueError, match="moved or changed"):
-        editor.open_scenario(demo, "login.feature", 9, "Some other name")
+        editor.open_scenario(demo, "login.feature", 16, "Some other name")
 
 
 def test_lines_without_a_step_open_as_text(demo):
@@ -133,14 +133,14 @@ def outline_spec():
     return spec(kind="Scenario Outline", name=OUTLINE + " (edited)", tags="@login", steps=[
         {"line": "Given I am on the login page"},
         {"line": 'When I log in as "<username>" with password "<password>"'},
-        {"line": 'Then I should see the error "<error>"'},
+        {"line": 'Then I see the error "<error>"'},
     ], examples=[{"name": "", "header": ["username", "password", "error"],
                   "rows": [["locked_out_user", "secret_sauce", "Sorry"], ["bob", "x", "Nope"]]}])
 
 
 def test_edit_replaces_only_that_scenario(demo):
     before_text = feature_text(demo, "login.feature")
-    change, before, after = editor.plan_edit(demo, "login.feature", 9, OUTLINE, outline_spec())
+    change, before, after = editor.plan_edit(demo, "login.feature", 16, OUTLINE, outline_spec())
     builder.apply_change(change, change.hash)
     text = feature_text(demo, "login.feature")
     assert text.startswith(before_text[: before_text.index("  Scenario Outline")])  # earlier lines untouched
@@ -152,13 +152,13 @@ def test_edit_replaces_only_that_scenario(demo):
 
 
 def test_edit_refuses_if_the_scenario_moved(demo):
-    change, *_ = editor.plan_edit(demo, "login.feature", 9, OUTLINE, outline_spec())
+    change, *_ = editor.plan_edit(demo, "login.feature", 16, OUTLINE, outline_spec())
     path = Path(demo.features) / "login.feature"
     path.write_text("# new first line\n" + path.read_text())
     with pytest.raises(ValueError, match="changed since the preview"):
         builder.apply_change(change, change.hash)
     with pytest.raises(ValueError, match="moved or changed"):
-        editor.plan_edit(demo, "login.feature", 9, OUTLINE, outline_spec())
+        editor.plan_edit(demo, "login.feature", 16, OUTLINE, outline_spec())
 
 
 def test_background_stays_a_background(demo):
@@ -169,10 +169,10 @@ def test_background_stays_a_background(demo):
 
 
 def test_delete_and_duplicate(demo):
-    change, _before = editor.plan_delete(demo, "cart.feature", 13, "Remove a product again")
+    change, _before = editor.plan_delete(demo, "cart.feature", 14, "Remove a product again")
     builder.apply_change(change, change.hash)
     text = feature_text(demo, "cart.feature")
-    assert "Remove a product again" not in text and text.endswith("    And the cart should contain 2 items\n")
+    assert "Remove a product again" not in text and text.endswith("    Then the cart contains 2 items\n")
     change, rendered = editor.plan_duplicate(demo, "cart.feature", 7, "Add two products")
     builder.apply_change(change, change.hash)
     names = [b.name for b in gherkin.parse(feature_text(demo, "cart.feature")).blocks]
@@ -183,7 +183,7 @@ def test_delete_and_duplicate(demo):
 
 def test_restore_undoes_edit_delete_and_add(demo):
     original = feature_text(demo, "cart.feature")
-    change, before = editor.plan_delete(demo, "cart.feature", 13, "Remove a product again")
+    change, before = editor.plan_delete(demo, "cart.feature", 14, "Remove a product again")
     builder.apply_change(change, change.hash)
     entry = history.record(demo, "delete", "Ann", {change.shown: (change.before, change.after)},
                            file=change.shown, before=before)
@@ -237,10 +237,10 @@ def test_edit_over_http_records_history_and_restores(demo, tmp_path):
         listed = json.loads(request(port, "GET", f"/api/scenarios?project={project.id}")[2])
         assert [f["file"] for f in listed["files"]] == ["cart.feature", "login.feature"]
         opened = json.loads(request(port, "GET", f"/api/scenario/open?project={project.id}&file=login.feature"
-                                                 f"&start=9&name={OUTLINE.replace(' ', '%20')}")[2])
+                                                 f"&start=16&name={OUTLINE.replace(' ', '%20')}")[2])
         assert opened["kind"] == "Scenario Outline"
 
-        body = {"file": "login.feature", "start": 9, "name": OUTLINE, "spec": outline_spec(), "author": "Ann"}
+        body = {"file": "login.feature", "start": 16, "name": OUTLINE, "spec": outline_spec(), "author": "Ann"}
         preview = post("/api/scenario/edit/preview", body)
         assert post("/api/scenario/edit/save", {**body, "hash": preview["hash"]}) == {"saved": "login.feature"}
 
@@ -264,9 +264,9 @@ def test_saving_without_changes_is_refused(demo, tmp_path):
     server, app, _ = start_in_background(store)
     port = server.server_address[1]
     try:
-        opened = editor.open_scenario(demo, "cart.feature", 13, "Remove a product again")
+        opened = editor.open_scenario(demo, "cart.feature", 14, "Remove a product again")
         same = spec(name=opened["name"], tags="", steps=[{"line": f"{s['written']} {s['text']}"} for s in opened["steps"]])
-        body = {"project": project.id, "file": "cart.feature", "start": 13, "name": opened["name"], "spec": same}
+        body = {"project": project.id, "file": "cart.feature", "start": 14, "name": opened["name"], "spec": same}
         status, _, data, _ = request(port, "POST", "/api/scenario/edit/preview", body, app.token)
         assert status == 400 and "nothing to save" in json.loads(data)["error"]
         assert history.entries(demo) == []
