@@ -154,7 +154,7 @@ and `gherkin-copilot-review-2026-10-12-status.md`):
 | `bandit -q -r src demo run_demo.py` (static security analysis) | No findings. The three places that start a process (`run_demo.py` and the app's Run button in `ui/runner.py`) use fixed argument lists and no shell, and are annotated with why |
 | `mypy --strict` | No issues in 19 source files |
 | `ruff check` (rules in `pyproject.toml`) | No issues |
-| Tool tests | 263 passed (macOS, Python 3.14), including tests for missing paths, malformed files, non-finite numbers, Windows code pages and generated inputs |
+| Tool tests | 267 passed (macOS, Python 3.14; also run on Windows and Ubuntu in CI), including tests for missing paths, malformed files, non-finite numbers, Windows code pages and generated inputs |
 | Branch coverage (`coverage run -m pytest tests`) | 92% |
 | Demo scenarios in a real browser (Brave) | 6 passed |
 | `pip install --require-hashes -r requirements.lock` in a clean venv, then `pip check` | Installs cleanly, no broken requirements (checked 2026-10-09; the lock file hasn't changed since) |

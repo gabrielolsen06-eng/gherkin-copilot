@@ -40,10 +40,21 @@ LOG_LINES = 3000
 RESULT_LINE = re.compile(r"^\S+::\S.*\s(PASSED|FAILED|ERROR|SKIPPED|XFAIL|XPASS)(\s|$)")  # "t.py::test_a PASSED [50%]"
 
 
+def split_command(text: str, windows: bool = os.name == "nt") -> list[str]:
+    """Split like a shell: quotes group words and are removed. On Windows a backslash is a path separator,
+    not an escape (shlex's non-POSIX mode would keep the quotes, so pytest would get -k '"a b"')."""
+    lexer = shlex.shlex(text, posix=True)
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    if windows:
+        lexer.escape = ""
+    return list(lexer)
+
+
 def parse_command(text: str) -> tuple[dict[str, str], list[str]]:
     """``DEMO_BROWSER=brave python -m pytest demo`` -> ({"DEMO_BROWSER": "brave"}, [python, -m, pytest, demo])."""
     try:
-        tokens = shlex.split(text, posix=os.name != "nt")
+        tokens = split_command(text)
     except ValueError as exc:
         raise ValueError(f"The test command can't be read: {exc}") from exc
     env = {}

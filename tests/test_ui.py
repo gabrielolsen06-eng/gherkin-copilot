@@ -94,7 +94,7 @@ def test_add_switch_list_steps_and_remove(app, tmp_path):
 @pytest.mark.parametrize("body, message", [
     ({"name": "", "steps": str(DEMO)}, "name"),
     ({"name": "x", "steps": "relative/path"}, "full path"),
-    ({"name": "x", "steps": "/no/such/folder"}, "doesn't exist"),
+    ({"name": "x", "steps": str(DEMO / "no-such-folder")}, "doesn't exist"),  # absolute on Windows too
     ({"name": 5, "steps": str(DEMO)}, "must be text"),
 ])
 def test_bad_projects_get_readable_errors(app, body, message):

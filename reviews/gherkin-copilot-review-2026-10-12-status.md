@@ -19,3 +19,14 @@ written against commit `ac14430`. This file records what was done about its new 
 - **Deleted step files and the stale-index note (M2):** still not noticed; storing each file's
   mtime in the index would fix it.
 - **`# language:` and Examples beyond the first row (L7):** documented limits, unchanged.
+
+## Found by the first Windows CI run
+
+The first push ran the tests on Windows for the first time. Three failed:
+
+- **Real bug:** the app's Run button split the saved test command in shlex's non-POSIX mode on
+  Windows, which keeps the quote marks (`-k "a b"` reached pytest as `"a b"`) and splits
+  `--x="a b"` in two. `runner.split_command` now removes quotes on every platform and only
+  treats backslashes differently (path separators on Windows). Tested for both platforms.
+- **Test bugs:** the Brave test set `HOME`, which `Path.home()` ignores on Windows, and the
+  projects test used `/no/such/folder`, which isn't an absolute path on Windows.

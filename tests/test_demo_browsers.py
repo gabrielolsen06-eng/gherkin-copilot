@@ -21,7 +21,7 @@ def test_brave_found_on_mac(monkeypatch, tmp_path):
     system, home = tmp_path / "system", tmp_path / "home"
     monkeypatch.setattr(browsers, "MAC_APPLICATIONS", system)
     monkeypatch.setattr(browsers.sys, "platform", "darwin")
-    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(browsers.Path, "home", lambda: home)  # HOME alone isn't enough on Windows
     app = "Brave Browser.app/Contents/MacOS/Brave Browser"
     exe = home / "Applications" / app
     exe.parent.mkdir(parents=True)

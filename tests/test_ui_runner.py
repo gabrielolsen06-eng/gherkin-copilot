@@ -63,6 +63,18 @@ def test_parse_command(command, expected):
     assert runner.parse_command(command) == expected
 
 
+@pytest.mark.parametrize("command, windows, expected", [
+    ('pytest -k "a b" --x="c d"', True, ["pytest", "-k", "a b", "--x=c d"]),
+    ("pytest -k 'a b'", True, ["pytest", "-k", "a b"]),
+    (r'C:\venv\Scripts\python.exe -m pytest "C:\My Tests\cart"', True,
+     [r"C:\venv\Scripts\python.exe", "-m", "pytest", r"C:\My Tests\cart"]),
+    (r"pytest -k a\ b", False, ["pytest", "-k", "a b"]),
+])
+def test_split_command_on_each_platform(command, windows, expected):
+    # quotes are removed everywhere; a backslash is a path separator on Windows and an escape elsewhere
+    assert runner.split_command(command, windows=windows) == expected
+
+
 @pytest.mark.parametrize("command, message", [
     ("", "Enter a test command"),
     ("X=1", "Enter a test command"),
