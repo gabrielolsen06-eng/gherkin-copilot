@@ -79,25 +79,47 @@ def _seconds(duration) -> float:
         return 0.0
 
 
+def _line(value: object) -> int:
+    try:
+        return int(value or 0)  # type: ignore[call-overload]
+    except (TypeError, ValueError):
+        return 0
+
+
+def _step(s: dict) -> Step:
+    result = s.get("result") or {}
+    return Step(
+        keyword=str(s.get("keyword", "")).strip(),
+        name=str(s.get("name", "")),
+        line=_line(s.get("line")),
+        status=str(result.get("status", "skipped")),
+        seconds=_seconds(result.get("duration")),
+        error=str(result.get("error_message") or ""),
+    )
+
+
 def load_report(path: Path) -> list[Feature]:
-    data = json.loads(path.read_text(encoding="utf-8"))
+    """Read Cucumber JSON. Raises ValueError with a readable message if the file isn't valid."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return _features(data)
+    except (json.JSONDecodeError, UnicodeDecodeError, AttributeError, TypeError) as exc:
+        raise ValueError(f"{path} isn't a valid Cucumber JSON report ({exc}).") from exc
+
+
+def _features(data: list) -> list[Feature]:
     features = []
     for f in data:
         scenarios = []
+        background: list[Step] = []
         for el in f.get("elements", []):
             if el.get("type") == "background":
+                # Cucumber-JVM and Cucumber-JS report a feature's Background as its own element
+                # before each scenario (pytest-bdd inlines it): keep its steps with that scenario
+                background = [_step(s) for s in el.get("steps", [])]
                 continue
-            steps = [
-                Step(
-                    keyword=str(s.get("keyword", "")).strip(),
-                    name=str(s.get("name", "")),
-                    line=int(s.get("line") or 0),
-                    status=str(s.get("result", {}).get("status", "skipped")),
-                    seconds=_seconds(s.get("result", {}).get("duration")),
-                    error=str(s.get("result", {}).get("error_message") or ""),
-                )
-                for s in el.get("steps", [])
-            ]
+            steps = background + [_step(s) for s in el.get("steps", [])]
+            background = []
             # pytest-bdd marks every step after a failure as failed too; they never ran
             for i, step in enumerate(steps):
                 if step.status == "failed" and any(p.status == "failed" for p in steps[:i]) and not step.error:
@@ -106,7 +128,7 @@ def load_report(path: Path) -> list[Feature]:
                 name=str(el.get("name", "")),
                 keyword=str(el.get("keyword", "Scenario")),
                 test_id=str(el.get("id", "")),
-                line=int(el.get("line") or 0),
+                line=_line(el.get("line")),
                 tags=[str(t.get("name", "")) for t in el.get("tags", [])],
                 steps=steps,
             ))

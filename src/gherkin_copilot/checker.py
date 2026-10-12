@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import keyword
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from gherkin_copilot.indexer import StepDef
+from gherkin_copilot.indexer import StepDef, iter_project_files
 from gherkin_copilot.matcher import Match, find, is_exact_match
 
 STEP_LINE = re.compile(r"^(Given|When|Then|And|But|\*)\s+(.+)$")
@@ -46,7 +47,11 @@ class StepResult:
 
 def parse_feature(path: Path, shown_path: str | None = None) -> list[FeatureStep]:
     """Return every step in a feature file, in order."""
-    return parse_feature_text(path.read_text(encoding="utf-8"), shown_path or str(path))
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"{path} isn't UTF-8 text, so it can't be read as a feature file.") from exc
+    return parse_feature_text(text, shown_path or str(path))
 
 
 def parse_feature_text(text: str, shown_path: str = "<text>") -> list[FeatureStep]:
@@ -118,11 +123,8 @@ def check_steps(feature_steps: list[FeatureStep], definitions: list[StepDef]) ->
     return results
 
 
-def iter_feature_files(root: Path):
-    if root.is_file():
-        yield root
-    else:
-        yield from sorted(p for p in root.rglob("*.feature") if ".venv" not in p.parts)
+def iter_feature_files(root: Path) -> Iterator[Path]:
+    return iter_project_files(root, "*.feature")
 
 
 def _function_name(text: str) -> str:

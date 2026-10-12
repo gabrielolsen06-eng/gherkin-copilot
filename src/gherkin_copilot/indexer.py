@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import ast
 import json
-from dataclasses import asdict, dataclass
+import time
+from collections.abc import Iterator
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 STEP_KEYWORDS = {"given", "when", "then", "step"}
@@ -34,6 +36,15 @@ class StepDef:
     @property
     def location(self) -> str:
         return f"{self.file}:{self.line}"
+
+
+@dataclass
+class Index:
+    """A saved index: the steps, plus where and when they were scanned (to spot a stale index)."""
+
+    steps: list[StepDef]
+    root: Path | None = None
+    created: float = field(default=0.0)
 
 
 def _decorator_name(node: ast.expr) -> str | None:
@@ -78,6 +89,8 @@ def index_file(path: Path, root: Path | None = None) -> list[StepDef]:
         return []
 
     shown_path = str(path.relative_to(root)) if root else str(path)
+    # pytest-bdd matches a plain string literally; behave reads {name} in a plain string as a placeholder
+    plain_strings_are_literal = _imports(tree, "pytest_bdd") and not _imports(tree, "behave")
     steps: list[StepDef] = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -92,8 +105,7 @@ def index_file(path: Path, root: Path | None = None) -> list[StepDef]:
             if extracted is None:
                 continue
             pattern, kind = extracted
-            # behave defaults to parse-style placeholders for plain strings
-            if kind == "string" and "{" in pattern and "}" in pattern:
+            if kind == "string" and "{" in pattern and "}" in pattern and not plain_strings_are_literal:
                 kind = "parse"
             steps.append(
                 StepDef(
@@ -108,13 +120,31 @@ def index_file(path: Path, root: Path | None = None) -> list[StepDef]:
     return steps
 
 
-def iter_python_files(root: Path):
+def _imports(tree: ast.Module, module: str) -> bool:
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import) and any(a.name.split(".")[0] == module for a in node.names):
+            return True
+        if isinstance(node, ast.ImportFrom) and (node.module or "").split(".")[0] == module:
+            return True
+    return False
+
+
+def iter_project_files(root: Path, pattern: str) -> Iterator[Path]:
+    """Files under root, skipping virtual environments, build output and caches *inside* the project.
+
+    Only the part of the path below root is checked, so a project that itself lives in a
+    folder called build/ or dist/ is still scanned.
+    """
     if root.is_file():
         yield root
         return
-    for path in sorted(root.rglob("*.py")):
-        if not any(part in SKIP_DIRS for part in path.parts):
+    for path in sorted(root.rglob(pattern)):
+        if not any(part in SKIP_DIRS or part.startswith(".venv") for part in path.relative_to(root).parts[:-1]):
             yield path
+
+
+def iter_python_files(root: Path) -> Iterator[Path]:
+    return iter_project_files(root, "*.py")
 
 
 def build_index(root: Path) -> list[StepDef]:
@@ -126,9 +156,19 @@ def build_index(root: Path) -> list[StepDef]:
     return steps
 
 
-def save_index(steps: list[StepDef], out: Path) -> None:
-    out.write_text(json.dumps([asdict(s) for s in steps], indent=2) + "\n", encoding="utf-8")
+def save_index(steps: list[StepDef], out: Path, root: Path | None = None) -> None:
+    data = {"root": str(root.resolve()) if root else None, "created": time.time(), "steps": [asdict(s) for s in steps]}
+    out.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
-def load_index(path: Path) -> list[StepDef]:
-    return [StepDef(**item) for item in json.loads(path.read_text(encoding="utf-8"))]
+def load_index(path: Path) -> Index:
+    """Read a saved index. Raises ValueError with a readable message if the file isn't one."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, list):  # written by an older version: steps only
+            return Index([StepDef(**item) for item in data])
+        root = data.get("root")
+        return Index([StepDef(**item) for item in data["steps"]], Path(root) if root else None,
+                     float(data.get("created") or 0))
+    except (json.JSONDecodeError, UnicodeDecodeError, KeyError, TypeError, AttributeError) as exc:
+        raise ValueError(f"{path} isn't a valid index file. Run `gherkin-copilot index` to rebuild it.") from exc

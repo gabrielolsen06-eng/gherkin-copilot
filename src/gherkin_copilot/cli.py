@@ -15,28 +15,59 @@ import argparse
 import difflib
 import json
 import sys
+from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
 
 from gherkin_copilot import __version__
-from gherkin_copilot.checker import check_steps, iter_feature_files, make_stub, parse_feature
-from gherkin_copilot.indexer import StepDef, build_index, load_index, save_index
+from gherkin_copilot.checker import FeatureStep, StepResult, check_steps, iter_feature_files, make_stub, parse_feature
+from gherkin_copilot.indexer import StepDef, build_index, iter_python_files, load_index, save_index
 from gherkin_copilot.matcher import find, find_duplicates
 from gherkin_copilot.merger import apply, plan_merges
 from gherkin_copilot.report import write_report
 
 DEFAULT_INDEX = Path(".gherkin-index.json")
+MARKS = {"ok": "✓", "missing": "✗", "ambiguous": "!"}
+ASCII_MARKS = {"ok": "OK", "missing": "MISSING", "ambiguous": "AMBIGUOUS"}
+
+
+class UsageError(Exception):
+    """A problem with what the user asked for: printed as one line, exit code 2."""
+
+
+def _existing_path(text: str | None, what: str) -> Path:
+    path = Path(text or ".")
+    if not path.exists():
+        raise UsageError(f"{what} not found: {path}")
+    return path
 
 
 def _load_steps(args: argparse.Namespace) -> list[StepDef]:
     """Use the saved index unless a path was given or no index exists yet."""
     if args.path is None and args.index.exists():
-        return load_index(args.index)
-    return build_index(Path(args.path or "."))
+        index = load_index(args.index)
+        newer = next((p for p in iter_python_files(index.root) if p.stat().st_mtime > index.created), None) \
+            if index.root and index.root.is_dir() else None
+        if newer:
+            print(f"Note: {newer} changed after the saved index was made. Run `gherkin-copilot index` again, "
+                  "or pass --path to scan fresh.", file=sys.stderr)
+        return index.steps
+    return build_index(_existing_path(args.path, "Folder"))
+
+
+def _mark(status: str) -> str:
+    """✓ / ✗, or plain words when the output can't show them (e.g. a Windows log file)."""
+    mark = MARKS[status]
+    try:
+        mark.encode(sys.stdout.encoding or "utf-8")
+    except (UnicodeEncodeError, LookupError):
+        return ASCII_MARKS[status]
+    return mark
 
 
 def cmd_index(args: argparse.Namespace) -> int:
-    steps = build_index(Path(args.path or "."))
+    root = _existing_path(args.path, "Folder")
+    steps = build_index(root)
     if args.json:
         print(json.dumps([asdict(s) for s in steps], indent=2))
     else:
@@ -44,7 +75,7 @@ def cmd_index(args: argparse.Namespace) -> int:
             print(f"{s.keyword.capitalize():<6} {s.pattern}")
             print(f"       {s.location}  ({s.kind}, {s.function})")
     if not args.no_save:
-        save_index(steps, args.index)
+        save_index(steps, args.index, root)
     print(f"\n{len(steps)} step definitions indexed", end="", file=sys.stderr)
     print("" if args.no_save else f", saved to {args.index}", file=sys.stderr)
     return 0
@@ -62,7 +93,7 @@ def cmd_find(args: argparse.Namespace) -> int:
     if exact:
         print("Matches:")
         for m in exact:
-            print(f"  ✓ {m.step.keyword.capitalize()} {m.step.pattern}   [{m.step.location}]")
+            print(f"  {_mark('ok')} {m.step.keyword.capitalize()} {m.step.pattern}   [{m.step.location}]")
     else:
         print("No step definition matches this text.")
     if fuzzy:
@@ -88,52 +119,56 @@ def cmd_dupes(args: argparse.Namespace) -> int:
     return 0
 
 
+def _print_results(results: list[StepResult]) -> None:
+    current = None
+    for r in results:
+        if r.step.file != current:
+            current = r.step.file
+            print(f"\n{current}")
+        where = r.bound[0].location if r.status == "ok" else ""
+        print(f"  {_mark(r.status)} {r.step.line:>3}  {r.step.raw}   {where}".rstrip())
+        if r.status == "ambiguous":
+            for s in r.bound:
+                print(f"           matches {s.keyword.capitalize()} {s.pattern}   [{s.location}]")
+        for m in r.suggestions:
+            print(f"           did you mean ({m.score:.2f}) {m.step.keyword.capitalize()} {m.step.pattern}   [{m.step.location}]")
+    counts = {k: sum(r.status == k for r in results) for k in ("ok", "missing", "ambiguous")}
+    print(f"\n{len(results)} steps: {counts['ok']} ok, {counts['missing']} missing, {counts['ambiguous']} ambiguous")
+
+
+def _print_stubs(missing: list[FeatureStep]) -> None:
+    print("\n# --- Stubs for missing steps (pytest-bdd) ---")
+    print("from pytest_bdd import given, parsers, then, when\n")
+    for stub in dict.fromkeys(make_stub(step) for step in missing):
+        print(f"\n{stub}")
+
+
 def cmd_check(args: argparse.Namespace) -> int:
+    root = _existing_path(args.features, "Feature file or folder")
     steps = _load_steps(args)
-    root = Path(args.features)
     base = root if root.is_dir() else root.parent
+    features = list(iter_feature_files(root))
+    if not features:
+        raise UsageError(f"No .feature files found in {root}")
     results = []
-    for feature in iter_feature_files(root):
+    for feature in features:
         results.extend(check_steps(parse_feature(feature, str(feature.relative_to(base))), steps))
 
     if args.json:
         print(json.dumps([{"file": r.step.file, "line": r.step.line, "step": r.step.raw, "status": r.status,
                            "bound_to": [s.location for s in r.bound]} for r in results], indent=2))
     else:
-        current = None
-        for r in results:
-            if r.step.file != current:
-                current = r.step.file
-                print(f"\n{current}")
-            mark = {"ok": "✓", "missing": "✗", "ambiguous": "!"}[r.status]
-            where = r.bound[0].location if r.status == "ok" else ""
-            print(f"  {mark} {r.step.line:>3}  {r.step.raw}   {where}".rstrip())
-            if r.status == "ambiguous":
-                for s in r.bound:
-                    print(f"           matches {s.keyword.capitalize()} {s.pattern}   [{s.location}]")
-            for m in r.suggestions:
-                print(f"           did you mean ({m.score:.2f}) {m.step.keyword.capitalize()} {m.step.pattern}   [{m.step.location}]")
-
-        counts = {k: sum(r.status == k for r in results) for k in ("ok", "missing", "ambiguous")}
-        print(f"\n{len(results)} steps: {counts['ok']} ok, {counts['missing']} missing, {counts['ambiguous']} ambiguous")
-
+        _print_results(results)
         missing = [r.step for r in results if r.status == "missing"]
         if args.stubs and missing:
-            seen = set()
-            print("\n# --- Stubs for missing steps (pytest-bdd) ---")
-            print("from pytest_bdd import given, parsers, then, when\n")
-            for step in missing:
-                stub = make_stub(step)
-                if stub not in seen:
-                    seen.add(stub)
-                    print(f"\n{stub}")
+            _print_stubs(missing)
     return 0 if all(r.status == "ok" for r in results) else 1
 
 
 def cmd_merge(args: argparse.Namespace) -> int:
-    root = Path(args.path or ".")
-    result = plan_merges(root, threshold=args.threshold, keep=frozenset(args.keep),
-                         features=Path(args.features) if args.features else None)
+    root = _existing_path(args.path, "Folder")
+    features = _existing_path(args.features, "Features folder") if args.features else None
+    result = plan_merges(root, threshold=args.threshold, keep=frozenset(args.keep), features=features)
     written = apply(result) if args.apply else []
 
     if args.json:
@@ -152,7 +187,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
         return 0
     base = Path.cwd()
     for p in result.plans:
-        print(f"{'✓' if p.ok else '✗'} {p.score:.2f}  keep  {p.keep.keyword.capitalize()} {p.keep.pattern}   [{p.keep.location}]")
+        print(f"{_mark('ok' if p.ok else 'missing')} {p.score:.2f}  keep  {p.keep.keyword.capitalize()} {p.keep.pattern}   [{p.keep.location}]")
         print(f"        {'drop' if p.ok else '    '}  {p.drop.keyword.capitalize()} {p.drop.pattern}   [{p.drop.location}]")
         for problem in p.problems:
             print(f"        can't merge: {problem}")
@@ -280,7 +315,20 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    return args.func(args)
+    for stream in (sys.stdout, sys.stderr):  # never crash on characters a console or log file can't show
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
+    command: Callable[[argparse.Namespace], int] = args.func
+    try:
+        return command(args)
+    except UsageError as exc:
+        message = str(exc)
+    except OSError as exc:
+        message = f"{exc.strerror or exc}: {exc.filename}" if exc.filename else str(exc)
+    except (ValueError, KeyError, TypeError) as exc:  # malformed index / report / feature files
+        message = str(exc) or type(exc).__name__
+    print(f"gherkin-copilot: error: {message}", file=sys.stderr)
+    return 2
 
 
 if __name__ == "__main__":
