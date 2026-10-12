@@ -310,7 +310,7 @@ line `merge` takes the same split: `gherkin-copilot merge path/to/steps --featur
   and the result is scored by a blend of character similarity and word overlap (0 to 1).
 
 Fuzzy matching compares wording, not meaning: "I log in as admin" and "the admin user is
-signed in" won't be flagged as duplicates. That's a job for the planned LLM features.
+signed in" won't be flagged as duplicates.
 
 ## Development
 
@@ -347,5 +347,6 @@ Useful environment variables for the demo:
 1. ~~`index`, `find`, `dupes`~~, ~~`merge`~~
 2. ~~`check` with stub generation, runnable demo~~
 3. ~~HTML report, traces and videos~~
-4. `generate STORY.txt`: draft scenarios from a user story with an LLM, using only existing steps
-5. CI on GitHub Actions
+4. ~~CI on GitHub Actions~~
+
+No LLM features are planned: the tool is built to run fully offline on a locked-down, low-powered laptop.

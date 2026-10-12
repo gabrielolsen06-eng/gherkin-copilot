@@ -92,6 +92,8 @@ file, or the scenario being edited; results in `.gherkin-copilot/results`, self-
 
 
 1. Done: `index`, `find`, `dupes`, `merge`, `check --stubs`, `report`, runnable demo
-2. Next: `generate STORY.txt`: draft scenarios from a user story with an LLM, using only
-   existing steps (must be optional and clearly network-using; keep the core offline)
-3. Put it in a GitHub repo with CI (GitHub Actions)
+2. Done: GitHub repo with CI (GitHub Actions, Ubuntu + Windows)
+
+**No LLM features** (dropped the planned `generate STORY.txt`): the tool has to run on a
+locked-down, low-powered work laptop, so no network models and no local models either.
+Don't propose them.
