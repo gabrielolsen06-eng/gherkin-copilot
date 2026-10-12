@@ -361,7 +361,9 @@ python -m venv .venv-dev && .venv-dev/bin/pip install -r requirements-dev.txt
 ```
 
 `.github/workflows/ci.yml` runs all of these plus the tests on Ubuntu and Windows
-(Python 3.11 and 3.13) and the browser demo on every push.
+(Python 3.11 and 3.13) and the browser demo on every push. It also creates a project with `init`
+and runs it in Chromium, and on Windows in the installed Edge with no browser download, set up
+exactly as that project's README says.
 
 Useful environment variables for the demo:
 

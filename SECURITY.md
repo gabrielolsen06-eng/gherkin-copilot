@@ -161,7 +161,7 @@ and `gherkin-copilot-review-2026-10-12-status.md`):
 | Tool tests | 274 passed (macOS, Python 3.14; also run on Windows and Ubuntu in CI), including tests for missing paths, malformed files, non-finite numbers, Windows code pages, generated inputs and the project `init` creates |
 | Branch coverage (`coverage run -m pytest tests`) | 92% |
 | Demo scenarios in a real browser (Brave) | 6 passed |
-| A project made by `init`, run in a real browser | Passes in Brave locally and in Chromium in CI, with warnings treated as errors. Its `requirements.lock` is identical to this repo's (a test checks), so the audit above covers it |
+| A project made by `init`, run in a real browser | Passes in Brave locally, and in CI in Chromium and in the installed Edge on Windows (no browser download), with warnings treated as errors. Its `requirements.lock` is identical to this repo's (a test checks), so the audit above covers it |
 | `pip install --require-hashes -r requirements.lock` in a clean venv, then `pip check` | Installs cleanly, no broken requirements (checked 2026-10-09; the lock file hasn't changed since) |
 
 Ruff, mypy, bandit and the tests also run as pre-commit hooks. The same checks run on every push in CI (`.github/workflows/ci.yml`), including the tests on
