@@ -28,8 +28,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from gherkin_copilot import gherkin
 from gherkin_copilot.report import ARTIFACT_KINDS, _short_error, attach_artifacts, load_report
-from gherkin_copilot.ui import gherkin
 from gherkin_copilot.ui.builder import _inside
 from gherkin_copilot.ui.history import project_root
 from gherkin_copilot.ui.projects import Project

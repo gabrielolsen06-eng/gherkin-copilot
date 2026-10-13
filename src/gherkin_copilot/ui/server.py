@@ -20,8 +20,8 @@ from pathlib import Path
 from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 
-from gherkin_copilot import __version__
-from gherkin_copilot.ui import builder, dupes, editor, gherkin, history, home, runner, stepcode
+from gherkin_copilot import __version__, gherkin
+from gherkin_copilot.ui import builder, dupes, editor, history, home, runner, stepcode
 from gherkin_copilot.ui.catalog import describe
 from gherkin_copilot.ui.projects import Project, ProjectStore
 
@@ -113,7 +113,7 @@ class App:
                 return {"results": builder.check(project, lines, body.get("examples"))}
             if route == "/api/stepcode/draft":
                 return {**stepcode.draft(text("line"), text("keyword")), **stepcode.catalogue(),
-                        "files": stepcode.step_files(project)}
+                        "files": builder.project_files(project)["steps"]}
             if route == "/api/stepcode/code":
                 try:
                     return stepcode.code(text("line"), text("keyword"), body.get("names"), body.get("actions"))

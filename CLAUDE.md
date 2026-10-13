@@ -56,14 +56,14 @@ and `.github/workflows/ci.yml` if playwright changed; `tests/test_init.py` fails
 
 - `src/gherkin_copilot/`: `scaffold.py` + `starter/` (`init`: starter project from `*.tmpl`
   files shipped as package data; only creates files, never overwrites), `indexer.py` (find step defs via ast), `matcher.py` (exact and
-  fuzzy matching), `checker.py` (feature-file parsing, stubs), `merger.py` (merge duplicate
+  fuzzy matching), `gherkin.py` (the one feature-file parser: exact scenario line spans + renderer), `checker.py` (steps
+  from `gherkin.py`, binding, stubs), `merger.py` (merge duplicate
   steps; the only code that edits user files, and only with `--apply`), `report.py` (Cucumber JSON
   to HTML, no JS), `cli.py`, `ui/` (the local web app: `server.py` stdlib HTTP server with
   token + Host/Origin checks, `projects.py` project list in `~/.gherkin-copilot/`,
   `catalog.py` steps as text + slots + `vscode://` links to their code (no editing step code in the app), `builder.py` check/save/stubs for the scenario
   builder (preview diff + hash, writes only inside project folders), `dupes.py` duplicates
-  screen on top of `merger.plan_merges` (one pair at a time, multi-file hash),
-  `gherkin.py` feature-file parser with exact scenario line spans + renderer, `editor.py`
+  screen on top of `merger.plan_merges` (one pair at a time, multi-file hash), `editor.py`
   scenario list/open-as-blocks/new/edit/delete/duplicate/restore (validates a structured
   spec, never writes raw browser text), `history.py` append-only
   `.gherkin-copilot/history.jsonl` in the project, `runner.py` runs the project's test

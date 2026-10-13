@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from gherkin_copilot.checker import FeatureStep, stub_parts
-from gherkin_copilot.indexer import StepDef, index_file, iter_python_files
+from gherkin_copilot.indexer import StepDef, index_file
 from gherkin_copilot.matcher import is_exact_match
 from gherkin_copilot.ui.builder import STEP_START, FileChange, _inside, _module_names
 from gherkin_copilot.ui.projects import Project
@@ -217,8 +217,3 @@ def plan(project: Project, line: str, keyword: str, names: object, actions: obje
         out[at:at] = imports
     after = "\n".join(out) + "\n\n\n" + source
     return FileChange(path, path.relative_to(folder).as_posix(), before, after, creates=False)
-
-
-def step_files(project: Project) -> list[str]:
-    folder = Path(project.steps)
-    return sorted(p.relative_to(folder).as_posix() for p in iter_python_files(folder) if index_file(p))

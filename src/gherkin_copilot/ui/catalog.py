@@ -63,5 +63,10 @@ def editor_link(folder: Path, step: StepDef) -> str:
     return editor_url((base / step.file).as_posix(), step.line)
 
 
+def step_info(folder: Path, step: StepDef) -> dict[str, Any]:
+    """A step as the page shows it: its fields, its wording as text and slots, and a link to its code."""
+    return {**asdict(step), "segments": segments(step), "open_url": editor_link(folder, step)}
+
+
 def describe(folder: Path) -> list[dict[str, Any]]:
-    return [{**asdict(s), "segments": segments(s), "open_url": editor_link(folder, s)} for s in build_index(folder)]
+    return [step_info(folder, s) for s in build_index(folder)]

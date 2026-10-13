@@ -1,8 +1,8 @@
 """Check .feature files against the step index and draft stubs for missing steps.
 
-The feature parser is deliberately small: it understands Feature, Background,
-Scenario, Scenario Outline / Examples, And / But, tags, comments, doc strings
-and data tables, which covers what step matching needs.
+Feature files are read with ``gherkin.parse``, the same parser the app's editor
+uses: Feature, Rule, Background, Scenario, Scenario Outline / Examples, tags,
+comments, doc strings and data tables.
 """
 
 from __future__ import annotations
@@ -13,12 +13,11 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from gherkin_copilot import gherkin
 from gherkin_copilot.indexer import StepDef, iter_project_files
 from gherkin_copilot.matcher import Match, find, is_exact_match
 
 STEP_LINE = re.compile(r"^(Given|When|Then|And|But|\*)\s+(.+)$")
-SECTION = re.compile(
-    r"^(Feature|Background|Scenario Outline|Scenario Template|Scenario|Example|Rule|Examples|Scenarios):")
 OUTLINE_PARAM = re.compile(r"<([^<>]+)>")
 QUOTED = re.compile(r'"[^"]*"')
 NUMBER = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?(?![\w.])")
@@ -56,66 +55,24 @@ def parse_feature(path: Path, shown_path: str | None = None) -> list[FeatureStep
 
 
 def parse_feature_text(text: str, shown_path: str = "<text>") -> list[FeatureStep]:
+    """Every step, read with the same parser the app's editor uses, so both always agree."""
     lines = text.splitlines()
     steps: list[FeatureStep] = []
-    outline: list[FeatureStep] = []  # steps waiting for their Examples table
     previous = "given"
-    docstring: str | None = None  # the fence of the doc string we're inside
-    section = ""
-    examples_header: list[str] | None = None
-
-    def cells(row: str) -> list[str]:
-        return [c.strip() for c in row.strip().strip("|").split("|")]
-
-    for number, line in enumerate(lines, start=1):
-        stripped = line.strip()
-        if docstring is None and stripped.startswith(('"""', "```")):
-            docstring = stripped[:3]  # only the same fence closes it: a ``` block may contain """
-            continue
-        if docstring is not None and stripped.startswith(docstring):
-            docstring = None
-            continue
-        if docstring is not None or not stripped or stripped.startswith(("#", "@")):
-            continue
-
-        if m := SECTION.match(stripped):
-            section = m.group(1)
-            examples_header = None
-            if section in {"Scenario", "Example", "Background", "Feature", "Rule"}:
-                steps.extend(outline)  # outline without Examples: keep the raw text
-                outline = []
-            continue
-
-        if stripped.startswith("|"):
-            if section in {"Examples", "Scenarios"}:
-                if examples_header is None:
-                    examples_header = cells(stripped)
-                elif outline:  # fill outline parameters from the first Examples row
-                    values = dict(zip(examples_header, cells(stripped), strict=False))
-
-                    def fill(m: re.Match[str], values: dict[str, str] = values) -> str:
-                        return values.get(m.group(1), m.group(0))
-
-                    for s in outline:
-                        s.text = OUTLINE_PARAM.sub(fill, s.text)
-                    steps.extend(outline)
-                    outline = []
-            continue  # data tables under a step don't affect matching
-
-        if section in {"Feature", "Rule"}:  # free description text, even if it starts with Given or When
-            continue
-        if m := STEP_LINE.match(stripped):
-            word, text = m.groups()
-            kw = previous if word in {"And", "But", "*"} else word.lower()
-            previous = kw
-            step = FeatureStep(kw, text.strip(), stripped, shown_path, number)
-            if section in {"Scenario Outline", "Scenario Template"}:
-                outline.append(step)
-            else:
-                steps.append(step)
-    steps.extend(outline)
-    steps.sort(key=lambda s: s.line)
+    for block in gherkin.parse(text).blocks:
+        first_row = next((e for e in block.examples if e.rows), None) if block.outline else None
+        values = dict(zip(first_row.header, first_row.rows[0], strict=False)) if first_row else {}
+        for step in block.steps:
+            keyword_ = previous if step.keyword in {"And", "But", "*"} else step.keyword.lower()
+            previous = keyword_
+            steps.append(FeatureStep(keyword_, _fill(step.text, values), lines[step.line - 1].strip(), shown_path,
+                                     step.line))
     return steps
+
+
+def _fill(text: str, values: dict[str, str]) -> str:
+    """An outline's <placeholders>, filled from its first Examples row."""
+    return OUTLINE_PARAM.sub(lambda m: values.get(m.group(1), m.group(0)), text)
 
 
 def binds(step: FeatureStep, definition: StepDef) -> bool:

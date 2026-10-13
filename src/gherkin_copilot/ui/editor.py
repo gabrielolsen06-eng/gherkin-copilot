@@ -14,10 +14,10 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from gherkin_copilot import gherkin
 from gherkin_copilot.checker import check_steps, iter_feature_files, parse_feature
 from gherkin_copilot.indexer import StepDef, build_index
 from gherkin_copilot.merger import capture
-from gherkin_copilot.ui import gherkin
 from gherkin_copilot.ui.builder import FILE_NAME, FileChange, _inside, _one_line, clean_lines
 from gherkin_copilot.ui.catalog import segments
 from gherkin_copilot.ui.projects import Project

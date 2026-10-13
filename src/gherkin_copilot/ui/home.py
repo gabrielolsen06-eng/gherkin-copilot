@@ -9,24 +9,20 @@ aren't repeated here.
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from gherkin_copilot import gherkin
 from gherkin_copilot.checker import FeatureStep, binds, iter_feature_files, parse_feature
 from gherkin_copilot.indexer import StepDef, build_index
-from gherkin_copilot.ui import gherkin, gitinfo, history
-from gherkin_copilot.ui.catalog import editor_link, segments
+from gherkin_copilot.ui import gitinfo, history
+from gherkin_copilot.ui.catalog import step_info
 from gherkin_copilot.ui.projects import Project
 
 TOP = 5
 UNUSED = 8
 TAGS = 12
 RECENT = 5
-
-
-def _step(step: StepDef, uses: int, folder: Path) -> dict[str, Any]:
-    return {**asdict(step), "segments": segments(step), "uses": uses, "open_url": editor_link(folder, step)}
 
 
 def statistics(project: Project) -> dict[str, Any]:
@@ -65,8 +61,8 @@ def statistics(project: Project) -> dict[str, Any]:
         "used": len(index) - len(unused),
         "missing": missing,
         "ambiguous": ambiguous,
-        "top": [_step(d, n, steps_folder) for d, n in uses.most_common(TOP)],
-        "unused": [_step(d, 0, steps_folder) for d in unused[:UNUSED]],
+        "top": [{**step_info(steps_folder, d), "uses": n} for d, n in uses.most_common(TOP)],
+        "unused": [{**step_info(steps_folder, d), "uses": 0} for d in unused[:UNUSED]],
         "unused_count": len(unused),
         "tags": [{"tag": t, "scenarios": n} for t, n in tags.most_common(TAGS)],
     }

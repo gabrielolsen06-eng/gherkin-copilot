@@ -18,7 +18,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from gherkin_copilot.checker import check_steps, make_stub, parse_feature_text
+from gherkin_copilot.checker import check_steps, iter_feature_files, make_stub, parse_feature_text
 from gherkin_copilot.indexer import build_index, index_file, iter_python_files
 from gherkin_copilot.ui.catalog import segments
 from gherkin_copilot.ui.projects import Project
@@ -104,8 +104,7 @@ def _inside(folder: Path, relative: str, suffix: str) -> Path:
 def project_files(project: Project) -> dict[str, list[str]]:
     features, steps = Path(project.features), Path(project.steps)
     return {
-        "features": sorted(p.relative_to(features).as_posix() for p in features.rglob("*.feature")
-                           if ".venv" not in p.parts),
+        "features": sorted(p.relative_to(features).as_posix() for p in iter_feature_files(features)),
         "steps": sorted(p.relative_to(steps).as_posix() for p in iter_python_files(steps) if index_file(p)),
     }
 

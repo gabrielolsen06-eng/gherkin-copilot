@@ -13,13 +13,12 @@ from __future__ import annotations
 
 import difflib
 import hashlib
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
 from gherkin_copilot.indexer import StepDef
 from gherkin_copilot.merger import MergePlan, MergeResult, file_changes, function_source, plan_merges
-from gherkin_copilot.ui.catalog import editor_link, segments
+from gherkin_copilot.ui.catalog import step_info
 from gherkin_copilot.ui.projects import Project
 
 
@@ -53,8 +52,7 @@ def _plans(project: Project, threshold: object, keep: object = None) -> MergeRes
 
 
 def _step(step: StepDef, uses: int, folder: Path, code: bool = False) -> dict[str, Any]:
-    return {**asdict(step), "segments": segments(step), "uses": uses, "open_url": editor_link(folder, step),
-            "code": function_source(folder.resolve(), step) if code else None}
+    return {**step_info(folder, step), "uses": uses, "code": function_source(folder.resolve(), step) if code else None}
 
 
 def overview(project: Project, threshold: object, keep: object = None) -> dict[str, Any]:

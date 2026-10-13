@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import ast
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -135,12 +135,13 @@ def _decorator_options(node: ast.FunctionDef | ast.AsyncFunctionDef, step: StepD
     return options
 
 
-def _references(root: Path, name: str) -> list[str]:
-    """Places in the project's Python code that mention a function by name."""
-    found = []
+def _scan(root: Path) -> tuple[dict[Path, ast.Module], dict[str, list[str]]]:
+    """Parse the project's Python files once: each file's tree, and where each name is mentioned."""
+    trees: dict[Path, ast.Module] = {}
+    mentions: dict[str, list[str]] = defaultdict(list)
     for path in iter_python_files(root):
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            trees[path] = tree = ast.parse(path.read_text(encoding="utf-8"))
         except (SyntaxError, UnicodeDecodeError):
             continue
         for node in ast.walk(tree):
@@ -152,9 +153,8 @@ def _references(root: Path, name: str) -> list[str]:
                 mentioned = node.name.rpartition(".")[2]
             else:
                 continue
-            if mentioned == name:
-                found.append(f"{path.relative_to(root).as_posix()}:{node.lineno}")
-    return found
+            mentions[mentioned].append(f"{path.relative_to(root).as_posix()}:{node.lineno}")
+    return trees, mentions
 
 
 def function_source(root: Path, step: StepDef) -> str | None:
@@ -185,10 +185,10 @@ def _usage(feature_steps: list[FeatureStep], steps: list[StepDef]) -> Counter[St
     return Counter(s for fs in feature_steps for s in steps if binds(fs, s))
 
 
-def _check_code(plan: MergePlan, root: Path) -> None:
-    keep_path, drop_path = root / plan.keep.file, root / plan.drop.file
-    keep_node = _function_node(ast.parse(keep_path.read_text(encoding="utf-8")), plan.keep)
-    drop_node = _function_node(ast.parse(drop_path.read_text(encoding="utf-8")), plan.drop)
+def _check_code(plan: MergePlan, root: Path, trees: dict[Path, ast.Module], mentions: dict[str, list[str]]) -> None:
+    keep_tree, drop_tree = trees.get(root / plan.keep.file), trees.get(root / plan.drop.file)
+    keep_node = _function_node(keep_tree, plan.keep) if keep_tree else None
+    drop_node = _function_node(drop_tree, plan.drop) if drop_tree else None
     if keep_node is None or drop_node is None:
         plan.blockers.append("couldn't find both functions in the source; re-run index")
         return
@@ -203,7 +203,7 @@ def _check_code(plan: MergePlan, root: Path) -> None:
                              "(their parameters or code differ)")
     if len(drop_node.decorator_list) > 1:
         plan.blockers.append(f"{plan.drop.function} has other decorators; remove it by hand")
-    callers = _references(root, plan.drop.function)
+    callers = mentions.get(plan.drop.function)
     if callers:
         plan.blockers.append(f"{plan.drop.function} is used elsewhere: {', '.join(callers)}")
 
@@ -249,7 +249,9 @@ def plan_merges(root: Path, threshold: float = 0.6, keep: frozenset[str] = froze
     plans: list[MergePlan] = []
     skipped: list[tuple[StepDef, StepDef]] = []
     taken: set[StepDef] = set()
-    for pair in find_duplicates(steps, threshold):
+    pairs = find_duplicates(steps, threshold)
+    trees, mentions = _scan(root) if pairs else ({}, {})
+    for pair in pairs:
         if pair.first in taken or pair.second in taken:
             skipped.append((pair.first, pair.second))
             continue
@@ -270,7 +272,7 @@ def plan_merges(root: Path, threshold: float = 0.6, keep: frozenset[str] = froze
         if a.kind == "regex" and usage[b]:
             plan.blockers.append("feature lines can't be rewritten into a regex step automatically")
             continue
-        _check_code(plan, root)
+        _check_code(plan, root, trees, mentions)
         if not plan.blockers:  # planned even when the code differs, in case the user merges anyway
             _plan_edits(plan, feature_steps)
 
