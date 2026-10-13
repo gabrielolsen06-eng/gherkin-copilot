@@ -29,7 +29,8 @@ def type_into(app, text, field):
 
 @then(parsers.parse('"{field}" shows "{text}"'))
 def field_shows(app, field, text):
-    uia.wait_until(lambda: uia.text_of(app, field) == text, f"“{field}” to show “{text}”")
+    uia.wait_until(lambda: uia.text_of(app, field) == text,
+                   lambda: f"“{field}” to show “{text}” (it shows “{uia.text_of(app, field)}”)")
 
 
 @then(parsers.parse('"{field}" is not empty'))

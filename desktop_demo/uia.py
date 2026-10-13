@@ -66,11 +66,12 @@ def _norm(text: str) -> str:
     return " ".join(text.replace("&", "").split()).rstrip(" :").casefold()
 
 
-def _wait(found: Callable[[], Any], what: str, timeout: float = TIMEOUT) -> Any:
+def _wait(found: Callable[[], Any], what: str | Callable[[], str], timeout: float = TIMEOUT) -> Any:
     deadline = time.monotonic() + timeout
     while not (result := found()):
         if time.monotonic() > deadline:
-            raise AssertionError(f"Gave up after {timeout:.0f} s waiting for {what}")
+            detail = what if isinstance(what, str) else what()
+            raise AssertionError(f"Gave up after {timeout:.0f} s waiting for {detail}")
         time.sleep(0.2)
     return result
 
@@ -97,7 +98,7 @@ def _pattern(element: Any, pattern_id: int, interface: str) -> Any:
     return unknown.QueryInterface(getattr(_uia()[1], interface)) if unknown else None
 
 
-def _act(action: Callable[[], Any], what: str) -> None:
+def _act(action: Callable[[], Any], what: str, wait: float = 1.0) -> None:
     """Run a UI Automation action without waiting for it to finish.
 
     A classic Windows button only returns once its own code has, so a button that opens a message
@@ -117,7 +118,7 @@ def _act(action: Callable[[], Any], what: str) -> None:
 
     thread = threading.Thread(target=run, daemon=True)
     thread.start()
-    thread.join(1.0)
+    thread.join(wait)
     if errors:
         raise AssertionError(f"Couldn't {what}: {errors[0]}")
 
@@ -244,7 +245,7 @@ def type_into(app: App, name: str, text: str) -> None:
     pattern = _pattern(find(app, name, TYPABLE), VALUE, "IUIAutomationValuePattern")
     if not pattern or pattern.CurrentIsReadOnly:
         raise AssertionError(f"“{name}” doesn't accept typed text")
-    _act(lambda: pattern.SetValue(text), f"type into “{name}”")
+    _act(lambda: pattern.SetValue(text), f"type into “{name}”", wait=5.0)  # typing rarely opens a message box
 
 
 def text_of(app: App, name: str) -> str:
@@ -253,7 +254,7 @@ def text_of(app: App, name: str) -> str:
     return str(pattern.CurrentValue if pattern else element.CurrentName)
 
 
-def wait_until(check: Callable[[], bool], what: str) -> None:
+def wait_until(check: Callable[[], bool], what: str | Callable[[], str]) -> None:
     _wait(check, what)
 
 
