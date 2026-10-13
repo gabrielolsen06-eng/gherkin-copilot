@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from gherkin_copilot.indexer import StepDef, build_index
 from gherkin_copilot.matcher import PARSE_FIELD
@@ -49,5 +50,18 @@ def _readable(regex_text: str) -> str:
     return re.sub(r"\\(.)", r"\1", re.sub(r"(\w)\?", r"\1", regex_text))
 
 
+def editor_url(path: str, line: int) -> str:
+    """vscode://file/... opens the file at that line in VS Code: /Users/me/a.py and C:/Users/me/a.py alike."""
+    return f"vscode://file{'' if path.startswith('/') else '/'}{quote(path, safe='/:')}:{line}"
+
+
+def editor_link(folder: Path, step: StepDef) -> str:
+    """Where to open a step's code. The link is built here from the project's own folder, never taken from
+    the browser, and following it is the browser's job (it asks before opening VS Code): the app starts nothing."""
+    base = folder.resolve()
+    base = base if base.is_dir() else base.parent  # index paths are relative to the folder a step file is in
+    return editor_url((base / step.file).as_posix(), step.line)
+
+
 def describe(folder: Path) -> list[dict[str, Any]]:
-    return [{**asdict(s), "segments": segments(s)} for s in build_index(folder)]
+    return [{**asdict(s), "segments": segments(s), "open_url": editor_link(folder, s)} for s in build_index(folder)]

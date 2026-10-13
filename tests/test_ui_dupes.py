@@ -32,6 +32,8 @@ def test_overview_lists_pairs_with_usage(demo):
     assert (cart["drop"]["function"], cart["drop"]["uses"], cart["rewrites"]) == ("put_in_cart", 1, 1)
     assert login["ok"] and cart["ok"] and data["skipped"] == []
     assert login["keep"]["segments"] == [{"text": "I am on the login page"}]
+    drop = login["drop"]  # both sides link to their code, so the two functions can be compared before merging
+    assert drop["open_url"].startswith("vscode://file/") and drop["open_url"].endswith(f"/{drop['file']}:{drop['line']}")
 
 
 def test_threshold_is_clamped(demo):

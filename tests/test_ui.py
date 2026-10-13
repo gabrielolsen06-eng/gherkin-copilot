@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from gherkin_copilot.indexer import StepDef
-from gherkin_copilot.ui.catalog import segments
+from gherkin_copilot.ui.catalog import editor_url, segments
 from gherkin_copilot.ui.projects import ProjectStore
 from gherkin_copilot.ui.server import start_in_background
 
@@ -81,6 +81,8 @@ def test_add_switch_list_steps_and_remove(app, tmp_path):
     _status, _, data, _ = request(port, "GET", "/api/steps?project=demo-shop")
     steps = json.loads(data)["steps"]
     assert len(steps) == 15
+    for step in steps:  # each links to its code in VS Code, built from the project's own folder
+        assert step["open_url"] == editor_url((DEMO.resolve() / step["file"]).as_posix(), step["line"])
     assert request(port, "GET", "/api/steps?project=demo-shop-2")[2] == b'{"steps": []}'
 
     request(port, "POST", "/api/projects/active", {"id": "demo-shop"}, app.token)
@@ -113,6 +115,11 @@ def test_store_survives_restart_and_defaults_features_to_steps(tmp_path):
 
 def step(pattern, kind):
     return StepDef("when", pattern, kind, "fn", "steps.py", 1)
+
+
+def test_editor_links_for_mac_and_windows_paths():
+    assert editor_url("/Users/me/My Tests/steps.py", 3) == "vscode://file/Users/me/My%20Tests/steps.py:3"
+    assert editor_url("C:/Users/me/a#b/steps.py", 12) == "vscode://file/C:/Users/me/a%23b/steps.py:12"
 
 
 def test_segments_mark_slots_and_their_types():

@@ -317,13 +317,21 @@ function matchesQuery(step, text) {
   return words.every((w) => haystack.includes(w));
 }
 
+// The server builds the link from the project folder; the browser asks before handing it to VS Code
+function openLink(step) {
+  if (!String(step.open_url || "").startsWith("vscode://file/")) return null;
+  return el("a", { class: "open-code", href: step.open_url, title: `Open ${step.file} at line ${step.line} in VS Code` },
+    "Open in VS Code");
+}
+
 function stepCard(step) {
   const copy = () => copyText(`${step.keyword === "step" ? "Given" : capitalize(step.keyword)} ${stepText(step)}`,
     "Copied to clipboard");
-  return el("li", {},
+  return el("li", { class: "step-item" },
     el("button", { type: "button", class: "step-card", onclick: copy, title: "Copy this step" },
       sentence(step, slotChip),
-      el("span", { class: "where" }, `${step.file}:${step.line}`, el("span", { class: "fn" }, ` · ${step.function}()`))));
+      el("span", { class: "where" }, `${step.file}:${step.line}`, el("span", { class: "fn" }, ` · ${step.function}()`))),
+    openLink(step));
 }
 
 function groupedSteps(steps, makeItem, listClass) {
@@ -1584,6 +1592,7 @@ function dupeSide(step, role, pair) {
     el("span", { class: "sentence" }, el("strong", { class: "dupe-kw" }, `${keyword} `),
       ...sentence(step, slotChip).childNodes),
     el("span", { class: "where" }, `${step.file}:${step.line} · ${step.function}()`),
+    openLink(step),
     el("span", { class: "uses" }, uses(step.uses)),
     role === "drop" ? el("button", { type: "button", class: "ghost small", onclick: () => {
       state.dupesKeep.delete(pair.keep.function);

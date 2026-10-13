@@ -60,7 +60,7 @@ and `.github/workflows/ci.yml` if playwright changed; `tests/test_init.py` fails
   steps; the only code that edits user files, and only with `--apply`), `report.py` (Cucumber JSON
   to HTML, no JS), `cli.py`, `ui/` (the local web app: `server.py` stdlib HTTP server with
   token + Host/Origin checks, `projects.py` project list in `~/.gherkin-copilot/`,
-  `catalog.py` steps as text + slots, `builder.py` check/save/stubs for the scenario
+  `catalog.py` steps as text + slots + `vscode://` links to their code (no editing step code in the app), `builder.py` check/save/stubs for the scenario
   builder (preview diff + hash, writes only inside project folders), `dupes.py` duplicates
   screen on top of `merger.plan_merges` (one pair at a time, multi-file hash),
   `gherkin.py` feature-file parser with exact scenario line spans + renderer, `editor.py`

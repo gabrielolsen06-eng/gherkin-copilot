@@ -38,6 +38,10 @@ This page is written for whoever approves software on a managed work laptop.
   never files from your disk. Pages have a strict `Content-Security-Policy` (no inline or
   external scripts, no external connections) and build all text with `textContent`, so
   step text from a project can never run as code.
+- **Step code is edited in your editor, not in the app.** The app has no way to type Python:
+  to fix a step's code, **Open in VS Code** is a `vscode://` link to the step's file and line,
+  built by the server from the project's own folder. Following it is the browser's job (it
+  asks before opening VS Code); the app itself starts nothing.
 - **What it writes, and when:**
   - the project list, `~/.gherkin-copilot/projects.json` (names and folder paths).
     Removing a project from the list never touches its files;
@@ -158,7 +162,7 @@ and `gherkin-copilot-review-2026-10-12-status.md`):
 | `bandit -q -r src demo run_demo.py` (static security analysis) | No findings. The three places that start a process (`run_demo.py` and the app's Run button in `ui/runner.py`) use fixed argument lists and no shell, and are annotated with why |
 | `mypy --strict` | No issues in 20 source files |
 | `ruff check` (rules in `pyproject.toml`) | No issues |
-| Tool tests | 276 passed (macOS, Python 3.14; also run on Windows and Ubuntu in CI), including tests for missing paths, malformed files, non-finite numbers, Windows code pages, generated inputs and the project `init` creates |
+| Tool tests | 277 passed (macOS, Python 3.14; also run on Windows and Ubuntu in CI), including tests for missing paths, malformed files, non-finite numbers, Windows code pages, generated inputs and the project `init` creates |
 | Branch coverage (`coverage run -m pytest tests`) | 92% |
 | Demo scenarios in a real browser (Brave) | 6 passed |
 | A project made by `init`, run in a real browser | Passes in Brave locally, and in CI in Chromium and in the installed Edge on Windows (no browser download), with warnings treated as errors. Its `requirements.lock` is identical to this repo's (a test checks), so the audit above covers it |

@@ -162,6 +162,10 @@ h2 { font-size: 1rem; margin: 0; }
 .slot.number { background: var(--num-bg); color: var(--num-ink); }
 .where { color: var(--muted); font-size: 0.8rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .fn { opacity: 0.8; }
+.step-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.open-code { color: var(--muted); font-size: 0.8rem; white-space: nowrap; text-decoration: underline; text-underline-offset: 2px; }
+.open-code:hover { color: var(--ink); }
+.dupe-side .open-code { justify-self: start; }
 
 /* --- builder --- */
 .small { font-size: 0.8rem; }

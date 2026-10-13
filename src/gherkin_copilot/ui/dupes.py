@@ -15,7 +15,7 @@ from typing import Any
 
 from gherkin_copilot.indexer import StepDef
 from gherkin_copilot.merger import MergePlan, MergeResult, file_changes, plan_merges
-from gherkin_copilot.ui.catalog import segments
+from gherkin_copilot.ui.catalog import editor_link, segments
 from gherkin_copilot.ui.projects import Project
 
 
@@ -48,8 +48,8 @@ def _plans(project: Project, threshold: object, keep: object = None) -> MergeRes
     return plan_merges(Path(project.steps), _threshold(threshold), _keep(keep), features=Path(project.features))
 
 
-def _step(step: StepDef, uses: int) -> dict[str, Any]:
-    return {**asdict(step), "segments": segments(step), "uses": uses}
+def _step(step: StepDef, uses: int, folder: Path) -> dict[str, Any]:
+    return {**asdict(step), "segments": segments(step), "uses": uses, "open_url": editor_link(folder, step)}
 
 
 def overview(project: Project, threshold: object, keep: object = None) -> dict[str, Any]:
@@ -61,8 +61,8 @@ def overview(project: Project, threshold: object, keep: object = None) -> dict[s
             "score": p.score,
             "ok": p.ok,
             "problems": p.problems,
-            "keep": _step(p.keep, p.keep_uses),
-            "drop": _step(p.drop, p.drop_uses),
+            "keep": _step(p.keep, p.keep_uses, Path(project.steps)),
+            "drop": _step(p.drop, p.drop_uses, Path(project.steps)),
             "rewrites": len(p.edits),
         } for p in result.plans],
         "skipped": [[_loc(a), _loc(b)] for a, b in result.skipped],

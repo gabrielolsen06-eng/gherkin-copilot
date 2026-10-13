@@ -298,11 +298,13 @@ The app asks for your name the first time you save something.
 
 The **Steps** screen lists every step in the selected project, grouped by Given / When /
 Then, with placeholders such as “product” highlighted. Search it, or click a step to copy
-it. The app rescans the project whenever you come back to the browser tab, so edits show up
+it. If a step's code needs fixing, **Open in VS Code** opens its file at the right line. The
+app rescans the project whenever you come back to the browser tab, so edits show up
 straight away.
 
 **Duplicates** shows each pair of steps that say the same thing in different words, side by
-side: which one would be kept, which removed, and how many feature-file lines use each.
+side: which one would be kept, which removed, and how many feature-file lines use each
+(**Open in VS Code** on either side shows its code).
 Click **Keep this one instead** to swap them, and **Preview merge** to see every file the
 merge would change before confirming. Pairs that can't be merged safely say why (for
 example, their code differs). The slider sets how alike two steps must be to be listed.
@@ -351,7 +353,7 @@ signed in" won't be flagged as duplicates.
 ## Development
 
 ```bash
-python -m pytest tests       # tool tests (276)
+python -m pytest tests       # tool tests (277)
 python -m pytest demo        # browser scenarios (6)
 ```
 
