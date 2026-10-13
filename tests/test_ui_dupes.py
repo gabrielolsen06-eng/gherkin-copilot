@@ -99,3 +99,75 @@ def test_merge_over_http(demo, tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+DIFFERENT = '''from pytest_bdd import parsers, when
+
+
+@when(parsers.parse('I add "{product}" to the cart'))
+def add_to_cart(page, product):
+    page.click(product)
+
+
+@when(parsers.parse('I put the "{product}" in my cart'))
+def put_in_cart(page, product):
+    page.get_by_text(product).click()
+'''
+
+
+@pytest.fixture
+def different(tmp_path):
+    """Two steps that say the same thing with different code, so they can only be merged with force."""
+    (tmp_path / "steps").mkdir()
+    (tmp_path / "features").mkdir()
+    (tmp_path / "steps" / "cart_steps.py").write_text(DIFFERENT)
+    (tmp_path / "features" / "cart.feature").write_text(
+        'Feature: Cart\n  Scenario: Add\n    When I add "Onesie" to the cart\n    And I add "Jacket" to the cart\n\n'
+        '  Scenario: Put\n    When I put the "Onesie" in my cart\n')
+    return Project("p", "P", str(tmp_path / "steps"), str(tmp_path / "features"))
+
+
+def test_merge_anyway_when_only_the_code_differs(different):
+    cart = pair(dupes.overview(different, 0.6), "add_to_cart")
+    assert (cart["ok"], cart["can_force"], cart["rewrites"]) == (False, True, 1)
+    assert "page.get_by_text(product).click()" in cart["drop"]["code"]
+    assert cart["keep"]["code"].startswith("@when(parsers.parse(") and cart["keep"]["code"].endswith("page.click(product)")
+    with pytest.raises(ValueError, match="can't be merged"):
+        dupes.preview(different, 0.6, cart["id"], [])
+    with pytest.raises(ValueError, match="can't be merged"):
+        dupes.preview(different, 0.6, cart["id"], [], force="yes")  # only a real true counts
+
+    preview = dupes.preview(different, 0.6, cart["id"], [], force=True)
+    assert '+    When I add "Onesie" to the cart' in preview["files"][0]["diff"]
+    with pytest.raises(ValueError, match="can't be merged"):
+        dupes.apply(different, 0.6, cart["id"], [], preview["hash"])  # saving needs force too
+    dupes.apply(different, 0.6, cart["id"], [], preview["hash"], force=True)
+    code = (Path(different.steps) / "cart_steps.py").read_text()
+    assert "def put_in_cart" not in code and "page.click(product)" in code
+    assert "put the" not in (Path(different.features) / "cart.feature").read_text()
+
+
+def test_merge_anyway_is_refused_for_other_problems(different):
+    (Path(different.steps) / "helpers.py").write_text("from cart_steps import put_in_cart\n")
+    cart = pair(dupes.overview(different, 0.6), "add_to_cart")
+    assert not cart["can_force"] and cart["keep"]["code"] is None
+    with pytest.raises(ValueError, match="used elsewhere"):
+        dupes.preview(different, 0.6, cart["id"], [], force=True)
+
+
+def test_merge_anyway_over_http(different, tmp_path):
+    store = ProjectStore(tmp_path / "projects.json")
+    project = store.add("P", different.steps, different.features)
+    server, app, _ = start_in_background(store)
+    port = server.server_address[1]
+    try:
+        cart = pair(json.loads(request(port, "GET", f"/api/dupes?project={project.id}&threshold=0.6")[2]), "add_to_cart")
+        body = {"project": project.id, "threshold": 0.6, "pair": cart["id"], "keep": []}
+        assert request(port, "POST", "/api/merge/preview", body, app.token)[0] == 400
+        preview = json.loads(request(port, "POST", "/api/merge/preview", {**body, "force": True}, app.token)[2])
+        status, _, saved, _ = request(port, "POST", "/api/merge/save",
+                                      {**body, "force": True, "hash": preview["hash"], "label": "forced"}, app.token)
+        assert status == 200 and json.loads(saved)["saved"] == ["cart.feature", "cart_steps.py"]
+    finally:
+        server.shutdown()
+        server.server_close()

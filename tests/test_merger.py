@@ -223,3 +223,24 @@ def b(page):
     assert main(["merge", str(steps_dir), "--features", str(specs), "--apply"]) == 0
     assert (specs / "login.feature").read_text().count("the user is on the login page") == 3
     assert "def a(" not in (steps_dir / "steps.py").read_text()
+
+
+def test_differing_code_can_be_forced_but_other_problems_cannot(tmp_path):
+    steps = '''@when(parsers.parse('I add "{product}" to the cart'))
+def add(page, product):
+    page.click(product)
+
+
+@when(parsers.parse('I put the "{product}" in my cart'))
+def put(page, product):
+    page.get_by_text(product).click()
+'''
+    feature = 'Feature: x\n  Scenario: y\n    When I add "a" to the cart\n    And I put the "b" in my cart\n'
+    plan = plan_merges(project(tmp_path, steps, feature)).plans[0]
+    assert (plan.ok, plan.can_force, plan.blockers) == (False, True, [])
+    assert plan.problems == plan.differences and "don't do the same thing" in plan.differences[0]
+    assert [e.new for e in plan.edits] == ['    And I add "b" to the cart']  # planned, in case the user merges anyway
+
+    (tmp_path / "helpers.py").write_text("from steps import put\n")
+    plan = plan_merges(tmp_path).plans[0]
+    assert not plan.can_force and any("put is used elsewhere" in b for b in plan.blockers)

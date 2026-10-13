@@ -126,9 +126,11 @@ class App:
             where = (text("file"), body.get("start"), body.get("name"))
 
             if base == "/api/merge":
+                force = body.get("force") is True  # "Merge anyway": the user says the differing code does the same
                 if step == "preview":
-                    return dupes.preview(project, body.get("threshold"), text("pair"), body.get("keep"))
-                changes = dupes.apply(project, body.get("threshold"), text("pair"), body.get("keep"), body.get("hash"))
+                    return dupes.preview(project, body.get("threshold"), text("pair"), body.get("keep"), force)
+                changes = dupes.apply(project, body.get("threshold"), text("pair"), body.get("keep"), body.get("hash"),
+                                      force)
                 history.record(project, "merge", author, changes, scenario=text("label"))
                 return {"saved": sorted(changes)}
             if base == "/api/stepcode":

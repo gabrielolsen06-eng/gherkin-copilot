@@ -12,6 +12,10 @@ use the same keyword, their decorators have the same options (such as
 the removed function isn't called from anywhere else, and every rewritten
 line binds to the kept step. Anything else is reported and left alone.
 
+When the only thing in the way is that the two functions' code differs (their
+bodies, parameters or decorator options), the pair can still be merged if the
+user says they do the same thing; the app offers that as "Merge anyway".
+
 Planning never writes; ``apply`` writes the planned file contents.
 """
 
@@ -46,11 +50,22 @@ class MergePlan:
     keep_uses: int = 0  # feature lines using each step before the merge
     drop_uses: int = 0
     edits: list[LineEdit] = field(default_factory=list)
-    problems: list[str] = field(default_factory=list)
+    differences: list[str] = field(default_factory=list)  # their code differs; a person can vouch it's the same
+    blockers: list[str] = field(default_factory=list)  # the merge can't be carried out at all
+
+    @property
+    def problems(self) -> list[str]:
+        """Everything that stops an automatic merge."""
+        return self.differences + self.blockers
 
     @property
     def ok(self) -> bool:
         return not self.problems
+
+    @property
+    def can_force(self) -> bool:
+        """Only the code differs, so the merge can go ahead if the user says the steps do the same thing."""
+        return bool(self.differences) and not self.blockers
 
 
 @dataclass
@@ -129,10 +144,26 @@ def _references(root: Path, name: str) -> list[str]:
         except (SyntaxError, UnicodeDecodeError):
             continue
         for node in ast.walk(tree):
-            if isinstance(node, (ast.Name, ast.Attribute)) and \
-                    (node.id if isinstance(node, ast.Name) else node.attr) == name:
+            if isinstance(node, ast.Name):
+                mentioned = node.id
+            elif isinstance(node, ast.Attribute):
+                mentioned = node.attr
+            elif isinstance(node, ast.alias):  # from steps import name
+                mentioned = node.name.rpartition(".")[2]
+            else:
+                continue
+            if mentioned == name:
                 found.append(f"{path.relative_to(root).as_posix()}:{node.lineno}")
     return found
+
+
+def function_source(root: Path, step: StepDef) -> str | None:
+    """A step's decorators and function as written, to compare the two sides of a pair."""
+    source = (root / step.file).read_text(encoding="utf-8")
+    node = _function_node(ast.parse(source), step)
+    if node is None:
+        return None
+    return "\n".join(source.splitlines()[min(d.lineno for d in node.decorator_list) - 1 : node.end_lineno])
 
 
 def _remove_function(source: str, node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
@@ -159,22 +190,22 @@ def _check_code(plan: MergePlan, root: Path) -> None:
     keep_node = _function_node(ast.parse(keep_path.read_text(encoding="utf-8")), plan.keep)
     drop_node = _function_node(ast.parse(drop_path.read_text(encoding="utf-8")), plan.drop)
     if keep_node is None or drop_node is None:
-        plan.problems.append("couldn't find both functions in the source; re-run index")
+        plan.blockers.append("couldn't find both functions in the source; re-run index")
         return
     keep_options, drop_options = _decorator_options(keep_node, plan.keep), _decorator_options(drop_node, plan.drop)
     differing = [f"{k}: {keep_options.get(k, 'not set')} vs {drop_options.get(k, 'not set')}"
                  for k in sorted(keep_options.keys() | drop_options.keys())
                  if keep_options.get(k) != drop_options.get(k)]
     if differing:
-        plan.problems.append(f"their decorators differ ({'; '.join(differing)})")
+        plan.differences.append(f"their decorators differ ({'; '.join(differing)})")
     if _signature_and_body(keep_node) != _signature_and_body(drop_node):
-        plan.problems.append(f"{plan.keep.function} and {plan.drop.function} don't do the same thing "
+        plan.differences.append(f"{plan.keep.function} and {plan.drop.function} don't do the same thing "
                              "(their parameters or code differ)")
     if len(drop_node.decorator_list) > 1:
-        plan.problems.append(f"{plan.drop.function} has other decorators; remove it by hand")
+        plan.blockers.append(f"{plan.drop.function} has other decorators; remove it by hand")
     callers = _references(root, plan.drop.function)
     if callers:
-        plan.problems.append(f"{plan.drop.function} is used elsewhere: {', '.join(callers)}")
+        plan.blockers.append(f"{plan.drop.function} is used elsewhere: {', '.join(callers)}")
 
 
 def _plan_edits(plan: MergePlan, feature_steps: list[FeatureStep]) -> None:
@@ -188,12 +219,12 @@ def _plan_edits(plan: MergePlan, feature_steps: list[FeatureStep]) -> None:
         word, raw_text = line.groups()
         values = capture(plan.drop, raw_text.strip())
         if values is None:
-            plan.problems.append(f"{path}:{fs.line}: couldn't read the values in this line")
+            plan.blockers.append(f"{path}:{fs.line}: couldn't read the values in this line")
             continue
         new_text = render(plan.keep, values)
         filled = render(plan.keep, capture(plan.drop, fs.text) or values)
         if not is_exact_match(filled, plan.keep):
-            plan.problems.append(f"{path}:{fs.line}: rewritten line wouldn't bind to the kept step")
+            plan.blockers.append(f"{path}:{fs.line}: rewritten line wouldn't bind to the kept step")
             continue
         old = path.read_text(encoding="utf-8").splitlines()[fs.line - 1]
         indent = old[: len(old) - len(old.lstrip())]
@@ -229,18 +260,18 @@ def plan_merges(root: Path, threshold: float = 0.6, keep: frozenset[str] = froze
         plans.append(plan)
 
         if a.keyword != b.keyword:
-            plan.problems.append(
+            plan.blockers.append(
                 f"one is a {a.keyword.capitalize()} step and the other a {b.keyword.capitalize()} step")
             continue
         names_a, names_b = placeholder_names(a), placeholder_names(b)
         if names_a is None or names_b is None or sorted(names_a) != sorted(names_b):
-            plan.problems.append("their placeholders don't line up, so values can't be carried across")
+            plan.blockers.append("their placeholders don't line up, so values can't be carried across")
             continue
         if a.kind == "regex" and usage[b]:
-            plan.problems.append("feature lines can't be rewritten into a regex step automatically")
+            plan.blockers.append("feature lines can't be rewritten into a regex step automatically")
             continue
         _check_code(plan, root)
-        if plan.ok:
+        if not plan.blockers:  # planned even when the code differs, in case the user merges anyway
             _plan_edits(plan, feature_steps)
 
     return MergeResult(plans, skipped, file_changes([p for p in plans if p.ok], root))

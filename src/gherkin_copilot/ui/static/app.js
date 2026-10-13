@@ -1375,7 +1375,7 @@ function renderHistory() {
 // --- change dialog: every write is previewed first --------------------------------------
 
 const dialog = { kind: null, preview: null, request: null };
-const SUBMIT = { save: "Save", copy: "Save", stubs: "Add to file", merge: "Merge", edit: "Save changes",
+const SUBMIT = { save: "Save", copy: "Save", stubs: "Add to file", merge: "Merge", force: "Merge anyway", edit: "Save changes",
   delete: "Delete", duplicate: "Duplicate", restore: "Restore" };
 
 function slug(text) {
@@ -1478,7 +1478,7 @@ function showPreview(preview) {
   $("change-preview").hidden = !preview;
   $("change-back").hidden = !preview;
   $("change-submit").textContent = preview ? SUBMIT[dialog.kind] : "Preview";
-  $("change-submit").classList.toggle("danger-fill", !!preview && dialog.kind === "delete");
+  $("change-submit").classList.toggle("danger-fill", !!preview && ["delete", "force"].includes(dialog.kind));
   if (preview) {
     const files = preview.files || [preview];
     $("change-diff").replaceChildren(...files.flatMap((file) => [
@@ -1487,7 +1487,9 @@ function showPreview(preview) {
         el("span", { class: line.startsWith("+") ? "add" : line.startsWith("-") ? "del" : line.startsWith("@@") ? "hunk" : "" },
           `${line}\n`)),
     ].filter(Boolean)));
-    if (dialog.kind === "merge") $("change-title").textContent = `Merge: change ${plural(files.length, "file")}`;
+    if (dialog.kind === "merge" || dialog.kind === "force") {
+      $("change-title").textContent = `${dialog.kind === "force" ? "Merge anyway" : "Merge"}: change ${plural(files.length, "file")}`;
+    }
     else if (["save", "copy", "stubs"].includes(dialog.kind)) {
       $("change-title").textContent = preview.creates ? `Create ${preview.file}` : `Change ${preview.file}`;
     }
@@ -1530,7 +1532,8 @@ async function submitChange(event) {
 
 function afterSave(kind, result, body) {
   const saved = Array.isArray(result.saved) ? result.saved.join(", ") : result.saved;
-  toast({ save: `Saved to ${saved}`, copy: `Saved to ${saved}`, merge: `Merged: updated ${saved}`, stubs: `Added steps to ${saved}`,
+  toast({ save: `Saved to ${saved}`, copy: `Saved to ${saved}`, merge: `Merged: updated ${saved}`,
+    force: `Merged: updated ${saved}. Run the tests to check.`, stubs: `Added steps to ${saved}`,
     edit: `Saved changes to ${saved}`, delete: `Deleted from ${saved}`, duplicate: `Duplicated in ${saved}`,
     restore: `Restored in ${saved}` }[kind]);
   const d = state.draft;
@@ -1763,19 +1766,50 @@ function dupeSide(step, role, pair) {
     } }, "Keep this one instead") : null);
 }
 
+function mergeRequest(pair, force) {
+  return { threshold: state.dupesThreshold, pair: pair.id, keep: [...state.dupesKeep], force,
+    label: `${pair.keep.function}() kept, ${pair.drop.function}() removed` + (force ? " (their code differed)" : "") };
+}
+
+function mergeSummary(pair) {
+  return pair.rewrites
+    ? `Merging rewrites ${plural(pair.rewrites, "feature line")} and removes ${pair.drop.function}().`
+    : `No feature file uses the second wording, so merging just removes ${pair.drop.function}().`;
+}
+
+// Both functions side by side; body lines the other one doesn't have are highlighted
+function codeCompare(pair) {
+  const lines = (step) => (step.code || "(couldn't read this function)").split("\n");
+  const side = (label, step, other) => {
+    const theirs = new Set(lines(other).map((l) => l.trim()));
+    return el("div", { class: "code-side" }, el("span", { class: "side-label" }, `${label} · ${step.function}()`),
+      el("pre", { class: "code" }, ...lines(step).map((line) => el("span", {
+        class: /^\s*(@|def |async def )/.test(line) || theirs.has(line.trim()) ? "" : "differs" }, `${line}\n`))));
+  };
+  return el("details", { class: "code-compare", open: true }, el("summary", {}, "Compare their code"),
+    el("div", { class: "code-sides" }, side("Keep", pair.keep, pair.drop), side("Remove", pair.drop, pair.keep)));
+}
+
 function dupeCard(pair) {
   const footer = pair.ok
     ? el("div", { class: "dupe-foot" },
-        el("span", {}, pair.rewrites
-          ? `Merging rewrites ${plural(pair.rewrites, "feature line")} and removes ${pair.drop.function}().`
-          : `No feature file uses the second wording, so merging just removes ${pair.drop.function}().`),
+        el("span", {}, mergeSummary(pair)),
         el("button", { type: "button", class: "primary", onclick: () => directChange("merge", "/api/merge",
-          { threshold: state.dupesThreshold, pair: pair.id, keep: [...state.dupesKeep],
-            label: `${pair.keep.function}() kept, ${pair.drop.function}() removed` }, "Merge") }, "Preview merge…"))
-    : el("div", { class: "dupe-foot problems" },
-        el("strong", {}, "Can't merge automatically"),
-        el("ul", {}, ...pair.problems.map((p) => el("li", {}, p))),
-        el("span", { class: "muted small" }, "Tidy these up by hand, or reword one step so they're no longer alike."));
+          mergeRequest(pair, false), "Merge") }, "Preview merge…"))
+    : pair.can_force
+      ? el("div", { class: "dupe-foot problems" },
+          el("strong", {}, "Their code differs, so they aren't merged automatically"),
+          el("ul", {}, ...pair.differences.map((p) => el("li", {}, p))),
+          codeCompare(pair),
+          el("span", { class: "small" }, `If they still do the same thing, you can merge them anyway. ${mergeSummary(pair)} ` +
+            `From then on only ${pair.keep.function}()'s code runs for both wordings, so run the tests afterwards. ` +
+            "Use “Keep this one instead” first if the other function's code is the one to keep."),
+          el("button", { type: "button", class: "ghost warn force", onclick: () => directChange("force", "/api/merge",
+            mergeRequest(pair, true), "Merge anyway") }, "Merge anyway…"))
+      : el("div", { class: "dupe-foot problems" },
+          el("strong", {}, "Can't merge automatically"),
+          el("ul", {}, ...pair.problems.map((p) => el("li", {}, p))),
+          el("span", { class: "muted small" }, "Tidy these up by hand, or reword one step so they're no longer alike."));
   return el("article", { class: `dupe ${pair.ok ? "" : "blocked"}` },
     el("div", { class: "dupe-head" }, el("span", { class: "score" }, `${Math.round(pair.score * 100)}% similar`)),
     el("div", { class: "dupe-sides" }, dupeSide(pair.keep, "keep", pair), el("span", { class: "arrow", "aria-hidden": "true" }, "←"),

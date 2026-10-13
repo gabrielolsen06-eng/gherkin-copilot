@@ -395,6 +395,14 @@ button.small { padding: 4px 10px; }
 .dupe-foot.problems .muted { color: inherit; opacity: 0.8; }
 .all-clear { background: var(--accent-soft); border-radius: 12px; padding: 24px; text-align: center; }
 .diff .file { display: block; font-weight: 700; color: var(--ink); margin-top: 8px; }
+.code-compare summary { cursor: pointer; font-weight: 600; }
+.code-sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 8px; }
+.code-side { display: grid; gap: 4px; min-width: 0; }
+.code-side .side-label { color: inherit; }
+.code-side .code { margin: 0; color: var(--ink); max-height: 320px; overflow: auto; }
+.code .differs { display: block; background: var(--num-bg); box-shadow: inset 3px 0 var(--num-ink); }
+.dupe-foot .force { justify-self: start; background: var(--card); }
+@media (max-width: 640px) { .code-sides { grid-template-columns: minmax(0, 1fr); } }
 
 @media (max-width: 640px) {
   .dupe-sides { grid-template-columns: minmax(0, 1fr); }

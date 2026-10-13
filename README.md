@@ -320,8 +320,12 @@ straight away.
 side: which one would be kept, which removed, and how many feature-file lines use each
 (**Open in VS Code** on either side shows its code).
 Click **Keep this one instead** to swap them, and **Preview merge** to see every file the
-merge would change before confirming. Pairs that can't be merged safely say why (for
-example, their code differs). The slider sets how alike two steps must be to be listed.
+merge would change before confirming. Pairs that can't be merged safely say why. If the
+only reason is that their code differs, **Compare their code** shows both functions side by
+side with the differing lines highlighted, and **Merge anyway** merges them after the same
+preview. From then on only the kept function's code runs, so run the tests afterwards. Other
+reasons (the function is called or imported elsewhere, values can't be carried across) still
+block the merge. The slider sets how alike two steps must be to be listed.
 
 **Test results** runs your tests and shows what happened, scenario by scenario and step by
 step: errors, timings, a screenshot of each scenario and a command to replay it in
