@@ -251,7 +251,8 @@ def type_into(app: App, name: str, text: str) -> None:
 def text_of(app: App, name: str) -> str:
     element = find(app, name, READABLE)
     pattern = _pattern(element, VALUE, "IUIAutomationValuePattern")
-    return str(pattern.CurrentValue if pattern else element.CurrentName)
+    text = str(pattern.CurrentValue if pattern else element.CurrentName)
+    return " ".join(text.split())  # as a person reads it: Character Map's field ends with a line break
 
 
 def wait_until(check: Callable[[], bool], what: str | Callable[[], str]) -> None:
