@@ -116,7 +116,16 @@ jobs:
         run: gherkin-copilot check desktop_demo/features --path desktop_demo/steps
       - run: mkdir reports
       - name: Run the scenarios against Character Map
-        run: python -m pytest desktop_demo -v -p no:cacheprovider --cucumberjson=reports/desktop.json
+        run: python -m pytest desktop_demo -v -p no:cacheprovider --cucumberjson=reports/desktop.json --junitxml=reports/desktop.xml
+      - name: Show each failure on the run page
+        if: failure()
+        shell: python
+        run: |
+          import xml.etree.ElementTree as ET
+          for case in ET.parse("reports/desktop.xml").iter("testcase"):
+              for bad in [*case.iter("failure"), *case.iter("error")]:
+                  text = f"{bad.get('message') or ''}\n{(bad.text or '')[-1500:]}"
+                  print(f"::error title={case.get('name')}::" + text.replace("%", "%25").replace("\r", "").replace("\n", "%0A"))
       - name: HTML report
         if: always()
         run: gherkin-copilot report reports/desktop.json -o reports/desktop.html
