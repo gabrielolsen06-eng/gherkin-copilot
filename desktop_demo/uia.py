@@ -207,6 +207,8 @@ def find(app: App, name: str, kinds: set[int]) -> Any:
         found = _wait(matches, f"a {what} called “{name}”")
     except AssertionError as exc:
         raise AssertionError(f"{exc}. The app shows: {describe(app)}") from None
+    if len(found) > 1:  # a field's label usually has the field's name too: the field is the one meant
+        found = [e for e in found if _safe(lambda e=e: e.CurrentControlType) != TEXT] or found
     if len(found) > 1:
         raise AssertionError(f"{len(found)} controls are called “{name}”. Use the control's AutomationId instead.")
     return found[0]

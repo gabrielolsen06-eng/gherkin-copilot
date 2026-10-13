@@ -120,6 +120,8 @@ jobs:
       - name: Show each failure on the run page
         if: failure()
         shell: python
+        env:
+          PYTHONIOENCODING: utf-8  # the runner reads annotations as UTF-8
         run: |
           import xml.etree.ElementTree as ET
           for case in ET.parse("reports/desktop.xml").iter("testcase"):
