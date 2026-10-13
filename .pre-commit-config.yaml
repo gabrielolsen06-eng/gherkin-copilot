@@ -19,7 +19,7 @@ repos:
         pass_filenames: false
       - id: bandit
         name: bandit
-        entry: .venv-dev/bin/bandit -q -r src demo run_demo.py
+        entry: .venv-dev/bin/bandit -q -r src demo desktop_demo run_demo.py
         language: system
         types: [python]
         pass_filenames: false

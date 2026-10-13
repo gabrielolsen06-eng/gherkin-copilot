@@ -1,0 +1,8 @@
+# Windows desktop testing (desktop_demo/): one pure-Python package with no dependencies, so this
+# file is complete by hand (pip-compile on macOS or Linux would drop a Windows-only package).
+# Hashes are the ones PyPI publishes for comtypes 1.4.17 (wheel and source).
+# Install on Windows with:
+#   python -m pip install --require-hashes -r requirements.lock -r requirements-desktop.lock
+comtypes==1.4.17 \
+    --hash=sha256:4e0a221dde2c589b82977bed802efd71cd5eb67a380347b732e02735e597f586 \
+    --hash=sha256:3d9c1e92ad8daf7600d371e76ee16161a627a5fb70c3144f6e52e78af6034363
