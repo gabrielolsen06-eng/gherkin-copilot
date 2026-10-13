@@ -27,7 +27,7 @@
   <button type="button" class="tab" data-tab="steps">Steps</button>
   <button type="button" class="tab" data-tab="dupes">Duplicates <span class="count" id="dupes-count" hidden></span></button>
   <button type="button" class="tab" data-tab="history">History</button>
-  <button type="button" class="tab" data-tab="results">Test results <span class="run-dot" id="run-dot" hidden></span></button>
+  <button type="button" class="tab" data-tab="results">Test results <span class="run-dot" id="run-dot" role="img" hidden></span></button>
 </nav>
 
 <main>
@@ -245,7 +245,7 @@
     </label>
     <p class="field-hint">Tip: on a Mac, select the folder in Finder and press ⌥⌘C to copy its full path.
       On Windows, Shift + right-click it and choose “Copy as path”.</p>
-    <p class="error-box" id="add-error" hidden></p>
+    <p class="error-box" id="add-error" role="alert" hidden></p>
     <div class="dialog-actions">
       <button type="button" class="ghost" id="add-cancel">Cancel</button>
       <button type="submit" class="primary">Add project</button>
@@ -272,7 +272,7 @@
       </label>
       <label class="check"><input type="checkbox" name="capture" checked> Screenshots and traces
         <span class="field-hint">(needs pytest-playwright)</span></label>
-      <p class="error-box" id="tests-error" hidden></p>
+      <p class="error-box" id="tests-error" role="alert" hidden></p>
       <div class="dialog-actions"><button type="submit" class="ghost">Save test settings</button></div>
     </form>
     <p class="field-hint">Removing a project only takes it off this list. Its files aren't touched.</p>
@@ -292,7 +292,7 @@
       <p class="field-hint">Here's exactly what will change. Nothing has been written yet.</p>
       <pre id="change-diff" class="diff"></pre>
     </div>
-    <p class="error-box" id="change-error" hidden></p>
+    <p class="error-box" id="change-error" role="alert" hidden></p>
     <div class="dialog-actions">
       <button type="button" class="ghost" id="change-cancel">Cancel</button>
       <button type="button" class="ghost" id="change-back" hidden>Back</button>
@@ -336,7 +336,7 @@
       <p class="field-hint">Here's exactly what will change. Nothing has been written yet.</p>
       <pre id="stepcode-diff" class="diff"></pre>
     </div>
-    <p class="error-box" id="stepcode-error" hidden></p>
+    <p class="error-box" id="stepcode-error" role="alert" hidden></p>
     <div class="dialog-actions">
       <button type="button" class="ghost" id="stepcode-cancel">Cancel</button>
       <button type="button" class="ghost" id="stepcode-back" hidden>Back</button>

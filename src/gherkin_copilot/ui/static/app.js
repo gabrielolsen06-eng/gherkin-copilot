@@ -74,7 +74,7 @@ function toast(message) {
   box.textContent = message;
   box.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { box.hidden = true; }, 2600);
+  toastTimer = setTimeout(() => { box.hidden = true; }, Math.min(10000, 4000 + message.length * 50)); // time to read it
 }
 
 function store(key, value) {
@@ -135,6 +135,8 @@ function showTab(tab) {
   state.tab = TABS.includes(tab) ? tab : "home";
   for (const button of document.querySelectorAll(".tab")) {
     button.classList.toggle("active", button.dataset.tab === state.tab);
+    if (button.dataset.tab === state.tab) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
   }
   for (const name of TABS) $(`panel-${name}`).hidden = !state.active || name !== state.tab;
   if (!state.active) return;
@@ -260,6 +262,7 @@ function askAuthor() {
     const done = (name) => {
       form.removeEventListener("submit", submit);
       $("author-cancel").removeEventListener("click", cancel);
+      dialog.removeEventListener("close", cancel);
       dialog.close();
       resolve(name);
     };
@@ -274,6 +277,7 @@ function askAuthor() {
     const cancel = () => done(null);
     form.addEventListener("submit", submit);
     $("author-cancel").addEventListener("click", cancel);
+    dialog.addEventListener("close", cancel); // Esc
     dialog.showModal();
     form.elements.author.focus();
   });
@@ -615,14 +619,26 @@ function moveBlock(id, to) {
   const blocks = state.draft.blocks;
   const from = blocks.findIndex((b) => b.id === id);
   if (from < 0) return;
+  const hadFocus = $("blocks").contains(document.activeElement);
   const [block] = blocks.splice(from, 1);
   blocks.splice(Math.max(0, Math.min(to > from ? to - 1 : to, blocks.length)), 0, block);
   changed();
+  if (hadFocus) refocus($("blocks"), blocks.indexOf(block), to > from ? "Move down" : "Move up");
 }
 
 function removeBlock(id) {
+  const at = state.draft.blocks.findIndex((b) => b.id === id);
+  const hadFocus = $("blocks").contains(document.activeElement);
   state.draft.blocks = state.draft.blocks.filter((b) => b.id !== id);
   changed();
+  if (hadFocus) refocus($("blocks"), at, "Remove step", $("typed-input"));
+}
+
+// Lists are rebuilt after every change, which drops keyboard focus: put it back on the row the user was on
+function refocus(list, row, label, fallback = null) {
+  const item = list.children[Math.min(row, list.children.length - 1)];
+  const buttons = item ? [...item.querySelectorAll(".block-tools button:not(:disabled)")] : [];
+  (buttons.find((b) => b.getAttribute("aria-label") === label) || buttons[0] || fallback)?.focus();
 }
 
 function replaceWithStep(id, step) {
@@ -1249,7 +1265,7 @@ function resultScenario(feature, s) {
       el("span", { class: "result-name" }, s.name, s.example ? el("span", { class: "muted small" }, ` [${s.example}]`) : null),
       el("span", { class: "muted small" }, `${s.seconds.toFixed(2)}s`)),
     el("ol", { class: "result-steps" }, ...s.steps.map((st) => el("li", { class: `result-step ${st.status}` },
-      el("span", { class: "dot", "aria-label": st.status }),
+      el("span", { class: "dot", role: "img", "aria-label": st.status, title: st.status }),
       el("span", {}, el("strong", { class: "muted" }, `${st.keyword} `), st.name),
       el("span", { class: "muted small" }, `${st.seconds.toFixed(2)}s`),
       st.error ? el("pre", { class: "result-error" }, st.error) : null))),
@@ -1277,6 +1293,8 @@ function renderResults() {
   $("run-scenario-btn").disabled = running;
   $("run-dot").hidden = !running && !resultCounts().failed;
   $("run-dot").className = `run-dot ${running ? "running" : "failed"}`;
+  $("run-dot").title = running ? "Tests running" : "The last run had failures";
+  $("run-dot").setAttribute("aria-label", $("run-dot").title);
 
   $("run-status").hidden = !running;
   if (running) $("run-status-text").textContent = `Running ${run.label === "All tests" ? "all tests" : run.label}` +
@@ -1657,7 +1675,12 @@ function renderActions() {
       text.addEventListener("input", () => { item.value = { text: text.value }; scheduleStepCode(); });
       parts.push(source, text);
     }
-    const move = (to) => () => { sc.actions.splice(to, 0, sc.actions.splice(i, 1)[0]); renderActions(); scheduleStepCode(); };
+    const move = (to) => () => {
+      sc.actions.splice(to, 0, sc.actions.splice(i, 1)[0]);
+      renderActions();
+      refocus($("stepcode-actions"), to, to > i ? "Move down" : "Move up");
+      scheduleStepCode();
+    };
     return el("li", { class: "action-row" },
       el("span", { class: "action-num" }, String(i + 1)),
       el("div", { class: "action-fields" }, ...parts),
@@ -1665,7 +1688,12 @@ function renderActions() {
         el("button", { type: "button", class: "icon", title: "Move up", "aria-label": "Move up", disabled: i === 0, onclick: move(i - 1) }, "↑"),
         el("button", { type: "button", class: "icon", title: "Move down", "aria-label": "Move down", disabled: i === last, onclick: move(i + 1) }, "↓"),
         el("button", { type: "button", class: "icon", title: "Remove", "aria-label": "Remove action",
-          onclick: () => { sc.actions.splice(i, 1); renderActions(); scheduleStepCode(); } }, "✕")));
+          onclick: () => {
+            sc.actions.splice(i, 1);
+            renderActions();
+            refocus($("stepcode-actions"), i, "Remove action", $("stepcode-add"));
+            scheduleStepCode();
+          } }, "✕")));
   }));
 }
 
