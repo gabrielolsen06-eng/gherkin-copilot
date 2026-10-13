@@ -17,7 +17,7 @@ KEYWORDS = ["Given", "When", "Then", "And", "But"]
 
 def random_feature(rng):
     """A feature file with steps mixed with the things a parser must skip; returns (text, expected steps)."""
-    lines, expected = ["Feature: generated", "  Some description text"], []
+    lines, expected = ["Feature: generated", "  Some description text", "  Given a user story, not a step"], []
     for s in range(rng.randint(1, 4)):
         lines += ["", f"  @tag{s}", f"  Scenario: scenario {s}"]
         for _ in range(rng.randint(1, 6)):

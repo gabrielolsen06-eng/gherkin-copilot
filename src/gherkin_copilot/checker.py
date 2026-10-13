@@ -102,6 +102,8 @@ def parse_feature_text(text: str, shown_path: str = "<text>") -> list[FeatureSte
                     outline = []
             continue  # data tables under a step don't affect matching
 
+        if section in {"Feature", "Rule"}:  # free description text, even if it starts with Given or When
+            continue
         if m := STEP_LINE.match(stripped):
             word, text = m.groups()
             kw = previous if word in {"And", "But", "*"} else word.lower()

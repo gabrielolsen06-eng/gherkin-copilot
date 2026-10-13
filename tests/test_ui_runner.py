@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -6,7 +7,7 @@ from pathlib import Path
 import pytest
 from test_ui import request
 
-from gherkin_copilot.ui import runner
+from gherkin_copilot.ui import history, runner
 from gherkin_copilot.ui.projects import Project, ProjectStore
 from gherkin_copilot.ui.server import start_in_background
 
@@ -136,6 +137,16 @@ def test_scopes_that_cant_run(project):
         work.stop("p")
 
 
+def test_stop_while_collecting_never_starts_the_run(project):
+    (Path(project.steps) / "tests" / "conftest.py").write_text("import time\n\ntime.sleep(3)  # slow collection\n")
+    work = runner.Runner()
+    work.start(project, "scenario", "sums.feature", "Adding works")
+    time.sleep(0.5)
+    work.stop("p")
+    done = wait(lambda: work.status("p"))
+    assert done["status"] == "stopped" and not any(line.startswith("$ cd") for line in done["log"])
+
+
 def test_stop(project):
     (Path(project.steps) / "tests" / "test_slow.py").write_text("import time\n\ndef test_slow():\n    time.sleep(30)\n")
     work = runner.Runner()
@@ -174,6 +185,17 @@ def test_settings_and_artifacts_over_http(project, tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_steps_and_features_on_different_windows_drives(project, monkeypatch):
+    def different_drives(paths):
+        raise ValueError("Paths don't have the same drive")  # what os.path.commonpath says on Windows for C: and D:
+
+    monkeypatch.setattr(os.path, "commonpath", different_drives)
+    features = Path(project.features)
+    assert runner.default_folder(project) == features and history.project_root(project) == features
+    history.record(project, "edit", "Ada", {"sums.feature": ("a\n", "b\n")})  # recording a save no longer fails
+    assert history.entries(project)[0]["author"] == "Ada"
 
 
 def test_default_folder_and_not_found_hint(project, tmp_path):

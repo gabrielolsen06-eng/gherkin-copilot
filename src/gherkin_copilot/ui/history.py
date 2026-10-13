@@ -26,7 +26,10 @@ _lock = threading.Lock()
 def project_root(project: Project) -> Path:
     """The folder that holds both steps and features, or the features folder if they're unrelated."""
     steps, features = Path(project.steps), Path(project.features)
-    common = Path(os.path.commonpath([steps, features]))
+    try:
+        common = Path(os.path.commonpath([steps, features]))
+    except ValueError:  # Windows: on different drives
+        return features
     return common if common in (steps, features) else features
 
 

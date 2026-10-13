@@ -174,7 +174,7 @@ worked through on 2026-10-12 (see `gherkin-copilot-review-2026-10-11-status.md` 
 | `bandit -q -r src demo run_demo.py` (static security analysis) | No findings. The three places that start a process (`run_demo.py` and the app's Run button in `ui/runner.py`) use fixed argument lists and no shell, and are annotated with why |
 | `mypy --strict` | No issues in 22 source files |
 | `ruff check` (rules in `pyproject.toml`) | No issues |
-| Tool tests | 293 passed (macOS, Python 3.14; also run on Windows and Ubuntu in CI), including tests for missing paths, malformed files, non-finite numbers, Windows code pages, generated inputs, the project `init` creates, and the home page's git reader checked against git itself (every object in a delta-compressed pack, and commits to push/pull on branchy history) |
+| Tool tests | 295 passed (macOS, Python 3.14; also run on Windows and Ubuntu in CI), including tests for missing paths, malformed files, non-finite numbers, Windows code pages, generated inputs, the project `init` creates, and the home page's git reader checked against git itself (every object in a delta-compressed pack, and commits to push/pull on branchy history) |
 | Branch coverage (`coverage run -m pytest tests`) | 92% |
 | Demo scenarios in a real browser (Brave) | 6 passed |
 | A project made by `init`, run in a real browser | Passes in Brave locally, and in CI in Chromium and in the installed Edge on Windows (no browser download), with warnings treated as errors. Its `requirements.lock` is identical to this repo's (a test checks), so the audit above covers it |

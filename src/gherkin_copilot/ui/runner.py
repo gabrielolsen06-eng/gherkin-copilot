@@ -79,7 +79,10 @@ def parse_command(text: str) -> tuple[dict[str, str], list[str]]:
 
 def default_folder(project: Project) -> Path:
     """Where tests run unless the user picks a folder: the folder holding both steps and features."""
-    return Path(os.path.commonpath([project.steps, project.features]))
+    try:
+        return Path(os.path.commonpath([project.steps, project.features]))
+    except ValueError:  # Windows: on different drives
+        return Path(project.features)
 
 
 def results_dir(project: Project) -> Path:
@@ -215,6 +218,10 @@ class Runner:
                     run.log.append("No test matches. Is the feature file loaded by a test module, e.g. "
                                    "scenarios(\"that.feature\") in a test_*.py file?")
                     run.status, run.ended = "error", time.time()
+                    return
+                if run.stop_requested:  # Stop was pressed while collecting: don't start the real run
+                    run.log.append("Stopped before the tests started.")
+                    run.status = "stopped"
                     return
             command = [*args, *extra]
             run.log.append(f"$ cd {cwd}")

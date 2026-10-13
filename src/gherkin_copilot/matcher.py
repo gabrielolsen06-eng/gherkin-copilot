@@ -11,6 +11,7 @@ Two kinds of matching:
 
 from __future__ import annotations
 
+import functools
 import re
 from dataclasses import dataclass
 from difflib import SequenceMatcher
@@ -73,6 +74,7 @@ def _parse_to_regex(pattern: str) -> str:
     return "".join(out)
 
 
+@functools.lru_cache(maxsize=4096)  # re keeps only 512 compiled patterns; big suites need more
 def to_regex(step: StepDef) -> re.Pattern[str] | None:
     if step.kind == "string":  # the indexer only keeps "string" where braces are literal (pytest-bdd)
         return re.compile(rf"^{re.escape(step.pattern)}$")
