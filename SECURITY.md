@@ -130,6 +130,30 @@ This page is written for whoever approves software on a managed work laptop.
 - **No internet needed.** Point the suite at an external site only if you choose to, with
   `DEMO_BASE_URL`.
 
+## Desktop testing (`desktop_demo/`, proof of concept)
+
+The tool itself is unchanged by this: it stays standard-library only and starts no
+programs. These are the test project's steps, which drive a Windows program the way a
+screen reader does.
+
+- **What it can do:** UI Automation (built into Windows) can read and press the controls of
+  **any window the test user can see**, not just the app under test. Run desktop tests on a
+  test VM, not on a machine with real work or sensitive data open.
+- **What it actually does:** starts the configured `.exe` (`DESKTOP_APP`) as an argument
+  list, never through a shell; only touches the windows of that app's process; and closes
+  the app after every scenario, ending its process if it won't close.
+- **Protects open work:** if the app is already open, the scenario stops instead of taking
+  over that window (and later closing it, losing anything unsaved).
+- **One new package, Windows only:** `comtypes` 1.4.17 (MIT licence, pure Python, no
+  dependencies, no compiled files), pinned with SHA-256 hashes in
+  `requirements-desktop.lock`. It talks to Windows' own `UIAutomationCore.dll`, which
+  Microsoft signs. A considered alternative, `uiautomation`, was rejected because it ships two
+  unsigned DLLs.
+- **Writes generated files once:** the first time it runs, `comtypes` writes Python wrapper
+  code for UI Automation into its own cache folder.
+- **No network, no downloads at run time.** Character Map, which the CI scenarios use, is
+  part of Windows.
+
 ## Dependencies
 
 - `requirements.lock` pins **every** package (direct and transitive) to an exact version
@@ -138,6 +162,9 @@ This page is written for whoever approves software on a managed work laptop.
 - Direct dependencies are kept to the minimum needed: `pytest`, `pytest-bdd`,
   `pytest-playwright` and `playwright`. Each is widely used and maintained, and listed in
   `requirements.in`.
+- `requirements-desktop.lock` (Windows desktop testing only) pins one pure-Python package,
+  `comtypes`, with the hashes PyPI publishes for it. It has no dependencies, so the file is
+  complete as written; it's installed alongside `requirements.lock`.
 - **Browsers:** Playwright can drive the Edge or Chrome already installed on the machine
   (`--browser-channel msedge` / `chrome`) or Brave (`--brave`), so nothing has to be
   downloaded. Downloading
@@ -166,12 +193,13 @@ point pip at it with `--index-url`; the hashes still guarantee the same files.
 
 Results from 2026-10-13. The independent review in `reviews/` and its re-review were
 worked through on 2026-10-12 (see `gherkin-copilot-review-2026-10-11-status.md` and
-`gherkin-copilot-review-2026-10-12-status.md`); the app's home page was added after them:
+`gherkin-copilot-review-2026-10-12-status.md`); the app's home page and desktop testing were
+added after them:
 
 | Check | Result |
 |---|---|
-| `pip-audit --strict -r requirements.lock` (known vulnerabilities) | No known vulnerabilities found |
-| `bandit -q -r src demo run_demo.py` (static security analysis) | No findings. The three places that start a process (`run_demo.py` and the app's Run button in `ui/runner.py`) use fixed argument lists and no shell, and are annotated with why |
+| `pip-audit --strict -r requirements.lock -r requirements-desktop.lock` (known vulnerabilities) | No known vulnerabilities found |
+| `bandit -q -r src demo desktop_demo run_demo.py` (static security analysis) | No findings. The places that start a process (`run_demo.py`, the app's Run button in `ui/runner.py`, and the desktop steps starting the app under test) use fixed argument lists and no shell, and are annotated with why |
 | `mypy --strict` | No issues in 22 source files |
 | `ruff check` (rules in `pyproject.toml`) | No issues |
 | Tool tests | 295 passed (macOS, Python 3.14; also run on Windows and Ubuntu in CI), including tests for missing paths, malformed files, non-finite numbers, Windows code pages, generated inputs, the project `init` creates, and the home page's git reader checked against git itself (every object in a delta-compressed pack, and commits to push/pull on branchy history) |

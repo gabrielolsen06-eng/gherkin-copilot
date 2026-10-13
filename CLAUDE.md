@@ -26,6 +26,7 @@ source .venv/bin/activate
 python -m pytest tests                    # tool unit tests
 python run_demo.py --brave --headed       # full demo in Brave (owner's browser on macOS)
 python run_demo.py --brave --no-open      # same, without opening the HTML report
+python -m pytest desktop_demo             # desktop scenarios: Windows only (skip on macOS); CI job "desktop"
 gherkin-copilot init|index|find|dupes|merge|check|report|ui --help
 gherkin-copilot ui                        # the app, on 127.0.0.1:8765
 ```
@@ -35,8 +36,8 @@ After changing `src/`, reinstall with `python -m pip install --no-deps --no-buil
 ### Quality checks (dev-only tools in `.venv-dev`, never runtime dependencies)
 
 ```bash
-.venv-dev/bin/ruff check src tests demo run_demo.py && .venv-dev/bin/mypy
-.venv-dev/bin/bandit -q -r src demo run_demo.py && .venv-dev/bin/pip-audit --strict -r requirements.lock
+.venv-dev/bin/ruff check src tests demo desktop_demo run_demo.py && .venv-dev/bin/mypy
+.venv-dev/bin/bandit -q -r src demo desktop_demo run_demo.py && .venv-dev/bin/pip-audit --strict -r requirements.lock -r requirements-desktop.lock
 ```
 
 All four must stay clean. Exit codes: 0 ok, 1 finding, 2 bad input (`UsageError`; wrap loaders in
@@ -77,6 +78,14 @@ and `.github/workflows/ci.yml` if playwright changed; `tests/test_init.py` fails
   `conftest.py` (loads every file in `steps/`), `browsers.py` (finds Brave), `server.py`. `demo/` is a
   package: import as `demo.server`, `demo.browsers`, `demo.steps.*`
 - `tests/`: unit tests for the tool
+- `desktop_demo/`: Windows desktop testing proof of concept, a separate project (own pytest.ini,
+  conftest, steps, features) so its steps never clash with `demo/`. `uia.py` drives apps through
+  Windows UI Automation via `comtypes` (imported lazily, so it loads on macOS; the test module
+  skips off Windows; a skip in conftest.py would crash). App from `DESKTOP_APP` (default
+  Character Map), `DESKTOP_WINDOW` for launchers. Actions run in a background thread (invoke
+  blocks while a message box is open). `requirements-desktop.lock` is hand-written: one
+  pure-Python package; update its hashes from PyPI's JSON when bumping, never via pip-compile
+  on macOS (it drops Windows-only packages). Desktop failures show as annotations on the CI run.
 
 ## Conventions
 

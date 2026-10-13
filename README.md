@@ -357,6 +357,49 @@ to use a different project list file.
 If your `.feature` files live outside the folder with your step definitions, the command
 line `merge` takes the same split: `gherkin-copilot merge path/to/steps --features path/to/features`.
 
+## Testing Windows desktop apps (proof of concept)
+
+The same plain-English scenarios can drive a Windows program instead of a website.
+`desktop_demo/` is a separate project whose steps press buttons, fill fields and read text
+through **UI Automation**, the accessibility interface built into Windows (what screen
+readers use), so it needs no extra driver and works on a locked screen.
+
+```gherkin
+Given the app is open
+When I type "ACME Ltd" into "Customer name"
+And I click "Save"
+Then I see "Customer saved"
+```
+
+On Windows (a test VM, not a machine with real work open):
+
+```bash
+python -m pip install --require-hashes -r requirements.lock -r requirements-desktop.lock
+python -m pytest desktop_demo                      # Character Map, which every Windows has
+set DESKTOP_APP=C:\Apps\Billing\Billing.exe       # or your own app (PowerShell: $env:DESKTOP_APP = "...")
+python -m pytest desktop_demo
+```
+
+| Variable | Purpose |
+|---|---|
+| `DESKTOP_APP` | Path to the `.exe` to test (default: Character Map) |
+| `DESKTOP_WINDOW` | Part of its main window's title. Only needed if it starts through a launcher or splash screen |
+| `DESKTOP_WORKDIR` | Folder to start it in (default: the `.exe`'s own folder) |
+
+Steps: `the app is open`, `I click "…"`, `I tick "…"`, `I type "…" into "…"`,
+`"…" shows "…"`, `"…" is not empty`, `"…" is ticked`, `I see "…"`. Controls are found by the
+name a screen reader would read out (a trailing colon or `&` shortcut marker doesn't matter),
+or by the developer's AutomationId. To check an app can be tested this way, start Narrator
+(Win + Ctrl + Enter) and Tab through it: if Narrator reads the names, the steps can use them.
+
+Each scenario starts the app, and closes it afterwards even if the scenario fails. If the
+app is already open, the scenario stops rather than take over (and later close) that window.
+Apps that need administrator rights need the tests started as administrator.
+
+Not yet: action blocks for desktop steps in the app, and an `init` starter for desktop
+projects. Add the folder in the app as its own project to use the step catalogue, duplicates,
+`check` and the Run button.
+
 ## How matching works
 
 - **Exact:** `parsers.parse` / `cfparse` patterns (`{name}`, `{count:d}`) are converted to
@@ -373,6 +416,7 @@ signed in" won't be flagged as duplicates.
 ```bash
 python -m pytest tests       # tool tests (277)
 python -m pytest demo        # browser scenarios (6)
+python -m pytest desktop_demo  # desktop scenarios (3, Windows only)
 ```
 
 Linting, type checking and security scans use dev-only tools, kept out of the project's
@@ -380,15 +424,15 @@ environment so the tool itself stays standard-library only:
 
 ```bash
 python -m venv .venv-dev && .venv-dev/bin/pip install -r requirements-dev.txt
-.venv-dev/bin/ruff check src tests demo run_demo.py     # lint (rules in pyproject.toml)
+.venv-dev/bin/ruff check src tests demo desktop_demo run_demo.py     # lint (rules in pyproject.toml)
 .venv-dev/bin/mypy                                       # strict type checking
-.venv-dev/bin/bandit -q -r src demo run_demo.py          # security lint
-.venv-dev/bin/pip-audit --strict -r requirements.lock   # known vulnerabilities
+.venv-dev/bin/bandit -q -r src demo desktop_demo run_demo.py          # security lint
+.venv-dev/bin/pip-audit --strict -r requirements.lock -r requirements-desktop.lock   # known vulnerabilities
 .venv-dev/bin/pre-commit install                         # run ruff, mypy, bandit and the tests on every commit
 ```
 
 `.github/workflows/ci.yml` runs all of these plus the tests on Ubuntu and Windows
-(Python 3.11 and 3.13) and the browser demo on every push. It also creates a project with `init`
+(Python 3.11 and 3.13), the browser demo, and the desktop scenarios on Windows on every push. It also creates a project with `init`
 and runs it in Chromium, and on Windows in the installed Edge with no browser download, set up
 exactly as that project's README says.
 
