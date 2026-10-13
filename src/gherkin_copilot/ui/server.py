@@ -21,7 +21,7 @@ from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 
 from gherkin_copilot import __version__
-from gherkin_copilot.ui import builder, dupes, editor, gherkin, history, runner, stepcode
+from gherkin_copilot.ui import builder, dupes, editor, gherkin, history, home, runner, stepcode
 from gherkin_copilot.ui.catalog import describe
 from gherkin_copilot.ui.projects import Project, ProjectStore
 
@@ -226,6 +226,8 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 if url.path == "/api/projects":
                     return self._json(HTTPStatus.OK, app.projects())
                 project_id = parse_qs(url.query).get("project", [""])[0]
+                if url.path == "/api/home":
+                    return self._json(HTTPStatus.OK, home.overview(app.project(project_id)))
                 if url.path == "/api/steps":
                     return self._json(HTTPStatus.OK, app.steps(project_id))
                 if url.path == "/api/files":

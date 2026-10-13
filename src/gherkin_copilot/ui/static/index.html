@@ -21,6 +21,7 @@
 </header>
 
 <nav class="tabs" id="tabs" hidden>
+  <button type="button" class="tab" data-tab="home">Home</button>
   <button type="button" class="tab" data-tab="build">Build a scenario</button>
   <button type="button" class="tab" data-tab="scenarios">Scenarios</button>
   <button type="button" class="tab" data-tab="steps">Steps</button>
@@ -36,6 +37,30 @@
       line of Gherkin) and a folder of <code>.feature</code> files. Add one to see every step it already knows.</p>
     <p class="muted">You can add as many projects as you like and switch between them at the top.</p>
     <button type="button" class="primary" id="welcome-add-btn">+ Add your first project</button>
+  </section>
+
+  <section id="panel-home" class="panel home" hidden>
+    <div class="panel-head">
+      <div>
+        <h1 id="home-title"></h1>
+        <p class="muted" id="home-subtitle"></p>
+      </div>
+      <div class="panel-tools">
+        <button type="button" class="ghost" id="home-build">+ Build a scenario</button>
+        <button type="button" class="primary" id="home-run">▶ Run all tests</button>
+      </div>
+    </div>
+    <div id="home-error" class="error-box" hidden></div>
+    <div id="home-tiles" class="home-tiles"></div>
+    <div class="home-grid">
+      <article class="home-card" id="home-git"></article>
+      <div class="home-column">
+        <article class="home-card" id="home-top"></article>
+        <article class="home-card" id="home-unused"></article>
+      </div>
+      <article class="home-card" id="home-changes"></article>
+      <article class="home-card" id="home-tags"></article>
+    </div>
   </section>
 
   <section id="panel-build" class="panel" hidden>

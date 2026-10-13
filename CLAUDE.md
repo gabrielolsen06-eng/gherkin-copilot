@@ -67,7 +67,8 @@ and `.github/workflows/ci.yml` if playwright changed; `tests/test_init.py` fails
   scenario list/open-as-blocks/new/edit/delete/duplicate/restore (validates a structured
   spec, never writes raw browser text), `history.py` append-only
   `.gherkin-copilot/history.jsonl` in the project, `runner.py` runs the project's test
-  command and reads `cucumber.json` back, `stepcode.py` action blocks → Playwright step code
+  command and reads `cucumber.json` back, `home.py` home page statistics, `gitinfo.py` branch/commit/pull/ahead-behind
+  read straight from `.git` (refs, reflog, zlib loose objects and v2 packs; never runs git), `stepcode.py` action blocks → Playwright step code
   (fixed action/locator menu, `repr` for all user text, compiled before saving), `static/` plain
   HTML/CSS/JS, `textContent` only, no frameworks or CDNs)
 - `demo/`: `app/` practice shop, `features/`, `drafts/` (deliberately unimplemented
@@ -92,7 +93,7 @@ catalogue (done); 2. block-based scenario builder with live check, stubs, save t
 (done; `merge --features` supports features outside the steps folder); 3b. scenario
 editor + history (done); 4. test results with a Run button (done: whole suite, one feature
 file, or the scenario being edited; results in `.gherkin-copilot/results`, self-ignored);
-5. docs/security pass (re-run bandit and pip-audit).
+5. home page: stats, git, recent changes (done); 6. docs/security pass (re-run bandit and pip-audit).
 
 
 1. Done: `index`, `find`, `dupes`, `merge`, `check --stubs`, `report`, runnable demo

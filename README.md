@@ -248,6 +248,20 @@ your step definitions, and optionally the folder with your `.feature` files. You
 as many projects as you like and switch between them at the top; the list is saved in
 `~/.gherkin-copilot/projects.json`.
 
+**Home** is the project at a glance, and where the app opens:
+
+- **Numbers:** scenarios, step definitions (used and unused), how often each step is
+  reused, feature lines with no step behind them, duplicate pairs and the last test run.
+  Click one to go to that screen.
+- **Latest commit:** the branch, the last commit (message, author, when), whether you have
+  commits to push or pull (as of your last fetch), when you last pulled and fetched, how
+  many commits were made in the last 7 days, and recent activity in your copy (commits,
+  pulls, merges, branch switches). The app reads this from the project's `.git` folder
+  itself, so it works without running git.
+- **Most used steps** with how many feature-file lines use each, **Unused steps** (no
+  feature file uses them) with **Open in VS Code**, the latest **changes made in the app**,
+  and **Tags** with how many scenarios each covers (click one to list them).
+
 **Build a scenario** is a block editor, a bit like Scratch. Every step the project already
 has is a block on the left: drag it into your scenario (or click **+**) and fill in its
 blanks, such as the product name. Blocks can only be made from steps that exist, so they

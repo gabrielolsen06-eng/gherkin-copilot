@@ -588,3 +588,59 @@ dialog.wide { width: min(880px, calc(100vw - 32px)); }
 .stepcode-save { display: grid; gap: 8px; }
 .stepcode-save select, .stepcode-save input:not([type=radio]) { width: 100%; }
 .build-code { justify-self: start; }
+
+/* --- home --- */
+#panel-home { max-width: 1100px; margin-left: auto; margin-right: auto; }
+#panel-home .panel-head { margin-bottom: 20px; }
+#home-subtitle { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; overflow-wrap: anywhere; }
+.home-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.home-tile { min-width: 0; gap: 2px; align-content: start; text-align: left; box-shadow: var(--shadow); }
+.home-tile:hover { border-color: var(--muted); }
+.tile-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.tile.warn strong { color: var(--num-ink); }
+.home-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.home-column { display: grid; gap: 16px; min-width: 0; }
+.home-card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 16px; display: grid; gap: 10px; min-width: 0; }
+.home-card p { margin: 0; }
+.home-card h3 { margin: 4px 0 0; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.home-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.branch { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; background: var(--slot-bg); color: var(--slot-ink); border-radius: 999px; padding: 2px 10px; }
+.branch::before { content: "⎇ "; }
+.commit { display: grid; gap: 2px; padding: 10px 12px; background: var(--bg); border-radius: 8px; border-left: 4px solid var(--accent); }
+.commit-subject { font-weight: 600; overflow-wrap: anywhere; }
+.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 0; font-size: 0.9rem; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; }
+.sync { display: inline-flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.activity { list-style: none; margin: 0; padding: 0; display: grid; }
+.activity li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--line); font-size: 0.9rem; }
+.activity li:first-child { border-top: none; }
+.activity .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.event { min-width: 6.5em; text-align: center; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border-radius: 4px; padding: 1px 6px; background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.event.git-commit, .event.action-add, .event.action-create, .event.action-duplicate, .event.action-add-steps,
+.event.action-add-step-code { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+.event.git-pull, .event.git-merge, .event.action-edit, .event.action-restore { color: var(--given); background: var(--slot-bg); border-color: transparent; }
+.event.git-reset, .event.action-delete { color: var(--bad); background: var(--bad-soft); border-color: transparent; }
+.event.git-rebase, .event.action-merge { color: var(--num-ink); background: var(--num-bg); border-color: transparent; }
+.usage { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.usage-line { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.usage .sentence, .unused .sentence { font-size: 0.9rem; line-height: 1.6; }
+.usage .uses { font-weight: 700; color: var(--ink); }
+.bar-track { display: block; height: 6px; border-radius: 3px; background: var(--bg); overflow: hidden; }
+.bar { display: block; height: 100%; border-radius: 3px; background: var(--any); }
+.kw-given .bar { background: var(--given); }
+.kw-when .bar { background: var(--when); }
+.kw-then .bar { background: var(--then); }
+.unused { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.unused li { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.unused .kw-pill { font-size: 0.68rem; padding: 1px 6px; }
+.unused .sentence { flex: 1; min-width: 0; }
+.tag-cloud { display: flex; flex-wrap: wrap; gap: 6px; }
+button.tag { background: none; padding: 2px 8px; font-size: 0.85rem; }
+button.tag:hover { border-color: var(--any); }
+
+@media (max-width: 800px) {
+  .home-grid { grid-template-columns: minmax(0, 1fr); }
+  .activity li { grid-template-columns: auto minmax(0, 1fr); }
+  .activity li > :last-child { grid-column: 2; }
+}

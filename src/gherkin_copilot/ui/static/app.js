@@ -9,7 +9,7 @@ const KEYWORDS = [
   ["then", "Then", "Check the result"],
   ["step", "Any keyword", "Works after Given, When or Then"],
 ];
-const TABS = ["build", "scenarios", "steps", "dupes", "history", "results"];
+const TABS = ["home", "build", "scenarios", "steps", "dupes", "history", "results"];
 const OUTLINE_KINDS = ["Scenario Outline", "Scenario Template"];
 
 const state = {
@@ -18,7 +18,8 @@ const state = {
   steps: [],
   query: "",
   paletteQuery: "",
-  tab: "build",
+  tab: "home",
+  home: null, // last /api/home answer
   draft: emptyDraft(),
   results: [], // server check, one per block, in order
   scenarios: null, // last /api/scenarios answer
@@ -131,13 +132,13 @@ async function copyText(text, done = "Copied") {
 // --- tabs -------------------------------------------------------------------
 
 function showTab(tab) {
-  state.tab = TABS.includes(tab) ? tab : "build";
-  store("gc-tab", state.tab);
+  state.tab = TABS.includes(tab) ? tab : "home";
   for (const button of document.querySelectorAll(".tab")) {
     button.classList.toggle("active", button.dataset.tab === state.tab);
   }
   for (const name of TABS) $(`panel-${name}`).hidden = !state.active || name !== state.tab;
   if (!state.active) return;
+  if (state.tab === "home") loadHome();
   if (state.tab === "dupes") loadDupes();
   if (state.tab === "scenarios") loadScenarios();
   if (state.tab === "history") loadHistory();
@@ -161,7 +162,7 @@ function applyProjects(data) {
   if (state.active) select.value = state.active;
   if (state.active !== previous) {
     loadDraft();
-    state.dupes = state.scenarios = state.history = state.run = state.runResults = null;
+    state.home = state.dupes = state.scenarios = state.history = state.run = state.runResults = null;
     state.dupesKeep = new Set();
     loadRun();
   }
@@ -286,6 +287,166 @@ function renderAuthor() {
   const name = author();
   $("author-line").textContent = name ? `Changes are recorded as ${name}` : "You'll be asked for your name on your first change";
   $("author-change").textContent = name ? "Change name" : "Set name";
+}
+
+// --- home -------------------------------------------------------------------
+
+const GIT_EVENTS = { commit: "Commit", pull: "Pull", merge: "Merge", checkout: "Switch", reset: "Reset",
+  rebase: "Rebase", clone: "Clone", "cherry-pick": "Cherry-pick", revert: "Revert" };
+const fromSeconds = (t) => new Date(t * 1000); // git and the test runner count in seconds
+const people = (n) => (n === 1 ? "1 person" : `${n} people`);
+const fill = (node, ...children) => node.replaceChildren(...children.filter(Boolean)); // replaceChildren would print "null"
+
+async function loadHome() {
+  const project = activeProject();
+  if (!project) return;
+  try {
+    const data = await api(`/api/home?${query({})}`);
+    if (project.id !== state.active) return;
+    state.home = data;
+    $("home-error").hidden = true;
+  } catch (error) {
+    state.home = null;
+    $("home-error").textContent = error.message;
+    $("home-error").hidden = false;
+  }
+  renderHome();
+}
+
+function homeTile(label, value, detail, tab, tone = "") {
+  return el("button", { type: "button", class: `tile home-tile ${tone}`, onclick: () => showTab(tab) },
+    el("span", { class: "tile-label" }, label), el("strong", {}, String(value)), el("span", { class: "muted small" }, detail));
+}
+
+function lastRunTile() {
+  const { total, passed, failed } = resultCounts();
+  const started = state.runResults?.run?.started;
+  if (state.run?.status === "running") return homeTile("Last test run", "Running…", `${state.run.done} done so far`, "results");
+  if (!activeProject().test_command) return homeTile("Last test run", "–", "set up a test command first", "results");
+  if (!total) return homeTile("Last test run", "–", "not run yet", "results");
+  return homeTile("Last test run", `${passed}/${total}`, "passed" + (started ? ` · ${when(fromSeconds(started))}` : ""),
+    "results", failed ? "bad" : "good");
+}
+
+function renderHomeTiles(stats) {
+  const pairs = state.dupes?.pairs.length;
+  const reuse = stats.used ? `${(stats.feature_lines / stats.used).toFixed(1)}×` : "–";
+  $("home-tiles").replaceChildren(
+    homeTile("Scenarios", stats.scenarios, `in ${plural(stats.feature_files, "feature file")}` +
+      (stats.example_rows ? ` · ${plural(stats.example_rows, "example row")}` : ""), "scenarios"),
+    homeTile("Step definitions", stats.definitions, `${stats.used} used · ${stats.unused_count} unused`, "steps"),
+    homeTile("Reuse", reuse, "times each used step is used, on average", "steps"),
+    homeTile("Missing steps", stats.missing,
+      (stats.missing ? `feature ${stats.missing === 1 ? "line has" : "lines have"} no step behind it` : "every line has a step behind it") +
+      (stats.ambiguous ? ` · ${stats.ambiguous} ambiguous` : ""), "scenarios", stats.missing ? "bad" : "good"),
+    homeTile("Duplicates", pairs ?? "…", pairs == null ? "checking…" : pairs ? `${pairs === 1 ? "pair says" : "pairs say"} the same thing`
+      : "none found", "dupes", pairs ? "warn" : pairs === 0 ? "good" : ""),
+    lastRunTile());
+}
+
+function gitSync(git) {
+  if (!git.branch) return el("span", { class: "muted" }, "Not on a branch (detached HEAD)");
+  if (!git.upstream) return el("span", { class: "muted" }, "Not linked to a remote branch");
+  if (git.ahead == null) return el("span", { class: "muted" }, `Tracks ${git.upstream}`);
+  if (!git.ahead && !git.behind) return el("span", { class: "pill good" }, `✓ Up to date with ${git.upstream}`);
+  return el("span", { class: "sync" },
+    git.ahead ? el("span", { class: "pill warn" }, `↑ ${plural(git.ahead, "commit")} to push`) : null,
+    git.behind ? el("span", { class: "pill warn" }, `↓ ${plural(git.behind, "commit")} to pull`) : null,
+    el("span", { class: "muted small" }, ` vs ${git.upstream}`));
+}
+
+function renderHomeGit(git) {
+  const card = $("home-git");
+  if (!git) {
+    return fill(card, el("h2", {}, "Latest commit"),
+      el("p", { class: "muted" }, "This project isn't in a git repository, so there's no commit history to show."));
+  }
+  const head = git.head;
+  const facts = [
+    ["Remote", gitSync(git), git.upstream && git.last_fetch ? `as of the last fetch, ${when(fromSeconds(git.last_fetch))}` : ""],
+    ["Last pull", git.last_pull ? `${when(fromSeconds(git.last_pull.time))}${git.last_pull.message ? ` · ${git.last_pull.message}` : ""}`
+      : "none recorded in this copy", ""],
+    ["Last fetch", git.last_fetch ? when(fromSeconds(git.last_fetch)) : "never", ""],
+    ["Last 7 days", git.week ? `${plural(git.week.commits, "commit")}${git.week.capped ? "+" : ""}` +
+      (git.week.commits ? ` by ${people(git.week.authors)}` : "") : "–", ""],
+  ];
+  fill(card,
+    el("header", { class: "home-card-head" }, el("h2", {}, "Latest commit"),
+      git.branch ? el("span", { class: "branch", title: "Current branch" }, git.branch) : null),
+    head ? el("div", { class: "commit" },
+      el("p", { class: "commit-subject" }, head.subject || "(no message)"),
+      el("p", { class: "muted small" }, el("code", {}, head.short),
+        [head.author, head.time ? when(fromSeconds(head.time)) : ""].filter(Boolean).map((t) => ` · ${t}`).join("")))
+      : el("p", { class: "muted" }, "No commits yet."),
+    el("dl", { class: "facts" }, ...facts.flatMap(([label, value, note]) => [
+      el("dt", {}, label), el("dd", {}, value, note ? el("span", { class: "muted small" }, ` ${note}`) : null)])),
+    git.activity.length ? el("h3", {}, "Recent activity in this copy") : null,
+    git.activity.length ? el("ol", { class: "activity" }, ...git.activity.map((e) => el("li", {},
+      el("span", { class: `event git-${e.kind}`, title: e.action }, GIT_EVENTS[e.kind] || e.kind),
+      el("span", { class: "what" }, e.message || e.action),
+      el("span", { class: "muted small" }, when(fromSeconds(e.time)))))) : null);
+}
+
+function renderHomeTop(stats) {
+  const most = stats.top[0]?.uses || 1;
+  $("home-top").replaceChildren(el("h2", {}, "Most used steps"),
+    stats.top.length ? el("ol", { class: "usage" }, ...stats.top.map((s) => {
+      const bar = el("span", { class: "bar" });
+      bar.style.width = `${Math.max(3, Math.round((s.uses / most) * 100))}%`;
+      return el("li", { class: `kw-${s.keyword}` },
+        el("div", { class: "usage-line" }, sentence(s, slotChip), el("span", { class: "uses" }, `${s.uses}×`)),
+        el("span", { class: "bar-track" }, bar));
+    })) : el("p", { class: "muted small" }, "No feature file uses this project's steps yet."));
+}
+
+function renderHomeUnused(stats) {
+  const n = stats.unused_count;
+  fill($("home-unused"), el("h2", {}, "Unused steps", n ? el("span", { class: "muted" }, ` · ${n}`) : null),
+    el("p", { class: "field-hint" }, n ? "No feature file in this project uses these. Delete them, or write the scenario that needs them."
+      : "Every step definition is used by at least one scenario."),
+    n ? el("ul", { class: "unused" }, ...stats.unused.map((s) => el("li", { class: `kw-${s.keyword}` },
+      el("span", { class: "kw-pill" }, KEYWORDS.find(([key]) => key === s.keyword)?.[1] || s.keyword),
+      sentence(s, slotChip), openLink(s)))) : null,
+    n > stats.unused.length ? el("p", { class: "muted small" }, `and ${n - stats.unused.length} more`) : null);
+}
+
+function renderHomeChanges(changes) {
+  fill($("home-changes"),
+    el("header", { class: "home-card-head" }, el("h2", {}, "Recent changes in the app"),
+      changes.changes ? el("button", { type: "button", class: "ghost small", onclick: () => showTab("history") }, "See all") : null),
+    changes.recent.length ? el("ol", { class: "activity" }, ...changes.recent.map((e) => el("li", {},
+      el("span", { class: `event action-${e.action.replace(/\s/g, "-")}` }, ACTIONS[e.action] || e.action),
+      el("span", { class: "what" }, e.scenario ? `${e.file} › ${e.scenario}` : (e.files || []).join(", ")),
+      el("span", { class: "muted small" }, `${e.author || "someone"} · ${when(e.time)}`))))
+      : el("p", { class: "muted small" }, "Nothing yet. Scenarios you save, edit or merge here show up in this list."),
+    changes.changes ? el("p", { class: "muted small" }, `${plural(changes.changes, "change")} by ${people(changes.authors)} in total`) : null);
+}
+
+function renderHomeTags(stats) {
+  const card = $("home-tags");
+  card.hidden = !stats.tags.length;
+  card.replaceChildren(el("h2", {}, "Tags"), el("p", { class: "field-hint" }, "Scenarios per tag. Click one to see them."),
+    el("div", { class: "tag-cloud" }, ...stats.tags.map((t) => el("button", { type: "button", class: "tag", onclick: () => {
+      state.scenariosQuery = $("scenarios-search").value = t.tag;
+      showTab("scenarios");
+    } }, t.tag, el("span", { class: "muted" }, ` ${t.scenarios}`)))));
+}
+
+function renderHome() {
+  const project = activeProject();
+  if (!project) return;
+  $("home-title").textContent = project.name;
+  $("home-subtitle").textContent = project.features === project.steps ? project.steps : `${project.steps} · ${project.features}`;
+  $("home-run").disabled = state.run?.status === "running";
+  const data = state.home;
+  for (const id of ["home-tiles", "home-git", "home-top", "home-unused", "home-changes", "home-tags"]) $(id).hidden = !data;
+  if (!data) return;
+  renderHomeTiles(data.stats);
+  renderHomeGit(data.git);
+  renderHomeTop(data.stats);
+  renderHomeUnused(data.stats);
+  renderHomeChanges(data.history);
+  renderHomeTags(data.stats);
 }
 
 // --- steps catalogue --------------------------------------------------------
@@ -1147,6 +1308,7 @@ function renderResults() {
     $("run-log-text").textContent = log.join("\n");
     if (!total && !running && run) $("run-log").open = true;
   }
+  if (state.tab === "home") renderHome();
 }
 
 // --- history ----------------------------------------------------------------------
@@ -1626,6 +1788,7 @@ function renderDupes() {
   const count = $("dupes-count");
   count.hidden = !data?.pairs.length;
   count.textContent = data?.pairs.length || "";
+  if (state.tab === "home") renderHome();
   if (!data) return;
   const n = data.pairs.length;
   $("dupes-summary").textContent = n ? `${plural(n, "pair")} of steps say the same thing in different words` : "";
@@ -1714,6 +1877,8 @@ $("stepcode-cancel").addEventListener("click", () => $("stepcode-dialog").close(
 $("stepcode-back").addEventListener("click", () => showStepCodePreview(null));
 $("stepcode-form").addEventListener("change", (e) => { if (e.target.name === "target") syncStepCodeTarget(); });
 $("run-all").addEventListener("click", () => startRun("all"));
+$("home-run").addEventListener("click", () => startRun("all"));
+$("home-build").addEventListener("click", () => showTab("build"));
 $("run-setup-btn").addEventListener("click", openInfoDialog);
 $("run-stop").addEventListener("click", () => api("/api/run/stop", { project: state.active }).catch((e) => toast(e.message)));
 $("run-scenario-btn").addEventListener("click", () => {
@@ -1730,8 +1895,11 @@ $("dupes-threshold").addEventListener("input", (e) => {
   loadDupes();
 });
 
-window.addEventListener("focus", () => { if (state.active) loadSteps(); }); // pick up edits made in the editor
+window.addEventListener("focus", () => { // pick up edits made in the editor
+  if (!state.active) return;
+  loadSteps();
+  if (state.tab === "home") loadHome();
+});
 
-state.tab = store("gc-tab") || "build";
 renderAuthor();
 loadProjects().catch((error) => toast(error.message));
