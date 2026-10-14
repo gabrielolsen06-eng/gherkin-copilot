@@ -110,7 +110,8 @@ catalogue (done); 2. block-based scenario builder with live check, stubs, save t
 (done; `merge --features` supports features outside the steps folder); 3b. scenario
 editor + history (done); 4. test results with a Run button (done: whole suite, one feature
 file, or the scenario being edited; results in `.gherkin-copilot/results`, self-ignored);
-5. home page: stats, git, recent changes (done); 6. docs/security pass (re-run bandit and pip-audit).
+5. home page: stats, git, recent changes (done); 6. docs/security pass (done 14 Oct 2026: README and SECURITY.md edited with the humanizer skill, every
+check re-run, SECURITY.md's table dated 2026-10-14).
 
 
 1. Done: `index`, `find`, `dupes`, `merge`, `check --stubs`, `report`, runnable demo

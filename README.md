@@ -43,7 +43,7 @@ python run_demo.py --browser-channel msedge   # Edge
 
 On a Mac, use `python3` for the first `venv` command if `python` isn't found.
 
-**Brave** isn't a browser Playwright knows by name, but it's built on Chromium, so
+Brave isn't a browser Playwright knows by name, but it's built on Chromium, so
 `--brave` finds it in its standard install location and drives it like Chrome
 (`/Applications/Brave Browser.app` on macOS, `Program Files\BraveSoftware` on Windows,
 `brave-browser` on Linux). If Brave lives somewhere else, set `DEMO_BROWSER_PATH` to its
@@ -88,8 +88,8 @@ gherkin-copilot report path/to/cucumber.json -o report.html --artifacts path/to/
 
 ## What the demo shows
 
-The `demo/` folder is a small pytest-bdd + Playwright suite for a **practice web shop that
-ships inside this project** (`demo/app`). The tests start it on `127.0.0.1` automatically,
+The `demo/` folder is a small pytest-bdd + Playwright suite for a practice web shop that
+ships inside this project (`demo/app`). The tests start it on `127.0.0.1` automatically,
 so the demo needs no internet access and touches no real system. Its page structure
 mirrors [saucedemo.com](https://www.saucedemo.com), the well-known public practice site, so
 the same suite can also be pointed there:
@@ -112,13 +112,13 @@ demo/
 ├── conftest.py     starts the shop, browser options
 ├── browsers.py     finds Brave (or another Chromium browser) to drive
 └── server.py       localhost-only static server with security headers
-
-demo/ is a Python package, so its modules import as demo.server, demo.browsers and
-demo.steps.*. conftest.py loads every file in steps/, and tests/test_features.py runs every
-feature file, so new steps and features are picked up without registering them.
-login.feature shows a declarative scenario ("Given I am a registered customer / When I sign
-in") next to imperative ones that spell out each value.
 ```
+
+`demo/` is a Python package, so its modules import as `demo.server`, `demo.browsers` and
+`demo.steps.*`. `conftest.py` loads every file in `steps/`, and `tests/test_features.py` runs
+every feature file, so new steps and features are picked up without registering them.
+`login.feature` shows a declarative scenario ("Given I am a registered customer / When I sign
+in") next to imperative ones that spell out each value.
 
 Two steps in `demo/steps` are deliberate near-duplicates, so `dupes` has something to find,
 and `cart.feature` uses one of them so `merge` has a line to rewrite.
@@ -231,9 +231,8 @@ Every command accepts `--json`, and exit codes are meant for CI:
 | 2 | A problem with the input: a path that doesn't exist, no `.feature` files found, a file that isn't a valid index / report / UTF-8 text. One line on stderr, no traceback |
 | 3 | An internal error (a bug): the details are printed so it can be reported |
 
-So a typo in a path fails a CI gate instead of passing it. Output never crashes on a
-Windows console or log file: the ✓ / ✗ marks become `OK` / `MISSING` when the output
-can't show them.
+A typo in a path therefore fails a CI gate. Output never crashes on a Windows console or log
+file: the ✓ / ✗ marks become `OK` / `MISSING` when the output can't show them.
 
 The saved index (`.gherkin-index.json`) remembers which folder it came from and when. If a
 step file is newer, `find`, `dupes` and `check` say so; re-run `index` or pass `--path`.
@@ -279,7 +278,7 @@ are ready to run by construction. You can also type a line by hand; each line is
 you type and shows:
 
 - ✓ when it matches an existing step,
-- ✗ when it doesn't, with “did you mean” suggestions (click one to swap it in) and the
+- ✗ when it doesn't, with "did you mean" suggestions (click one to swap it in) and the
   drafted code for a new step,
 - ! when more than one step matches, or a value doesn't fit (e.g. text in a number blank).
 
@@ -288,19 +287,18 @@ The Gherkin text builds up live on the right. When you're done:
 - **Save to a feature file** creates a new `.feature` file or adds the scenario to an
   existing one.
 - **Add missing steps to code** adds templates for the steps that don't exist yet to one of
-  your step files (with any imports they need). They fail with “Step not written yet” until
+  your step files (with any imports they need). They fail with "Step not written yet" until
   someone writes the body.
-
 - **Build its code with action blocks** (on any line that doesn't exist yet) writes the real
-  code for the new step, no Python needed. Name the parts of the line that change (e.g.
+  code for the new step, so nobody has to write Python. Name the parts of the line that change (e.g.
   `"Ada"` → `first_name`), then add actions in order: go to a page, click, type into,
   choose an option, tick a checkbox, press a key, check text / visibility / how many / the
   address. Find elements the way a user sees them (a button's text, a field's label) or by
   CSS selector. The Playwright code updates live, and saves into an existing or a new step
   file, so the step runs straight away.
 
-All of these show exactly what will change and only write when you confirm. If the file changed
-in the meantime, saving is refused so nothing is overwritten. Your draft is kept in the
+All of these show exactly what will change and only write when you confirm. If the file
+changed in the meantime, saving is refused so nothing is overwritten. Your draft is kept in the
 browser per project, so a reload doesn't lose it.
 
 **Scenarios** lists every feature file and its scenarios, with tags, step counts and
@@ -321,7 +319,7 @@ project, in `.gherkin-copilot/history.jsonl`, so committing it shares it with th
 The app asks for your name the first time you save something.
 
 The **Steps** screen lists every step in the selected project, grouped by Given / When /
-Then, with placeholders such as “product” highlighted. Search it, or click a step to copy
+Then, with placeholders such as "product" highlighted. Search it, or click a step to copy
 it. If a step's code needs fixing, **Open in VS Code** opens its file at the right line. The
 app rescans the project whenever you come back to the browser tab, so edits show up
 straight away.
@@ -439,7 +437,7 @@ signed in" won't be flagged as duplicates.
 ## Development
 
 ```bash
-python -m pytest tests       # tool tests (277)
+python -m pytest tests       # tool tests (306)
 python -m pytest demo        # browser scenarios (6)
 python -m pytest desktop_demo  # desktop scenarios (3, Windows only)
 ```
@@ -456,10 +454,11 @@ python -m venv .venv-dev && .venv-dev/bin/pip install -r requirements-dev.txt
 .venv-dev/bin/pre-commit install                         # run ruff, mypy, bandit and the tests on every commit
 ```
 
-`.github/workflows/ci.yml` runs all of these plus the tests on Ubuntu and Windows
-(Python 3.11 and 3.13), the browser demo, and the desktop scenarios on Windows on every push. It also creates a project with `init`
-and runs it in Chromium, and on Windows in the installed Edge with no browser download, set up
-exactly as that project's README says.
+`.github/workflows/ci.yml` runs all of these on every push, plus the tests on Ubuntu and
+Windows (Python 3.11 and 3.13), the browser demo, and the desktop scenarios on Windows. It
+also creates projects with `init` and checks them: lints and scans both kinds, runs a web
+project in Chromium and, on Windows, in the installed Edge with no browser download (set up
+exactly as that project's README says), and runs a desktop project against Character Map.
 
 Useful environment variables for the demo:
 

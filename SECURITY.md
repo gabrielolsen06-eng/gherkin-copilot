@@ -81,9 +81,9 @@ This page is written for whoever approves software on a managed work laptop.
     before it can be saved, so no text from the browser can become code;
   - a history of those changes, appended to `.gherkin-copilot/history.jsonl` inside the
     project. It holds the diffs, the scenario text before and after, and the name the user
-    typed in. It never contains anything beyond what's already in the project's files. The app reads
-  project folders the same way the command line does: with `ast`, never importing or
-  running code.
+    typed in. It never contains anything beyond what's already in the project's files.
+- **Reads projects the way the command line does:** with `ast`, never importing or running
+  their code.
 - **Opens your browser** with Python's standard `webbrowser` module (use `--no-open` to
   skip).
 - **Runs tests only when you ask, and only your own command.** A project can have a test
@@ -137,19 +137,19 @@ the test project: `init --desktop` writes its files from fixed templates (the sa
 `desktop_demo/` in this repository), and its steps drive a Windows program the way a screen
 reader does.
 
-- **What it can do:** UI Automation (built into Windows) can read and press the controls of
-  **any window the test user can see**, not just the app under test. Run desktop tests on a
-  test VM, not on a machine with real work or sensitive data open.
-- **What it actually does:** starts the configured `.exe` (`desktop_app` in `pytest.ini`, or
-  `DESKTOP_APP`) as an argument list, never through a shell; only touches the windows of that app's process; and closes
-  the app after every scenario, ending its process if it won't close.
+- **What it could do:** UI Automation (built into Windows) can read and press the controls of
+  **any window the test user can see**, not just the app under test. Run desktop tests on a test
+  VM, not on a machine with real work or sensitive data open.
+- **What it does:** starts the configured `.exe` (`desktop_app` in `pytest.ini`, or
+  `DESKTOP_APP`) as an argument list, never through a shell; only touches the windows of that
+  app's process; and closes the app after every scenario, ending its process if it won't close.
 - **Protects open work:** if the app is already open, the scenario stops instead of taking
   over that window (and later closing it, losing anything unsaved).
 - **One new package, Windows only:** `comtypes` 1.4.17 (MIT licence, pure Python, no
   dependencies, no compiled files), pinned with SHA-256 hashes in
   `requirements-desktop.lock`. It talks to Windows' own `UIAutomationCore.dll`, which
-  Microsoft signs. A considered alternative, `uiautomation`, was rejected because it ships two
-  unsigned DLLs.
+  Microsoft signs. (`uiautomation`, a package that does the same job, isn't used: it ships two
+  unsigned DLLs.)
 - **Writes generated files once:** the first time it runs, `comtypes` writes Python wrapper
   code for UI Automation into its own cache folder.
 - **No network, no downloads at run time.** Character Map, which the CI scenarios use, is
@@ -192,8 +192,7 @@ code (`app_server.py`, written by `init`), not the tool's.
   complete as written; it's installed alongside `requirements.lock`.
 - **Browsers:** Playwright can drive the Edge or Chrome already installed on the machine
   (`--browser-channel msedge` / `chrome`) or Brave (`--brave`), so nothing has to be
-  downloaded. Downloading
-  Playwright's own browser (`playwright install`) is optional.
+  downloaded. Downloading Playwright's own browser (`playwright install`) is optional.
 
 ### Installing without internet access
 
@@ -216,10 +215,10 @@ point pip at it with `--index-url`; the hashes still guarantee the same files.
 
 ## Checks run on this version
 
-Results from 2026-10-13. The independent review in `reviews/` and its re-review were
+Results from 2026-10-14. The independent review in `reviews/` and its re-review were
 worked through on 2026-10-12 (see `gherkin-copilot-review-2026-10-11-status.md` and
-`gherkin-copilot-review-2026-10-12-status.md`); the app's home page and desktop testing were
-added after them:
+`gherkin-copilot-review-2026-10-12-status.md`); the app's home page, desktop testing and
+`app_server` were added after them:
 
 | Check | Result |
 |---|---|
@@ -228,14 +227,15 @@ added after them:
 | `mypy --strict` | No issues in 22 source files |
 | `ruff check` (rules in `pyproject.toml`), also on both kinds of project `init` creates | No issues |
 | Tool tests | 306 passed (macOS, Python 3.14; also run on Windows and Ubuntu in CI), including tests for missing paths, malformed files, non-finite numbers, Windows code pages, generated inputs, the project `init` creates, and the home page's git reader checked against git itself (every object in a delta-compressed pack, and commits to push/pull on branchy history) |
-| Branch coverage (`coverage run -m pytest tests`) | 92% |
+| Branch coverage (`coverage run -m pytest tests`) | 91% |
 | Demo scenarios in a real browser (Brave) | 6 passed |
 | Desktop scenarios on Windows (`desktop_demo/`, Character Map, CI `windows-latest`) | 3 passed: typing into a field, clicking a button and ticking a checkbox, through UI Automation with no fake mouse or keyboard. A project made by `init --desktop` passes the same scenarios as created |
 | A project made by `init`, run in a real browser | Passes in Brave locally, and in CI in Chromium and in the installed Edge on Windows (no browser download), with warnings treated as errors. Its `requirements.lock` is identical to this repo's (a test checks), so the audit above covers it |
 | `pip install --require-hashes -r requirements.lock` in a clean venv, then `pip check` | Installs cleanly, no broken requirements (checked 2026-10-09; the lock file hasn't changed since) |
 
-Ruff, mypy, bandit and the tests also run as pre-commit hooks. The same checks run on every push in CI (`.github/workflows/ci.yml`), including the tests on
-Windows. To repeat them yourself, see "Development" in the README.
+Ruff, mypy, bandit and the tests also run as pre-commit hooks, and the same checks run on
+every push in CI (`.github/workflows/ci.yml`), including the tests on Windows. To repeat them
+yourself, see "Development" in the README.
 
 **Error handling:** the command line tool turns bad input (missing paths, files that
 aren't valid JSON or UTF-8) into a one-line message with exit code 2, and never prints a
