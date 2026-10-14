@@ -77,7 +77,10 @@ and `.github/workflows/ci.yml` if playwright changed; `tests/test_init.py` fails
   uses one so `merge` rewrites a line),
   `conftest.py` (loads every file in `steps/`), `browsers.py` (finds Brave), `server.py`. `demo/` is a
   package: import as `demo.server`, `demo.browsers`, `demo.steps.*`
-- `tests/`: unit tests for the tool
+- `tests/`: unit tests for the tool (`test_app_server.py` imports the generated project's `app_server.py`)
+- Starter templates: `starter/app_server.py.tmpl` starts/stops a program that serves the site
+  (`app_server` in pytest.ini; job object on Windows, process group elsewhere). CI's lint job runs
+  ruff and bandit on freshly generated web and desktop projects, so template code is checked too.
 - `desktop_demo/`: Windows desktop testing, exactly the project `init --desktop` creates: its
   files are copied to `src/gherkin_copilot/starter_desktop/*.tmpl` (plus a README template)
   and `test_init.py` fails until they match, like the lock files. Standalone project (no

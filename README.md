@@ -142,7 +142,8 @@ payments-tests/
     navigation_steps.py
   tests/test_features.py turns every scenario in features/ into a test
   conftest.py            loads steps/; BROWSER_PATH picks any Chromium-based browser
-  pytest.ini             base_url for the application under test
+  pytest.ini             base_url for the application under test (and app_server, below)
+  app_server.py          starts and stops a program that serves the site, if one does
   requirements.in / requirements.lock   pinned, hash-checked dependencies (same as this repo's)
   .gitignore
 ```
@@ -158,6 +159,14 @@ Playwright's Docker image (browsers included, so the pipeline downloads none), i
 the hash-checked lock (through Artifactory if `PIP_INDEX_URL` is set as a CI/CD variable),
 and shows the results in GitLab's Tests tab, keeping screenshots and traces of failures. This
 repo's CI runs that file's commands in the same image on every push.
+
+**If a program starts the site** (an `.exe` that opens a terminal, runs a pipeline and then
+serves the site on localhost, say), set `app_server` in `pytest.ini` to that program and
+`base_url` to where the site appears. The tests start it once before the first scenario, wait
+until `base_url` answers, and stop it, with everything it started, after the last one. Its
+output goes to `reports/app_server.log`. If it fails before the site answers, the run stops
+with the end of that log; if something already answers at `base_url`, the run stops rather
+than test an old version. The starter project's README has the details.
 
 ## Using it on your own project
 

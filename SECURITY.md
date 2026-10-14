@@ -160,6 +160,25 @@ reader does.
   scenario line before it can be saved. The generated code only calls the project's own
   `uia.py`.
 
+## Starting the site under test (`app_server`)
+
+For a site that a program on the test machine starts (an `.exe` that runs a local server, say),
+the web project `init` creates can start and stop that program. This is the test project's own
+code (`app_server.py`, written by `init`), not the tool's.
+
+- **Only when asked:** nothing happens unless `app_server` is set in the project's `pytest.ini`
+  (or `APP_SERVER`). The program is started as an argument list, never through a shell.
+- **Talks only to `base_url`,** to see whether the site answers yet. It sends nothing else,
+  accepts only `http://` and `https://` addresses, and bypasses any proxy so the check stays on
+  the machine.
+- **Stops everything it started:** on Windows the program runs in a job object (a group that
+  includes every program it starts), so ending the job also ends a server the program left
+  running after it closed itself, and Windows ends them anyway if the tests crash. Elsewhere it
+  runs in its own process group.
+- **Never tests a stale site:** if something already answers at `base_url` before the start,
+  the run stops with a message.
+- **Output stays local,** in `reports/app_server.log`, which the project's `.gitignore` excludes.
+
 ## Dependencies
 
 - `requirements.lock` pins **every** package (direct and transitive) to an exact version
@@ -205,10 +224,10 @@ added after them:
 | Check | Result |
 |---|---|
 | `pip-audit --strict -r requirements.lock -r requirements-desktop.lock` (known vulnerabilities) | No known vulnerabilities found |
-| `bandit -q -r src demo desktop_demo run_demo.py` (static security analysis) | No findings. The places that start a process (`run_demo.py`, the app's Run button in `ui/runner.py`, and the desktop steps starting the app under test) use fixed argument lists and no shell, and are annotated with why |
+| `bandit -q -r src demo desktop_demo run_demo.py`, and on both kinds of project `init` creates (static security analysis) | No findings. The places that start a process (`run_demo.py`, the app's Run button in `ui/runner.py`, and the desktop steps starting the app under test) use fixed argument lists and no shell, and are annotated with why |
 | `mypy --strict` | No issues in 22 source files |
-| `ruff check` (rules in `pyproject.toml`) | No issues |
-| Tool tests | 303 passed (macOS, Python 3.14; also run on Windows and Ubuntu in CI), including tests for missing paths, malformed files, non-finite numbers, Windows code pages, generated inputs, the project `init` creates, and the home page's git reader checked against git itself (every object in a delta-compressed pack, and commits to push/pull on branchy history) |
+| `ruff check` (rules in `pyproject.toml`), also on both kinds of project `init` creates | No issues |
+| Tool tests | 306 passed (macOS, Python 3.14; also run on Windows and Ubuntu in CI), including tests for missing paths, malformed files, non-finite numbers, Windows code pages, generated inputs, the project `init` creates, and the home page's git reader checked against git itself (every object in a delta-compressed pack, and commits to push/pull on branchy history) |
 | Branch coverage (`coverage run -m pytest tests`) | 92% |
 | Demo scenarios in a real browser (Brave) | 6 passed |
 | Desktop scenarios on Windows (`desktop_demo/`, Character Map, CI `windows-latest`) | 3 passed: typing into a field, clicking a button and ticking a checkbox, through UI Automation with no fake mouse or keyboard. A project made by `init --desktop` passes the same scenarios as created |

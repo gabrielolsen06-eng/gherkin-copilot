@@ -1,0 +1,176 @@
+"""Start the program that serves the site under test, and stop it, with everything it started, afterwards.
+
+For a site that a program starts on this machine (an .exe that runs a pipeline and then serves the
+site on localhost, say): set app_server in pytest.ini to that program and base_url to where the site
+appears. conftest.py starts it once before the first scenario, waits until base_url answers, and
+stops it after the last one. Its output goes to reports/app_server.log.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import os
+import signal
+import ssl
+import subprocess  # nosec B404: starts the program named in pytest.ini, as an argument list, never a shell
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+from typing import Any
+
+LOG = Path("reports") / "app_server.log"
+CREATE_SUSPENDED, CREATE_NO_WINDOW = 0x4, 0x08000000
+
+
+def answers(url: str) -> bool:
+    """Whether a web server answers at url: any reply but a server error. A certificate this machine doesn't
+    trust (common for https://localhost) still means it's up."""
+    direct = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # a company proxy can't reach localhost
+    try:
+        with direct.open(url, timeout=3):  # nosec B310: base_url, which start() checked is http(s)
+            return True
+    except urllib.error.HTTPError as error:
+        return error.code < 500
+    except urllib.error.URLError as error:
+        return isinstance(error.reason, ssl.SSLError)
+    except (OSError, ValueError):  # e.g. the connection dropped while the server starts
+        return False
+
+
+class Server:
+    """The started program. Everything it starts is stopped with it, even a server it leaves running after it
+    has exited itself (a launcher): on Windows they all run in one job object, elsewhere in one process group."""
+
+    def __init__(self, command: list[str], log: Path):
+        self.log = log.open("ab")
+        exe = Path(command[0])
+        options: dict[str, Any] = {"cwd": exe.parent if exe.is_absolute() else None, "stdin": subprocess.DEVNULL,
+                                   "stdout": self.log, "stderr": subprocess.STDOUT}
+        if os.name == "nt":
+            self.job = _new_job()
+            # suspended until it's in the job, so nothing it starts can escape the job
+            self.process = subprocess.Popen(command, creationflags=CREATE_SUSPENDED | CREATE_NO_WINDOW, **options)  # nosec B603
+            _join_job_and_run(self.job, self.process)
+        else:
+            self.process = subprocess.Popen(command, start_new_session=True, **options)  # nosec B603
+
+    def stop(self) -> None:
+        if os.name == "nt":
+            kernel32 = _kernel32()
+            kernel32.TerminateJobObject(self.job, 1)
+            kernel32.CloseHandle(self.job)
+        else:
+            for sig in (signal.SIGTERM, signal.SIGKILL):
+                with contextlib.suppress(ProcessLookupError, PermissionError):
+                    os.killpg(self.process.pid, sig)
+                if _group_gone(self.process, timeout=10):
+                    break
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            self.process.wait(10)
+        self.log.close()
+
+
+def start(command: list[str], url: str, wait: float = 300, log: Path = LOG) -> Server:
+    """Start the program and return once url answers. Raises RuntimeError with the end of its output if it
+    fails first, or doesn't get there within ``wait`` seconds."""
+    name = Path(command[0]).name
+    if not url.startswith(("http://", "https://")):
+        raise RuntimeError(f"base_url must be an http:// or https:// address, not {url!r}")
+    if answers(url):
+        raise RuntimeError(f"Something already answers at {url}. Stop it first, so the tests don't run against "
+                           "an old version of the site.")
+    log.parent.mkdir(parents=True, exist_ok=True)
+    server = Server(command, log)
+    deadline = time.monotonic() + wait
+    while not answers(url):
+        code = server.process.poll()
+        if code not in (None, 0):  # 0 is fine: a launcher that has handed over to the real server
+            server.stop()
+            raise RuntimeError(f"{name} stopped with exit code {code} before {url} answered. "
+                               f"The end of {log}:\n{_tail(log)}")
+        if time.monotonic() > deadline:
+            server.stop()
+            raise RuntimeError(f"{url} didn't answer within {wait:.0f} s of starting {name} (app_server_wait in "
+                               f"pytest.ini). The end of {log}:\n{_tail(log)}")
+        time.sleep(1)
+    return server
+
+
+def _tail(log: Path, lines: int = 20) -> str:
+    return "\n".join(log.read_text(encoding="utf-8", errors="replace").splitlines()[-lines:]) or "(no output)"
+
+
+def _group_gone(process: subprocess.Popen[bytes], timeout: float) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        process.poll()  # collect the program itself once it exits, or it still counts as running
+        try:
+            os.killpg(process.pid, 0)
+        except (ProcessLookupError, PermissionError):  # macOS says "not permitted" once only the exited leader is left
+            return True
+        time.sleep(0.2)
+    return False
+
+
+# --- Windows: a job object holds the program and everything it starts ------------------------------
+
+def _kernel32() -> Any:
+    from ctypes import WinDLL, wintypes  # Windows only
+
+    kernel32 = WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+    kernel32.CreateJobObjectW.argtypes = (wintypes.LPVOID, wintypes.LPCWSTR)
+    kernel32.SetInformationJobObject.argtypes = (wintypes.HANDLE, wintypes.INT, wintypes.LPVOID, wintypes.DWORD)
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    kernel32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
+    kernel32.TerminateJobObject.argtypes = (wintypes.HANDLE, wintypes.UINT)
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    return kernel32
+
+
+def _new_job() -> Any:
+    """A job whose programs all end when it's closed, even if the tests themselves crash."""
+    import ctypes
+
+    class Basic(ctypes.Structure):
+        _fields_ = [("PerProcessUserTimeLimit", ctypes.c_int64), ("PerJobUserTimeLimit", ctypes.c_int64),
+                    ("LimitFlags", ctypes.c_uint32), ("MinimumWorkingSetSize", ctypes.c_size_t),
+                    ("MaximumWorkingSetSize", ctypes.c_size_t), ("ActiveProcessLimit", ctypes.c_uint32),
+                    ("Affinity", ctypes.c_size_t), ("PriorityClass", ctypes.c_uint32),
+                    ("SchedulingClass", ctypes.c_uint32)]
+
+    class Extended(ctypes.Structure):
+        _fields_ = [("BasicLimitInformation", Basic), ("IoInfo", ctypes.c_uint64 * 6),
+                    ("ProcessMemoryLimit", ctypes.c_size_t), ("JobMemoryLimit", ctypes.c_size_t),
+                    ("PeakProcessMemoryUsed", ctypes.c_size_t), ("PeakJobMemoryUsed", ctypes.c_size_t)]
+
+    kernel32 = _kernel32()
+    job = kernel32.CreateJobObjectW(None, None)
+    if not job:
+        raise ctypes.WinError(ctypes.get_last_error())
+    limits = Extended()
+    limits.BasicLimitInformation.LimitFlags = 0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+    if not kernel32.SetInformationJobObject(job, 9, ctypes.byref(limits), ctypes.sizeof(limits)):  # 9: extended limits
+        raise ctypes.WinError(ctypes.get_last_error())
+    return job
+
+
+def _join_job_and_run(job: Any, process: subprocess.Popen[bytes]) -> None:
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = _kernel32()
+    handle = kernel32.OpenProcess(0x0100 | 0x0800 | 0x0001, False, process.pid)  # set quota, resume, terminate
+    try:
+        if not handle or not kernel32.AssignProcessToJobObject(job, handle):
+            error = ctypes.WinError(ctypes.get_last_error())
+            process.kill()
+            raise error
+        resume = ctypes.WinDLL("ntdll").NtResumeProcess
+        resume.argtypes = (wintypes.HANDLE,)
+        resume(handle)
+    finally:
+        if handle:
+            kernel32.CloseHandle(handle)

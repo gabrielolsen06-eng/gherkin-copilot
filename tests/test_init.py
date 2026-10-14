@@ -12,7 +12,7 @@ from gherkin_copilot.scaffold import templates
 
 REPO = Path(__file__).parent.parent
 EXPECTED = [
-    ".gitignore", "README.md", "conftest.py", "features/example.feature", "pytest.ini", "requirements.in",
+    ".gitignore", "README.md", "app_server.py", "conftest.py", "features/example.feature", "pytest.ini", "requirements.in",
     "requirements.lock", "steps/__init__.py", "steps/example_steps.py", "steps/navigation_steps.py",
     "tests/test_features.py",
 ]
@@ -27,7 +27,7 @@ def run(argv, capsys):
 def test_creates_the_starter_project_in_a_new_folder(tmp_path, capsys):
     root = tmp_path / "new" / "payments-tests"
     code, out, _ = run(["init", str(root), "--name", "Payments\n tests"], capsys)
-    assert code == 0 and "Created 11 files" in out and "python -m pytest --browser-channel msedge" in out
+    assert code == 0 and "Created 12 files" in out and "python -m pytest --browser-channel msedge" in out
     assert sorted(p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()) == EXPECTED
     assert (root / "README.md").read_text(encoding="utf-8").startswith("# Payments tests\n")
 
@@ -35,7 +35,7 @@ def test_creates_the_starter_project_in_a_new_folder(tmp_path, capsys):
 def test_never_overwrites_existing_files(tmp_path, capsys):
     (tmp_path / "pytest.ini").write_text("[pytest]\nmine = yes\n")
     code, out, _ = run(["init", str(tmp_path)], capsys)
-    assert code == 0 and "Created 10 files" in out and "Kept 1 file" in out and "  = pytest.ini" in out
+    assert code == 0 and "Created 11 files" in out and "Kept 1 file" in out and "  = pytest.ini" in out
     assert (tmp_path / "pytest.ini").read_text() == "[pytest]\nmine = yes\n"
     assert f"# {tmp_path.name}\n" in (tmp_path / "README.md").read_text(encoding="utf-8")  # name from the folder
 
@@ -48,7 +48,7 @@ def test_never_overwrites_existing_files(tmp_path, capsys):
 def test_dry_run_and_json_write_nothing(tmp_path, capsys):
     root = tmp_path / "plan"
     code, out, _ = run(["init", str(root), "--dry-run"], capsys)
-    assert code == 0 and "Would create 11 files" in out and "Nothing was written" in out and not root.exists()
+    assert code == 0 and "Would create 12 files" in out and "Nothing was written" in out and not root.exists()
 
     code, out, _ = run(["init", str(root), "--dry-run", "--json"], capsys)
     data = json.loads(out)
@@ -99,7 +99,7 @@ def test_gitlab_pipeline_only_when_asked(tmp_path, capsys):
     assert not (tmp_path / "plain" / ".gitlab-ci.yml").exists()
     code, out, _ = run(["init", str(tmp_path / "gl"), "--ci", "gitlab"], capsys)
     pipeline = (tmp_path / "gl" / ".gitlab-ci.yml").read_text(encoding="utf-8")
-    assert code == 0 and "Created 12 files" in out and "  + .gitlab-ci.yml" in out
+    assert code == 0 and "Created 13 files" in out and "  + .gitlab-ci.yml" in out
     assert "--require-hashes -r requirements.lock" in pipeline and "junit: reports/junit.xml" in pipeline
     with pytest.raises(SystemExit) as unknown:  # argparse rejects a CI system it doesn't know
         main(["init", str(tmp_path / "x"), "--ci", "jenkins"])

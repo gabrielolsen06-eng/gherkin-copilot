@@ -21,6 +21,12 @@ jobs:
       - run: mypy
       - run: bandit -q -r src demo desktop_demo run_demo.py
       - run: pip-audit --strict -r requirements.lock -r requirements-desktop.lock
+      - name: The projects `init` creates pass the same scans
+        run: |
+          PYTHONPATH=src python -m gherkin_copilot init "$RUNNER_TEMP/web-starter"
+          PYTHONPATH=src python -m gherkin_copilot init "$RUNNER_TEMP/desktop-starter" --desktop
+          ruff check --config pyproject.toml "$RUNNER_TEMP/web-starter" "$RUNNER_TEMP/desktop-starter"
+          bandit -q -r "$RUNNER_TEMP/web-starter" "$RUNNER_TEMP/desktop-starter"
 
   test:
     name: Tests (${{ matrix.os }}, Python ${{ matrix.python }})

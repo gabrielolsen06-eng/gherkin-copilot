@@ -5,16 +5,24 @@ folder is loaded here, so a new step file works without registering it anywhere.
 """
 
 import os
+import shlex
 from pathlib import Path
 
+import app_server
 import pytest
 
 STEPS_DIR = Path(__file__).resolve().parent / "steps"
 pytest_plugins = [f"steps.{p.stem}" for p in sorted(STEPS_DIR.glob("*.py")) if p.stem != "__init__"]
 
 
+def pytest_addoption(parser):
+    parser.addini("app_server", "program that starts the site under test (the APP_SERVER variable overrides it)")
+    parser.addini("app_server_args", "what to put after the program's name, separated by spaces")
+    parser.addini("app_server_wait", "seconds to wait for base_url to answer", default="300")
+
+
 def pytest_configure(config):
-    """pytest-bdd doesn't create the folder for --cucumberjson, so reports/cucumber.json would fail on a fresh checkout."""
+    """pytest-bdd doesn't create the --cucumberjson folder, so reports/cucumber.json would fail on a fresh checkout."""
     path = config.getoption("cucumber_json_path", None)
     if path:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -26,3 +34,22 @@ def browser_type_launch_args(browser_type_launch_args):
     such as Brave or a company-approved build."""
     path = os.environ.get("BROWSER_PATH")
     return {**browser_type_launch_args, "executable_path": path} if path else browser_type_launch_args
+
+
+@pytest.fixture(scope="session", autouse=True)
+def site_started(pytestconfig, base_url):
+    """If pytest.ini names a program that starts the site, start it once, and stop it after the last scenario."""
+    program = os.environ.get("APP_SERVER") or pytestconfig.getini("app_server")
+    if not program:
+        yield
+        return
+    if not base_url:
+        pytest.exit("Set base_url in pytest.ini to where the site appears, e.g. http://localhost:8080", returncode=4)
+    args = shlex.split(pytestconfig.getini("app_server_args"), posix=os.name != "nt")
+    command = [program, *(arg.strip('"') for arg in args)]  # Windows: keep backslashes, drop the quotes
+    try:
+        server = app_server.start(command, base_url, float(pytestconfig.getini("app_server_wait")))
+    except RuntimeError as error:  # one clear message, instead of every scenario failing the same way
+        pytest.exit(str(error), returncode=4)
+    yield
+    server.stop()

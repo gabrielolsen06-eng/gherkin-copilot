@@ -39,6 +39,39 @@ pytest-bdd, Playwright and the browser work on this machine. Delete it, and
 Set `base_url` in `pytest.ini` (or pass `--base-url` for one run). Steps then use paths
 relative to it, so `Given I am on the "/login" page` opens `<base_url>/login`.
 
+### If a program starts the site
+
+Some sites are started by a program on this machine, such as an `.exe` that runs a pipeline
+and then serves the site on localhost. Name it in `pytest.ini` and the tests start it for you:
+
+```ini
+base_url = http://localhost:8080
+app_server = C:\Apps\Portal\Portal.exe
+app_server_args = --port 8080
+app_server_wait = 300
+```
+
+`app_server_args` is only needed if the program takes options; `app_server_wait` is how many
+seconds it may take until `base_url` answers (5 minutes unless you change it). For one run, the
+`APP_SERVER` environment variable overrides `app_server`.
+
+- It starts once, before the first scenario, and its output goes to `reports/app_server.log`.
+- The tests wait until `base_url` answers. If the program stops with an error first, the run
+  ends with the last lines of its output.
+- After the last scenario it's stopped, together with everything it started, even a server
+  that keeps running after the program itself has closed.
+- If something already answers at `base_url` before it starts, the run stops instead of testing
+  whatever version is already running.
+
+If the site uses a certificate this machine doesn't trust (common for `https://localhost`), let
+the browser accept it by adding this to `conftest.py`:
+
+```python
+@pytest.fixture(scope="session")
+def browser_context_args(browser_context_args):
+    return {**browser_context_args, "ignore_https_errors": True}
+```
+
 ## Add a scenario
 
 1. Write it in a `.feature` file in `features/`. Every scenario there runs automatically.
