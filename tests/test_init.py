@@ -140,12 +140,15 @@ def test_desktop_project_binds_every_step_and_skips_off_windows(tmp_path, capsys
     assert (tmp_path / "README.md").read_text(encoding="utf-8").startswith("# Billing tests\n")
     code, out, _ = run(["check", str(tmp_path / "features"), "--path", str(tmp_path / "steps")], capsys)
     assert code == 0 and "10 ok, 0 missing, 0 ambiguous" in out
-    # pytest loads conftest.py (with its pytest.ini settings), the steps and uia.py, then skips: they need Windows
-    done = subprocess.run([sys.executable, "-m", "pytest", "-q", "-rs", "-p", "no:cacheprovider", "-W", "error"],  # nosec B603
-                          cwd=tmp_path, capture_output=True, text=True, timeout=120, check=False)
-    if sys.platform == "win32":  # CI's Windows test jobs have no comtypes: the desktop job runs these for real
-        assert "test_features.py" in done.stdout
-    else:
+    # pytest loads conftest.py (with its pytest.ini settings), the steps and uia.py, and finds every scenario
+    def pytest(*args):
+        return subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-W", "error", *args],  # nosec B603
+                              cwd=tmp_path, capture_output=True, text=True, timeout=120, check=False)
+
+    collected = pytest("--collect-only")
+    assert collected.returncode == 0 and "3 tests collected" in collected.stdout, collected.stdout + collected.stderr
+    if sys.platform != "win32":  # running them needs Windows (and comtypes): CI's desktop job does that
+        done = pytest("-rs")
         assert done.returncode == 0 and "needs Windows" in done.stdout, done.stdout + done.stderr
 
 
