@@ -146,6 +146,21 @@ def test_a_run_shows_as_ended_only_once_its_results_are_saved(project, monkeypat
     assert json.loads((runner.results_dir(project) / "run.json").read_text())["status"] == "finished"
 
 
+def test_results_never_go_through_a_link_out_of_the_project(project, tmp_path_factory):
+    outside = tmp_path_factory.mktemp("outside")
+    (outside / "results").mkdir()
+    (outside / "results" / "keep.txt").write_text("not the app's")
+    try:
+        os.symlink(outside, runner.results_dir(project).parent, target_is_directory=True)
+    except OSError:
+        pytest.skip("can't create symlinks here")
+    work = runner.Runner()
+    work.start(project, "all")
+    done = wait(lambda: work.status("p"))
+    assert done["status"] == "error" and "outside the project" in done["log"][-1]
+    assert (outside / "results" / "keep.txt").exists()  # used to be deleted with the old results
+
+
 def test_scopes_that_cant_run(project):
     work = runner.Runner()
     work.start(project, "file", "other.feature")

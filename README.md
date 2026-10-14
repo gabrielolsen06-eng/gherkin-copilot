@@ -12,7 +12,7 @@ and helps you:
 | `find "STEP"` | Says whether a line of Gherkin binds to a step, and suggests close matches if it doesn't |
 | `dupes` | Spots step definitions that say the same thing in slightly different words |
 | `merge` | Merges those duplicates: rewrites feature files to use one wording and deletes the other step (preview first, `--apply` to write) |
-| `check FEATURES` | Checks every line of your .feature files, and drafts Python code for missing steps (`--stubs`) |
+| `check FEATURES` | Checks every line of your .feature files (including lines that aren't Gherkin, which pytest-bdd would reject), and drafts Python code for missing steps (`--stubs`) |
 | `ui` | Opens the gherkin-copilot app in your browser: build and edit scenarios with blocks, run them, browse every step, merge duplicates, see the history of changes |
 | `report [JSON]` | Turns a Cucumber JSON results file into a single HTML page, with screenshots, videos and traces linked |
 
@@ -308,7 +308,10 @@ whether every line has a step behind it. From there you can:
   block and its values filled in (lines with no step behind them open as text). Change the
   steps, the name, the tags or the description; Scenario Outlines get a table editor for
   their Examples, and the Background can be edited too. Data tables and doc strings under a
-  step are kept as they are. **Save changes** replaces just that scenario in the file;
+  step are kept as they are, and so are comments just above a step. A scenario with a line
+  the editor couldn't write back (a mistyped keyword, or a comment inside a table) doesn't
+  open: the app names the line, so you can fix it in your text editor first. **Save
+  changes** replaces just that scenario in the file, keeping its line endings;
   **Save as a new scenario** keeps the original.
 - **Duplicate** a scenario as a starting point for a similar one, or **Delete** it.
 
@@ -437,7 +440,7 @@ signed in" won't be flagged as duplicates.
 ## Development
 
 ```bash
-python -m pytest tests       # tool tests (308)
+python -m pytest tests       # tool tests (325)
 python -m pytest demo        # browser scenarios (6)
 python -m pytest desktop_demo  # desktop scenarios (3, Windows only)
 ```

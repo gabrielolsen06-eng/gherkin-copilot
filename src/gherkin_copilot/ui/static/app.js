@@ -647,6 +647,7 @@ function replaceWithStep(id, step) {
   const [old] = state.draft.blocks.splice(index, 1);
   addStepBlock(step, index);
   state.draft.blocks[index].attachment = old.attachment;
+  state.draft.blocks[index].comments = old.comments;
 }
 
 // Base keyword per block, then the label shown in Gherkin ("And" when it repeats).
@@ -696,7 +697,7 @@ function draftSpec() {
     name: d.scenario,
     tags: d.tags,
     description: d.description,
-    steps: draftLines().map((line, i) => ({ line, attachment: d.blocks[i].attachment || [] })),
+    steps: draftLines().map((line, i) => ({ line, attachment: d.blocks[i].attachment || [], comments: d.blocks[i].comments || [] })),
     examples: isOutline() ? d.examples : [],
   };
 }
@@ -926,7 +927,8 @@ function gherkinLines() {
 
 function gherkinText() {
   const { head, tail } = gherkinLines();
-  const steps = draftLines().flatMap((l, i) => [`    ${l}`, ...(state.draft.blocks[i].attachment || []).map((a) => `    ${a}`)]);
+  const steps = draftLines().flatMap((l, i) => [...(state.draft.blocks[i].comments || []).map((c) => `    ${c}`), `    ${l}`,
+    ...(state.draft.blocks[i].attachment || []).map((a) => `    ${a}`)]);
   return [...head, ...steps, ...tail].join("\n");
 }
 
@@ -940,6 +942,7 @@ function renderGherkin() {
   const { head, tail } = gherkinLines();
   pre.replaceChildren(head.join("\n") + "\n",
     ...lines.flatMap((line, i) => [
+      ...(state.draft.blocks[i].comments || []).map((c) => el("span", { class: "line muted" }, `    ${c}\n`)),
       el("span", { class: `line status-${blockStatus(state.draft.blocks[i], i)}` }, `    ${line}\n`),
       ...(state.draft.blocks[i].attachment || []).map((a) => el("span", { class: "line muted" }, `    ${a}\n`)),
     ]),
@@ -1148,8 +1151,8 @@ async function openForEdit(where) {
     editing: { file: data.file, start: data.start, original_name: data.original_name },
     blocks: data.steps.map((s) => (s.step
       ? { id: newId(), kind: "step", step: s.step, values: s.values,
-          keyword: s.step.keyword === "step" ? s.keyword : s.step.keyword, attachment: s.attachment }
-      : { id: newId(), kind: "text", text: s.text, keyword: s.keyword, attachment: s.attachment })),
+          keyword: s.step.keyword === "step" ? s.keyword : s.step.keyword, attachment: s.attachment, comments: s.comments }
+      : { id: newId(), kind: "text", text: s.text, keyword: s.keyword, attachment: s.attachment, comments: s.comments })),
   };
   state.results = [];
   saveDraft();

@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, TypeVar, cast
 
 from gherkin_copilot.checker import check_steps, iter_feature_files, make_stub, parse_feature_text
+from gherkin_copilot.files import save_text
 from gherkin_copilot.indexer import build_index, index_file, iter_python_files, uses_desktop_helper
 from gherkin_copilot.ui.catalog import segments
 from gherkin_copilot.ui.projects import Project
@@ -189,4 +190,4 @@ def apply_change(change: FileChange, expected_hash: str) -> None:
     if _hash(current) != expected_hash or change.before != current:
         raise ValueError(f"{change.shown} changed since the preview. Preview again to see the latest version.")
     change.path.parent.mkdir(parents=True, exist_ok=True)
-    change.path.write_text(change.after, encoding="utf-8")
+    save_text(change.path, change.after)

@@ -1,6 +1,7 @@
 """`gherkin-copilot init`: the starter project it writes, and that it never overwrites anything."""
 
 import json
+import re
 import subprocess  # nosec B404: runs pytest on the generated project, fixed argument list
 import sys
 from pathlib import Path
@@ -22,6 +23,13 @@ def run(argv, capsys):
     code = main(argv)
     out = capsys.readouterr()
     return code, out.out, out.err
+
+
+def tag_every_scenario(project: Path) -> None:
+    """Testers add tags in the app, and pytest-bdd turns each into a pytest mark: collection must still work."""
+    for feature in (project / "features").glob("*.feature"):
+        text = feature.read_text(encoding="utf-8")
+        feature.write_text(re.sub(r"^( *)(Scenario)", r"\1@smoke @check-out\n\1\2", text, flags=re.M), encoding="utf-8")
 
 
 def test_creates_the_starter_project_in_a_new_folder(tmp_path, capsys):
@@ -86,6 +94,7 @@ def test_generated_project_binds_every_step_and_collects(tmp_path, capsys):
 
     # pytest itself loads conftest.py, every step file and pytest.ini (running it needs a browser: CI does that)
     # --cucumberjson into a folder that doesn't exist yet, as every CI run on a fresh checkout does
+    tag_every_scenario(tmp_path)
     done = subprocess.run([sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider", "-W", "error",  # nosec B603
                            "--cucumberjson=reports/cucumber.json"],
                           cwd=tmp_path, capture_output=True, text=True, timeout=120, check=False)
@@ -145,6 +154,7 @@ def test_desktop_project_binds_every_step_and_skips_off_windows(tmp_path, capsys
         return subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-W", "error", *args],  # nosec B603
                               cwd=tmp_path, capture_output=True, text=True, timeout=120, check=False)
 
+    tag_every_scenario(tmp_path)
     collected = pytest("--collect-only")
     assert collected.returncode == 0 and "3 tests collected" in collected.stdout, collected.stdout + collected.stderr
     if sys.platform != "win32":  # running them needs Windows (and comtypes): CI's desktop job does that

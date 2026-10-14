@@ -163,6 +163,36 @@ def b(page, product):
     assert "def b" not in (root / "steps.py").read_text()
 
 
+def test_lines_written_in_other_capitals_are_rewritten_too(tmp_path):
+    root = project(tmp_path, '''@when(parsers.parse('I add "{product}" to the cart'))
+def a(page, product):
+    pass
+
+
+@when(parsers.parse('I put the "{product}" in my cart'))
+def b(page, product):
+    pass
+''', 'Feature: x\n  Scenario: y\n    When I add "hat" to the cart\n    And I put the "Onesie" in My Cart\n')
+    apply(plan_merges(root, keep=frozenset({"a"})))
+    assert (root / "shop.feature").read_text().splitlines()[-1] == '    And I add "Onesie" to the cart'
+    assert main(["check", str(root / "shop.feature"), "--path", str(root)]) == 0  # used to be left behind, unbound
+
+
+def test_values_converted_differently_need_merge_anyway(tmp_path):
+    root = project(tmp_path, '''@when(parsers.parse("I add {count} items"))
+def a(page, count):
+    assert page.size() == count
+
+
+@when(parsers.parse("I put {count:d} items in"))
+def b(page, count):
+    assert page.size() == count
+''', "Feature: x\n  Scenario: y\n    When I add 3 items\n    When I put 3 items in\n")
+    plan = plan_merges(root).plans[0]
+    assert not plan.ok and plan.can_force  # the code is the same text, but count would be "3", not 3
+    assert "{count} vs {count:d}" in plan.problems[0] or "{count:d} vs {count}" in plan.problems[0]
+
+
 def test_refuses_to_rewrite_lines_into_a_regex_step(tmp_path):
     root = project(tmp_path, '''@when(parsers.parse('I add "{product}" to the cart'))
 def a(page, product):

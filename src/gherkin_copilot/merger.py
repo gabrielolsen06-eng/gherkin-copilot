@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from gherkin_copilot.checker import STEP_LINE, FeatureStep, binds, iter_feature_files, parse_feature
+from gherkin_copilot.files import save_text
 from gherkin_copilot.indexer import StepDef, build_index, iter_python_files
 from gherkin_copilot.matcher import PARSE_FIELD, find_duplicates, is_exact_match
 
@@ -100,8 +101,19 @@ def capture(step: StepDef, text: str) -> dict[str, str] | None:
         out.append(f"(?P<{m.group(1).partition(':')[0]}>.+?)")  # permissive: also accepts <outline> params
         pos = m.end()
     out.append(re.escape(step.pattern[pos:]))
-    m = re.fullmatch("".join(out), text)
+    m = re.fullmatch("".join(out), text, re.IGNORECASE if step.kind == "parse" else 0)  # as matcher.to_regex
     return m.groupdict() if m else None
+
+
+def placeholder_types(step: StepDef) -> dict[str, str]:
+    """How a parse step converts each value: {"count": "d"} for {count:d}; "" means it stays text."""
+    if step.kind != "parse":
+        return {}
+    return {name: fmt for name, _, fmt in (f.partition(":") for f in PARSE_FIELD.findall(step.pattern))}
+
+
+def _field(name: str, types: dict[str, str]) -> str:
+    return f"{{{name}:{types[name]}}}" if types.get(name) else f"{{{name}}}"
 
 
 def render(step: StepDef, values: dict[str, str]) -> str:
@@ -270,6 +282,12 @@ def plan_merges(root: Path, threshold: float = 0.6, keep: frozenset[str] = froze
         if names_a is None or names_b is None or sorted(names_a) != sorted(names_b):
             plan.blockers.append("their placeholders don't line up, so values can't be carried across")
             continue
+        types_a, types_b = placeholder_types(a), placeholder_types(b)
+        converted = [f"{_field(n, types_a)} vs {_field(n, types_b)}"
+                     for n in sorted(names_a) if types_a.get(n, "") != types_b.get(n, "")]
+        if converted:
+            plan.differences.append(f"they convert values differently ({'; '.join(converted)}), so the kept code "
+                                    "would get a different kind of value")
         if a.kind == "regex" and usage[b]:
             plan.blockers.append("feature lines can't be rewritten into a regex step automatically")
             continue
@@ -309,5 +327,5 @@ def file_changes(plans: list[MergePlan], root: Path) -> dict[Path, tuple[str, st
 
 def apply(result: MergeResult) -> list[Path]:
     for path, (_, new) in result.changes.items():
-        path.write_text(new, encoding="utf-8")
+        save_text(path, new)
     return list(result.changes)

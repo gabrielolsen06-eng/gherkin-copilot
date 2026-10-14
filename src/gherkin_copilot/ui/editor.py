@@ -70,6 +70,13 @@ def _attachment(value: object) -> list[str]:
     return [line.rstrip() for line in lines]
 
 
+def _comments(value: object) -> list[str]:
+    lines = [line.strip() for line in _texts(value or [], "Step comments")]
+    if any(not line.startswith("#") or "\n" in line or "\r" in line or len(line) > 500 for line in lines):
+        raise ValueError("A step's comments must be single lines starting with #.")
+    return lines
+
+
 def _examples(value: object) -> list[gherkin.Examples]:
     tables = list_of(value, object)
     if tables is None:
@@ -110,7 +117,7 @@ def clean_spec(spec: object, indent: str = "  ") -> gherkin.Block:
     steps: list[gherkin.Step] = []
     for line, raw in zip(lines, step_data, strict=True):
         word, text = line.split(None, 1)
-        steps.append(gherkin.Step(word, text, 0, _attachment(raw.get("attachment"))))
+        steps.append(gherkin.Step(word, text, 0, _attachment(raw.get("attachment")), _comments(raw.get("comments"))))
     examples = _examples(data.get("examples") or [])
     outline = kind in gherkin.OUTLINES
     if outline and not examples:
@@ -157,6 +164,16 @@ def _find_block(feature: gherkin.FeatureFile, start: object, name: object) -> gh
     return block
 
 
+def _keepable(text: str, block: gherkin.Block) -> gherkin.Block:
+    """Refuse a scenario with lines the editor can't write back, rather than drop them on save."""
+    if block.unkept:
+        line = block.unkept[0]
+        raise ValueError(f"Line {line} (“{text.splitlines()[line - 1].strip()[:80]}”) would be lost "
+                         "if the app saved this scenario: it isn't a step, a table under a step, or a comment just "
+                         "above a step. Fix or move it in your text editor, then open the scenario again.")
+    return block
+
+
 def _step_values(step: StepDef, text: str) -> dict[str, str] | None:
     try:
         return capture(step, text)
@@ -166,8 +183,9 @@ def _step_values(step: StepDef, text: str) -> dict[str, str] | None:
 
 def open_scenario(project: Project, file: str, start: object, name: object) -> dict[str, Any]:
     path = _feature_path(project, file)
-    feature = gherkin.parse(path.read_text(encoding="utf-8"))
-    block = _find_block(feature, start, name)
+    text = path.read_text(encoding="utf-8")
+    feature = gherkin.parse(text)
+    block = _keepable(text, _find_block(feature, start, name))
     index = build_index(Path(project.steps))
     results = {r.step.line: r for r in check_steps(parse_feature(path), index)}
     steps: list[dict[str, Any]] = []
@@ -181,6 +199,7 @@ def open_scenario(project: Project, file: str, start: object, name: object) -> d
             "written": s.keyword,
             "text": s.text,
             "attachment": s.attachment,
+            "comments": s.comments,
             "step": ({**asdict(match), "segments": segments(match)}
                      if match is not None and values is not None else None),
             "values": values or {},
@@ -253,6 +272,7 @@ def _change(project: Project, path: Path, before: str, after: str) -> FileChange
 
 def plan_edit(project: Project, file: str, start: object, name: object, spec: object) -> tuple[FileChange, str, str]:
     path, text, _, block = _existing(project, file, start, name)
+    _keepable(text, block)
     new = clean_spec(spec, block.indent)
     if (new.kind == "Background") != (block.kind == "Background"):
         raise ValueError("A Background can't become a scenario, or the other way round.")
@@ -271,6 +291,7 @@ def plan_duplicate(project: Project, file: str, start: object, name: object) -> 
     path, text, feature, block = _existing(project, file, start, name)
     if block.kind == "Background":
         raise ValueError("A feature can only have one Background.")
+    _keepable(text, block)
     taken = {b.name for b in feature.blocks}
     copy_name, n = f"{block.name} (copy)", 2
     while copy_name in taken:

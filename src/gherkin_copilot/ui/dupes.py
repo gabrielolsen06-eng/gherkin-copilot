@@ -16,6 +16,7 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
+from gherkin_copilot.files import save_text
 from gherkin_copilot.indexer import StepDef
 from gherkin_copilot.merger import MergePlan, MergeResult, file_changes, function_source, plan_merges
 from gherkin_copilot.ui.builder import list_of
@@ -119,5 +120,5 @@ def apply(project: Project, threshold: object, pair: str, keep: object,
     if _hash(changes) != expected_hash:
         raise ValueError("Some of these files changed since the preview. Preview again to see the latest version.")
     for path, (_, after) in changes.items():
-        path.write_text(after, encoding="utf-8")
+        save_text(path, after)
     return {_shown(p, project): pair for p, pair in changes.items()}

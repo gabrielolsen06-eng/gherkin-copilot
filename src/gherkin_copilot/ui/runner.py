@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from gherkin_copilot import gherkin
+from gherkin_copilot.files import resolves_inside
 from gherkin_copilot.report import ARTIFACT_KINDS, attach_artifacts, load_report, short_error
 from gherkin_copilot.ui.builder import path_inside
 from gherkin_copilot.ui.history import project_root
@@ -199,6 +200,8 @@ class Runner:
         out = results_dir(project)
         status = "error"  # shown only once run.json is saved: whoever sees the run end can read its results
         try:
+            if out.parent.exists() and not resolves_inside(out.parent, project_root(project)):
+                raise OSError(f"{out.parent} links to somewhere outside the project, so the results can't go there")
             if out.name == "results" and out.parent.name == ".gherkin-copilot" and out.exists():
                 shutil.rmtree(out)
             out.mkdir(parents=True)

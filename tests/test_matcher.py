@@ -35,6 +35,9 @@ def test_strip_keyword(text):
         (step(r"^the cart has (?P<n>\d+) items?$", "regex"), "And the cart has 1 item", True),
         (step(r"the cart has (?P<n>\d+) items?", "regex"), "And the cart has many items", False),
         (step("price is (1+", "regex"), "price is (1+", False),  # invalid regex never matches
+        (step('I log in as "{user}"'), 'When I Log In as "bob"', True),  # pytest-bdd's parse ignores case
+        (step("I am on the login page", "string"), "Given I am on the Login page", False),  # plain strings don't
+        (step(r"the cart has (?P<n>\d+) items?", "regex"), "And the Cart has 1 item", False),  # nor do regexes
     ],
 )
 def test_exact_match(definition, text, expected):

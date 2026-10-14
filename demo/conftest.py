@@ -9,6 +9,7 @@ DEMO_BROWSER_PATH to point at any Chromium-based browser executable.
 """
 
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,14 @@ from demo.server import start_in_background
 # the folder is loaded, so a new step file is available without registering it here.
 STEPS_DIR = Path(__file__).resolve().parent / "steps"
 pytest_plugins = [f"demo.steps.{p.stem}" for p in sorted(STEPS_DIR.glob("*.py")) if p.stem != "__init__"]
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """pytest-bdd turns every @tag into a pytest mark; registered, they run with -m and never warn."""
+    features = config.rootpath / (config.getini("bdd_features_base_dir") or ".")
+    for feature in features.rglob("*.feature"):
+        for tag in set(re.findall(r"(?<!\S)@(\S+)", feature.read_text(encoding="utf-8-sig"))):
+            config.addinivalue_line("markers", tag)
 
 
 @pytest.fixture(scope="session")

@@ -81,8 +81,8 @@ def to_regex(step: StepDef) -> re.Pattern[str] | None:
         return re.compile(rf"^{re.escape(step.pattern)}$")
     source = step.pattern if step.kind == "regex" else parse_to_regex(step.pattern)
     source = source.removeprefix("^").removesuffix("$")
-    try:
-        return re.compile(rf"^{source}$")
+    try:  # pytest-bdd's parse and cfparse steps ignore case (the parse library's default); regex steps don't
+        return re.compile(rf"^{source}$", re.IGNORECASE if step.kind == "parse" else 0)
     except re.error:
         return None
 

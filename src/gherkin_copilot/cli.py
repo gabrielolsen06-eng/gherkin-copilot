@@ -23,7 +23,15 @@ from dataclasses import asdict
 from pathlib import Path
 
 from gherkin_copilot import __version__
-from gherkin_copilot.checker import FeatureStep, StepResult, check_steps, iter_feature_files, make_stub, parse_feature
+from gherkin_copilot.checker import (
+    FeatureStep,
+    StepResult,
+    check_steps,
+    invalid_lines,
+    iter_feature_files,
+    make_stub,
+    parse_feature,
+)
 from gherkin_copilot.indexer import StepDef, build_index, load_index, save_index, uses_desktop_helper
 from gherkin_copilot.matcher import find, find_duplicates
 from gherkin_copilot.merger import MergeResult, apply, plan_merges
@@ -179,20 +187,29 @@ def cmd_check(args: argparse.Namespace) -> int:
     if not features:
         raise UsageError(f"No .feature files found in {root}")
     results: list[StepResult] = []
+    invalid: list[tuple[str, int, str]] = []
     for feature in features:
+        shown = feature.relative_to(base).as_posix()
         with _input_file():
-            parsed = parse_feature(feature, feature.relative_to(base).as_posix())
+            parsed = parse_feature(feature, shown)
+            invalid += [(shown, n, line) for n, line in invalid_lines(feature.read_text(encoding="utf-8"))]
         results.extend(check_steps(parsed, steps))
 
     if args.json:
         print(json.dumps([{"file": r.step.file, "line": r.step.line, "step": r.step.raw, "status": r.status,
-                           "bound_to": [s.location for s in r.bound]} for r in results], indent=2))
+                           "bound_to": [s.location for s in r.bound]} for r in results] +
+                         [{"file": file, "line": n, "step": line, "status": "invalid", "bound_to": []}
+                          for file, n, line in invalid], indent=2))
     else:
         _print_results(results)
+        if invalid:
+            print("\nNot Gherkin, so pytest-bdd won't load these files (a mistyped keyword?):")
+            for file, n, line in invalid:
+                print(f"  {_mark('missing')} {file}:{n}  {line}")
         missing = [r.step for r in results if r.status == "missing"]
         if args.stubs and missing:
             _print_stubs(missing, "app" if uses_desktop_helper(_steps_root(args)) else "page")
-    return 0 if all(r.status == "ok" for r in results) else 1
+    return 0 if not invalid and all(r.status == "ok" for r in results) else 1
 
 
 def _merge_json(result: MergeResult, applied: bool) -> str:

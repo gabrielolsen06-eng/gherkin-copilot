@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,24 @@ Feature: Shop
 '''
 
 
+COMMENTED = """Feature: Notes
+  @smoke
+  Scenario: Kept
+    # first, log in
+    Given I am a registered customer
+    # TODO: check the badge too
+    When I sign in
+    Then I see the products page
+
+  Scenario: Not kept
+    Given I am a registered customer
+      | name  |
+      # a comment inside the table
+      | alice |
+    Whne I sign in
+"""
+
+
 @pytest.fixture
 def demo(tmp_path):
     root = tmp_path / "demo"
@@ -66,6 +85,13 @@ def test_every_block_writes_back_unchanged():
         for block in reversed(gherkin.parse(text).blocks):
             out = gherkin.replace_span(out, block.start, block.end, gherkin.render(block))
         assert out == text
+
+
+def test_comments_above_steps_write_back_and_other_lines_are_flagged():
+    kept, lost = gherkin.parse(COMMENTED).blocks
+    assert kept.steps[1].comments == ["# TODO: check the badge too"] and not kept.unkept
+    assert gherkin.replace_span(COMMENTED, kept.start, kept.end, gherkin.render(kept)) == COMMENTED
+    assert (lost.unkept, lost.invalid) == ([13, 15], [15])  # used to vanish on save without a word
 
 
 def test_table_cells_with_escaped_pipes():
@@ -119,6 +145,7 @@ def spec(**overrides: Any) -> dict[str, Any]:
     ({"examples": [{"header": ["a"], "rows": [["1"]]}]}, "Only a Scenario Outline"),
     ({"kind": "Scenario Outline", "examples": [{"header": ["a", "a"], "rows": []}]}, "different, non-empty"),
     ({"steps": [{"line": "Given x", "attachment": ["Then smuggled step"]}]}, "data table or a doc string"),
+    ({"steps": [{"line": "Given x", "comments": ["Then smuggled step"]}]}, "starting with #"),
 ])
 def test_bad_specs_are_refused(bad, message):
     with pytest.raises(ValueError, match=message):
@@ -151,6 +178,20 @@ def test_edit_replaces_only_that_scenario(demo):
     assert before.startswith("  Scenario Outline: " + OUTLINE) and after.startswith("  @login")
     assert [r["status"] for r in builder.check(demo, [s["line"] for s in outline_spec()["steps"]],
                                                outline_spec()["examples"])] == ["ok"] * 3
+
+
+def test_comments_travel_with_their_step_and_unkeepable_scenarios_are_refused(demo):
+    (Path(demo.features) / "notes.feature").write_text(COMMENTED)
+    opened = editor.open_scenario(demo, "notes.feature", 2, "Kept")
+    assert opened["steps"][0]["comments"] == ["# first, log in"]
+    steps = [{"line": f"{s['written']} {s['text']}", "comments": s["comments"]} for s in opened["steps"]]
+    change, *_ = editor.plan_edit(demo, "notes.feature", 2, "Kept", spec(name="Kept", steps=steps))
+    assert change.after == COMMENTED  # saved unchanged, comments in place
+    for plan in (lambda: editor.open_scenario(demo, "notes.feature", 10, "Not kept"),
+                 lambda: editor.plan_edit(demo, "notes.feature", 10, "Not kept", spec(name="Not kept")),
+                 lambda: editor.plan_duplicate(demo, "notes.feature", 10, "Not kept")):
+        with pytest.raises(ValueError, match=r"Line 13 .* would be lost"):
+            plan()
 
 
 def test_edit_refuses_if_the_scenario_moved(demo):
@@ -205,6 +246,29 @@ def test_restore_undoes_edit_delete_and_add(demo):
 
 
 # --- history ------------------------------------------------------------------------
+
+def test_editing_a_windows_file_keeps_its_line_endings(demo):
+    path = Path(demo.features) / "login.feature"
+    path.write_bytes(path.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+    change, *_ = editor.plan_edit(demo, "login.feature", 16, OUTLINE, outline_spec())
+    builder.apply_change(change, change.hash)
+    data = path.read_bytes()
+    assert b"(edited)\r\n" in data and data.count(b"\n") == data.count(b"\r\n")  # no whole-file diff in git
+
+
+def test_history_refuses_a_link_out_of_the_project(demo, tmp_path):
+    outside = tmp_path / "zshrc"
+    outside.write_text("# my shell settings\n")
+    path = history.history_file(demo)
+    path.parent.mkdir(parents=True)
+    try:
+        os.symlink(outside, path)
+    except OSError:
+        pytest.skip("can't create symlinks here")
+    with pytest.raises(ValueError, match="outside the project"):
+        history.record(demo, "edit", "Ann", {"a.feature": ("x\n", "y\n")})
+    assert outside.read_text() == "# my shell settings\n"  # used to get a JSON line holding the scenario text
+
 
 def test_history_lives_in_the_project_and_survives_bad_lines(demo):
     path = history.history_file(demo)

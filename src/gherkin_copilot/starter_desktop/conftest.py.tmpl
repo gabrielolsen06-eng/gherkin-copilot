@@ -6,6 +6,7 @@ capitals, e.g. DESKTOP_APP=C:\\Apps\\Billing\\Billing.exe.
 """
 
 import os
+import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -29,10 +30,16 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """pytest-bdd doesn't create the --cucumberjson folder, so reports/cucumber.json would fail on a fresh checkout."""
+    """Before any test is collected: create the --cucumberjson folder (pytest-bdd doesn't, so reports/cucumber.json
+    would fail on a fresh checkout) and register the feature files' tags."""
     path = config.getoption("cucumber_json_path", None)
     if path:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
+    # pytest-bdd turns every @tag into a pytest mark; registered, they run with -m and never warn
+    features = config.rootpath / (config.getini("bdd_features_base_dir") or ".")
+    for feature in features.rglob("*.feature"):
+        for tag in set(re.findall(r"(?<!\S)@(\S+)", feature.read_text(encoding="utf-8-sig"))):
+            config.addinivalue_line("markers", tag)
 
 
 @pytest.fixture

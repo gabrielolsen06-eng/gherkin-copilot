@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from gherkin_copilot.files import resolves_inside
 from gherkin_copilot.ui.builder import json_object
 from gherkin_copilot.ui.projects import Project
 
@@ -65,6 +66,8 @@ def record(project: Project, action: str, author: object, files: dict[str, tuple
     path = history_file(project)
     with _lock:
         path.parent.mkdir(parents=True, exist_ok=True)
+        if not resolves_inside(path, project_root(project)):
+            raise ValueError(f"{path} links to somewhere outside the project, so the app won't write to it.")
         with path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(entry) + "\n")
     return entry

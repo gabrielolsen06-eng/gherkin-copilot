@@ -3,7 +3,8 @@
 The editor replaces one scenario at a time, so the rest of the file (comments,
 spacing, other scenarios) is left exactly as it was. A scenario's span runs
 from its first tag line to its last non-blank line; comments between scenarios
-stay outside every span.
+stay outside every span. Comments just above a step travel with that step; any
+other line in a span that can't be written back is listed in ``Block.unkept``.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ class Step:
     text: str
     line: int
     attachment: list[str] = field(default_factory=list[str])  # data table / doc string, indented relative to the step
+    comments: list[str] = field(default_factory=list[str])  # "# ..." lines just above the step
 
 
 @dataclass
@@ -50,6 +52,8 @@ class Block:
     start: int  # first line (tags included), 1-based
     end: int  # last non-blank line
     indent: str
+    unkept: list[int] = field(default_factory=list[int])  # lines in the span that render() can't write back
+    invalid: list[int] = field(default_factory=list[int])  # of those, the ones pytest-bdd rejects (not Gherkin)
 
     @property
     def outline(self) -> bool:
@@ -89,6 +93,7 @@ def parse(text: str) -> FeatureFile:
     step: Step | None = None
     in_doc: str | None = None
     in_feature_description = False
+    comments: list[int] = []  # comment lines seen since the last line that belongs to a block
 
     for number, raw in enumerate(lines, start=1):
         stripped = raw.strip()
@@ -98,7 +103,10 @@ def parse(text: str) -> FeatureFile:
             if stripped.startswith(in_doc):
                 in_doc = None
             continue
-        if not stripped or stripped.startswith("#"):
+        if not stripped:
+            continue
+        if stripped.startswith("#"):
+            comments.append(number)
             continue
         if stripped.startswith("@"):
             tags += stripped.split()
@@ -107,17 +115,19 @@ def parse(text: str) -> FeatureFile:
 
         if m := FEATURE.match(stripped):
             feature.name, feature.tags = m.group(1), tags
-            tags, tag_start, in_feature_description = [], None, True
+            tags, tag_start, in_feature_description, comments = [], None, True, []
             continue
         if RULE.match(stripped):
             current, examples, step, tags, tag_start, in_feature_description = None, None, None, [], None, False
+            comments = []
             continue
         if m := BLOCK.match(stripped):
             in_feature_description = False
             current = Block(m.group(1), m.group(2).strip(), tags, [], [], [], tag_start or number, number,
                             raw[: len(raw) - len(raw.lstrip())])
+            current.unkept = [n for n in comments if n > current.start]  # between its tags and its keyword
             feature.blocks.append(current)
-            examples, step, tags, tag_start = None, None, [], None
+            examples, step, tags, tag_start, comments = None, None, [], None, []
             continue
         if in_feature_description:
             feature.description.append(stripped)
@@ -125,6 +135,10 @@ def parse(text: str) -> FeatureFile:
         if current is None:
             continue
         current.end = number
+        step_match = STEP.match(stripped)
+        if not step_match:  # comments are only kept just above a step
+            current.unkept += comments
+            comments = []
         if m := EXAMPLES.match(stripped):
             examples = Examples(m.group(1), m.group(2).strip(), tags, [], [])
             current.examples.append(examples)
@@ -138,17 +152,26 @@ def parse(text: str) -> FeatureFile:
                     examples.rows.append(cells(stripped))
             elif step is not None:
                 step.attachment.append(_relative(raw, current.indent + "  "))
+            else:
+                current.unkept.append(number)
+                current.invalid.append(number)
             continue
         if stripped.startswith(('"""', "```")) and step is not None:
             in_doc = stripped[:3]
             step.attachment.append(_relative(raw, current.indent + "  "))
             continue
-        if m := STEP.match(stripped):
-            step = Step(m.group(1), m.group(2).strip(), number)
+        if step_match:
+            step = Step(step_match.group(1), step_match.group(2).strip(), number,
+                        comments=[lines[n - 1].strip() for n in comments])
             current.steps.append(step)
+            comments = []
             continue
         if not current.steps and not current.examples:
             current.description.append(stripped)
+        else:
+            current.unkept.append(number)
+            if examples is None or examples.header:  # text right under "Examples:" is its description, which is valid
+                current.invalid.append(number)
     return feature
 
 
@@ -179,6 +202,7 @@ def render(block: Block) -> str:
     out.append(f"{i}{block.kind}: {block.name}".rstrip())
     out += [f"{i}  {line}" for line in block.description]
     for step in block.steps:
+        out += [f"{i}  {comment}" for comment in step.comments]
         out.append(f"{i}  {step.keyword} {step.text}")
         out += [f"{i}  {line}".rstrip() if line.strip() else "" for line in step.attachment]
     for ex in block.examples:

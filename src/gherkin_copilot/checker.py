@@ -70,6 +70,12 @@ def parse_feature_text(text: str, shown_path: str = "<text>") -> list[FeatureSte
     return steps
 
 
+def invalid_lines(text: str) -> list[tuple[int, str]]:
+    """Lines inside a scenario that aren't Gherkin (a mistyped keyword, say): pytest-bdd rejects the whole file."""
+    lines = text.splitlines()
+    return [(n, lines[n - 1].strip()) for block in gherkin.parse(text).blocks for n in block.invalid]
+
+
 def _fill(text: str, values: dict[str, str]) -> str:
     """An outline's <placeholders>, filled from its first Examples row."""
     return OUTLINE_PARAM.sub(lambda m: values.get(m.group(1), m.group(0)), text)

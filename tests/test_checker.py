@@ -1,4 +1,5 @@
 import ast
+import json
 from pathlib import Path
 
 from gherkin_copilot.checker import check_steps, make_stub, parse_feature
@@ -83,6 +84,16 @@ def test_stubs_are_valid_python_with_parameters():
 def test_demo_features_are_fully_bound(capsys):
     assert main(["check", str(DEMO / "features"), "--path", str(DEMO)]) == 0
     assert "0 missing, 0 ambiguous" in capsys.readouterr().out
+
+
+def test_check_fails_on_lines_pytest_bdd_would_reject(tmp_path, capsys):
+    feature = tmp_path / "typo.feature"
+    feature.write_text("Feature: x\n  Scenario: y\n    Given I am on the login page\n    Whne I sign in\n")
+    assert main(["check", str(feature), "--path", str(DEMO)]) == 1  # used to pass: the line was skipped
+    assert "typo.feature:4  Whne I sign in" in capsys.readouterr().out
+    assert main(["check", str(feature), "--path", str(DEMO), "--json"]) == 1
+    assert json.loads(capsys.readouterr().out)[-1] == {"file": "typo.feature", "line": 4, "step": "Whne I sign in",
+                                                       "status": "invalid", "bound_to": []}
 
 
 def test_check_reports_missing_with_stubs(tmp_path, capsys):

@@ -60,7 +60,9 @@ and `.github/workflows/ci.yml` if playwright changed; `tests/test_init.py` fails
 
 - `src/gherkin_copilot/`: `scaffold.py` + `starter/` (`init`: starter project from `*.tmpl`
   files shipped as package data; only creates files, never overwrites), `indexer.py` (find step defs via ast), `matcher.py` (exact and
-  fuzzy matching), `gherkin.py` (the one feature-file parser: exact scenario line spans + renderer), `checker.py` (steps
+  fuzzy matching), `gherkin.py` (the one feature-file parser: exact scenario line spans + renderer; comments above a step are kept,
+  other lines it can't write back are in `Block.unkept`, and the editor refuses those scenarios), `files.py`
+  (`save_text`: every write of a user's file keeps its line endings and is atomic; `resolves_inside` for links), `checker.py` (steps
   from `gherkin.py`, binding, stubs), `merger.py` (merge duplicate
   steps; the only code that edits user files, and only with `--apply`), `report.py` (Cucumber JSON
   to HTML, no JS), `cli.py`, `ui/` (the local web app: `server.py` stdlib HTTP server with
@@ -78,7 +80,8 @@ and `.github/workflows/ci.yml` if playwright changed; `tests/test_init.py` fails
 - `demo/`: `app/` practice shop, `features/`, `drafts/` (deliberately unimplemented
   checkout scenario), `steps/` (two deliberate near-duplicate steps for the `dupes`/`merge` demo; `cart.feature`
   uses one so `merge` rewrites a line),
-  `conftest.py` (loads every file in `steps/`), `browsers.py` (finds Brave), `server.py`. `demo/` is a
+  `conftest.py` (loads every file in `steps/`; registers every feature-file tag as a pytest marker, as the starter
+  conftests do, so a tag added in the app can't break collection), `browsers.py` (finds Brave), `server.py`. `demo/` is a
   package: import as `demo.server`, `demo.browsers`, `demo.steps.*`
 - `tests/`: unit tests for the tool (`test_app_server.py` imports the generated project's `app_server.py`)
 - Starter templates: `starter/app_server.py.tmpl` starts/stops a program that serves the site
