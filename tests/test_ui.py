@@ -39,7 +39,7 @@ def test_page_carries_the_token_and_strict_headers(app):
     status, content_type, data, response = request(port, "GET", "/")
     assert status == 200 and content_type.startswith("text/html")
     assert app.token.encode() in data
-    assert "script-src 'self'" in response.getheader("Content-Security-Policy")
+    assert "script-src 'self'" in (response.getheader("Content-Security-Policy") or "")
     assert response.getheader("X-Content-Type-Options") == "nosniff"
     assert request(port, "GET", "/static/app.js")[0] == 200
 

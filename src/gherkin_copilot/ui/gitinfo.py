@@ -261,7 +261,7 @@ class Objects:
 
 def _parents(objects: Objects, sha: str) -> list[str]:
     """Parents that are in the repository (a shallow clone's oldest commits have parents that aren't)."""
-    out = []
+    out: list[str] = []
     for parent in objects.commit(sha).parents:
         with contextlib.suppress(LookupError):
             objects.commit(parent)
@@ -275,7 +275,8 @@ def _children_first(objects: Objects, group: set[str]) -> list[str]:
         for parent in _parents(objects, sha):
             if parent in waiting:
                 waiting[parent] += 1
-    ready, order = [sha for sha, n in waiting.items() if n == 0], []
+    ready = [sha for sha, n in waiting.items() if n == 0]
+    order: list[str] = []
     while ready:
         order.append(ready.pop())
         for parent in _parents(objects, order[-1]):
@@ -302,7 +303,7 @@ def ahead_behind(objects: Objects, local: str, remote: str) -> tuple[int, int] |
     walked = 0
     while not all(sides[sha] == 3 for _, sha in queue):
         newest = queue[0][0]
-        group, pending = set[str](), []
+        group, pending = set[str](), list[str]()
         while queue and queue[0][0] == newest:
             pending.append(heapq.heappop(queue)[1])
         while pending:  # this timestamp's commits, including parents made in the same second
@@ -414,7 +415,7 @@ def reflog(git_dir: Path) -> list[Event]:
     path = git_dir / "logs" / "HEAD"
     if not path.is_file():
         return []
-    events = []
+    events: list[Event] = []
     for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         match = REFLOG.fullmatch(line)
         if not match or not match[4]:

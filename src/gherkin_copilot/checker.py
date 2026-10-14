@@ -36,7 +36,7 @@ class FeatureStep:
 class StepResult:
     step: FeatureStep
     bound: list[StepDef]
-    suggestions: list[Match] = field(default_factory=list)
+    suggestions: list[Match] = field(default_factory=list[Match])
 
     @property
     def status(self) -> str:
@@ -82,7 +82,7 @@ def binds(step: FeatureStep, definition: StepDef) -> bool:
 
 
 def check_steps(feature_steps: list[FeatureStep], definitions: list[StepDef]) -> list[StepResult]:
-    results = []
+    results: list[StepResult] = []
     for fs in feature_steps:
         bound = [d for d in definitions if binds(fs, d)]
         suggestions = [] if bound else find(fs.text, definitions, limit=3, min_score=0.5)

@@ -279,8 +279,8 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             if length > MAX_BODY:
                 return self._json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "Request too large."})
             try:
-                body = json.loads(self.rfile.read(length) or b"{}")
-                if not isinstance(body, dict):
+                body = builder.json_object(json.loads(self.rfile.read(length) or b"{}"))
+                if body is None:
                     raise ApiError(HTTPStatus.BAD_REQUEST, "Send a JSON object.")
                 self._json(HTTPStatus.OK, app.post(urlsplit(self.path).path, body))
             except json.JSONDecodeError:

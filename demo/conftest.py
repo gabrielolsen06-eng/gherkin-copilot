@@ -10,6 +10,7 @@ DEMO_BROWSER_PATH to point at any Chromium-based browser executable.
 
 import os
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -35,7 +36,7 @@ def app_url():
 
 
 @pytest.fixture(scope="session")
-def browser_type_launch_args(browser_type_launch_args):
+def browser_type_launch_args(browser_type_launch_args: dict[str, Any]) -> dict[str, Any]:
     """Allow a specific browser binary, e.g. Brave or a company-approved Chrome build."""
     path = browser_path_from_env()
     return {**browser_type_launch_args, "executable_path": path} if path else browser_type_launch_args

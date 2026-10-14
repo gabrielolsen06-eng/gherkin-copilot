@@ -42,7 +42,7 @@ class Scenario:
     line: int
     tags: list[str]
     steps: list[Step]
-    artifacts: dict[str, list[Path]] = field(default_factory=dict)
+    artifacts: dict[str, list[Path]] = field(default_factory=dict[str, list[Path]])
 
     @property
     def status(self) -> str:
@@ -94,7 +94,7 @@ def _line(value: object) -> int:
 
 
 def _step(s: dict[str, Any]) -> Step:
-    result = s.get("result") or {}
+    result: dict[str, Any] = s.get("result") or {}
     return Step(
         keyword=str(s.get("keyword", "")).strip(),
         name=str(s.get("name", "")),
@@ -115,9 +115,9 @@ def load_report(path: Path) -> list[Feature]:
 
 
 def _features(data: list[Any]) -> list[Feature]:
-    features = []
+    features: list[Feature] = []
     for f in data:
-        scenarios = []
+        scenarios: list[Scenario] = []
         background: list[Step] = []
         for el in f.get("elements", []):
             if el.get("type") == "background":
@@ -178,7 +178,7 @@ def _fmt_seconds(value: float) -> str:
     return f"{value:.2f}s" if value < 60 else f"{int(value // 60)}m {value % 60:.0f}s"
 
 
-def _short_error(error: str) -> str:
+def short_error(error: str) -> str:
     """Pytest errors are long; the lines starting with 'E ' are the useful part."""
     lines = [ln[1:].strip() for ln in error.splitlines() if ln.startswith("E ")]
     return "\n".join(lines) or error.strip()
@@ -187,11 +187,11 @@ def _short_error(error: str) -> str:
 def _scenario_html(s: Scenario, out_dir: Path) -> str:
     title = escape(s.name) + (f' <span class="example">{escape(s.example)}</span>' if s.example else "")
     tags = "".join(f'<span class="tag">{escape(t)}</span>' for t in s.tags)
-    rows = []
+    rows: list[str] = []
     for step in s.steps:
         error = ""
         if step.error:
-            error = (f'<pre class="error">{escape(_short_error(step.error))}</pre>'
+            error = (f'<pre class="error">{escape(short_error(step.error))}</pre>'
                      f'<details class="trace"><summary>Full error</summary><pre>{escape(step.error)}</pre></details>')
         rows.append(
             f'<li class="step {escape(step.status)}"><span class="dot"></span>'
@@ -199,7 +199,7 @@ def _scenario_html(s: Scenario, out_dir: Path) -> str:
             f'<span class="dur">{_fmt_seconds(step.seconds)}</span>{error}</li>'
         )
 
-    media = []
+    media: list[str] = []
     for shot in s.artifacts.get("screenshots", []):
         src = escape(_rel(shot, out_dir))
         media.append(f'<a href="{src}"><img src="{src}" alt="Screenshot: {escape(shot.stem)}"></a>')
@@ -241,7 +241,7 @@ def render_html(features: list[Feature], out_dir: Path, source: str) -> str:
     tiles_html = "".join(f'<div class="tile"><div class="tv">{escape(v)}</div><div class="tl">{escape(k)}</div></div>'
                          for k, v in tiles)
 
-    sections = []
+    sections: list[str] = []
     for f in features:
         desc = f'<p class="desc">{escape(f.description)}</p>' if f.description else ""
         sections.append(

@@ -18,6 +18,7 @@ from typing import Any
 
 from gherkin_copilot.indexer import StepDef
 from gherkin_copilot.merger import MergePlan, MergeResult, file_changes, function_source, plan_merges
+from gherkin_copilot.ui.builder import list_of
 from gherkin_copilot.ui.catalog import step_info
 from gherkin_copilot.ui.projects import Project
 
@@ -42,9 +43,10 @@ def _keep(keep: object) -> frozenset[str]:
     """Functions the user chose to keep ("Keep this one instead")."""
     if keep is None:
         return frozenset()
-    if not isinstance(keep, list) or not all(isinstance(k, str) for k in keep):
+    names = list_of(keep, str)
+    if names is None:
         raise ValueError("keep must be a list of function names.")
-    return frozenset(keep)
+    return frozenset(names)
 
 
 def _plans(project: Project, threshold: object, keep: object = None) -> MergeResult:
@@ -100,7 +102,7 @@ def _one(project: Project, threshold: object, pair: str, keep: object,
 
 def preview(project: Project, threshold: object, pair: str, keep: object, force: object = False) -> dict[str, Any]:
     changes = _one(project, threshold, pair, keep, force)
-    files = []
+    files: list[dict[str, Any]] = []
     for path, (before, after) in sorted(changes.items()):
         shown = _shown(path, project)
         files.append({"file": shown, "diff": list(difflib.unified_diff(

@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from gherkin_copilot.ui.builder import json_object
 from gherkin_copilot.ui.projects import Project
 
 MAX_AUTHOR = 60
@@ -74,13 +75,13 @@ def entries(project: Project, limit: int = 300) -> list[dict[str, Any]]:
     path = history_file(project)
     if not path.is_file():
         return []
-    out = []
+    out: list[dict[str, Any]] = []
     for line in path.read_text(encoding="utf-8").splitlines():
         try:
-            item = json.loads(line)
+            item = json_object(json.loads(line))
         except json.JSONDecodeError:
             continue
-        if isinstance(item, dict) and isinstance(item.get("id"), str):
+        if item is not None and isinstance(item.get("id"), str):
             out.append(item)
     return out[::-1][:limit]
 

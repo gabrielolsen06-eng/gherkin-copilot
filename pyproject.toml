@@ -61,6 +61,14 @@ python_version = "3.11"
 strict = true
 files = ["src/gherkin_copilot"]
 
+# What VS Code (Pylance) checks; it overrides the user's own typeCheckingMode setting in this repo.
+# Strict for code that ships or that init copies; tests are run on every push, so standard is enough there.
+[tool.pyright]
+include = ["src", "tests", "demo", "desktop_demo", "run_demo.py", ".github"]
+typeCheckingMode = "standard"
+strict = ["src", "demo", "desktop_demo", "run_demo.py", ".github"]
+extraPaths = ["desktop_demo", "tests"]  # desktop_demo: `import uia`; tests: `from test_ui import ...`
+
 [tool.coverage.run]
 source = ["src/gherkin_copilot"]
 branch = true

@@ -6,6 +6,7 @@ capitals, e.g. DESKTOP_APP=C:\\Apps\\Billing\\Billing.exe.
 """
 
 import os
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -22,12 +23,12 @@ SETTINGS = {
 }
 
 
-def pytest_addoption(parser):
+def pytest_addoption(parser: pytest.Parser) -> None:
     for name, help_text in SETTINGS.items():
         parser.addini(name, help_text)
 
 
-def pytest_configure(config):
+def pytest_configure(config: pytest.Config) -> None:
     """pytest-bdd doesn't create the --cucumberjson folder, so reports/cucumber.json would fail on a fresh checkout."""
     path = config.getoption("cucumber_json_path", None)
     if path:
@@ -35,17 +36,17 @@ def pytest_configure(config):
 
 
 @pytest.fixture
-def desktop_config(pytestconfig):
-    value = {name: os.environ.get(name.upper()) or pytestconfig.getini(name) for name in SETTINGS}
+def desktop_config(pytestconfig: pytest.Config) -> dict[str, str]:
+    value: dict[str, str] = {name: os.environ.get(name.upper()) or pytestconfig.getini(name) for name in SETTINGS}
     if not value["desktop_app"]:
         pytest.fail("Set desktop_app in pytest.ini to the .exe to test")
     return {"exe": value["desktop_app"], "title": value["desktop_window"], "cwd": value["desktop_workdir"]}
 
 
 @pytest.fixture
-def desktop_apps():
+def desktop_apps() -> Iterator[list[uia.App]]:
     """Apps opened by this scenario; all closed afterwards, even when the scenario fails."""
-    apps = []
+    apps: list[uia.App] = []
     yield apps
     for app in apps:
         uia.close(app)

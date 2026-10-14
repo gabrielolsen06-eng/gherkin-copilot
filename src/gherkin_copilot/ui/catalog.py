@@ -27,7 +27,7 @@ def segments(step: StepDef) -> list[dict[str, str]]:
         pattern = pattern.removeprefix("^").removesuffix("$")
         finder, unescape = REGEX_GROUP, _readable
     else:
-        finder, unescape = PARSE_FIELD, (lambda s: s)
+        finder, unescape = PARSE_FIELD, str  # parse fields need no unescaping
     pos = 0
     for n, m in enumerate(finder.finditer(pattern), start=1):
         if m.start() > pos:

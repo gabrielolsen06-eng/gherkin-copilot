@@ -19,6 +19,7 @@ import time
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Any, cast
 
 STEP_KEYWORDS = {"given", "when", "then", "step"}
 SKIP_DIRS = {".git", ".venv", "venv", "__pycache__", "node_modules", ".tox", "build", "dist"}
@@ -190,7 +191,7 @@ def load_index(path: Path) -> Index:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(data, list):  # written by an older version: steps only
-            return Index([StepDef(**item) for item in data])
+            return Index([StepDef(**item) for item in cast("list[dict[str, Any]]", data)])
         root = data.get("root")
         return Index([StepDef(**item) for item in data["steps"]], Path(root) if root else None,
                      float(data.get("created") or 0))

@@ -13,6 +13,7 @@ import os
 import signal
 import ssl
 import subprocess  # nosec B404: starts the program named in pytest.ini, as an argument list, never a shell
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -45,18 +46,19 @@ class Server:
     def __init__(self, command: list[str], log: Path):
         self.log = log.open("ab")
         exe = Path(command[0])
-        options: dict[str, Any] = {"cwd": exe.parent if exe.is_absolute() else None, "stdin": subprocess.DEVNULL,
-                                   "stdout": self.log, "stderr": subprocess.STDOUT}
-        if os.name == "nt":
+        windows = sys.platform == "win32"
+        if windows:
             self.job = _new_job()
-            # suspended until it's in the job, so nothing it starts can escape the job
-            self.process = subprocess.Popen(command, creationflags=CREATE_SUSPENDED | CREATE_NO_WINDOW, **options)  # nosec B603
+        # Windows: suspended until it's in the job, so nothing it starts can escape the job
+        self.process = subprocess.Popen(  # nosec B603
+            command, cwd=exe.parent if exe.is_absolute() else None, stdin=subprocess.DEVNULL, stdout=self.log,
+            stderr=subprocess.STDOUT, start_new_session=not windows,
+            creationflags=CREATE_SUSPENDED | CREATE_NO_WINDOW if windows else 0)
+        if windows:
             _join_job_and_run(self.job, self.process)
-        else:
-            self.process = subprocess.Popen(command, start_new_session=True, **options)  # nosec B603
 
     def stop(self) -> None:
-        if os.name == "nt":
+        if sys.platform == "win32":
             kernel32 = _kernel32()
             kernel32.TerminateJobObject(self.job, 1)
             kernel32.CloseHandle(self.job)
@@ -102,6 +104,8 @@ def _tail(log: Path, lines: int = 20) -> str:
 
 
 def _group_gone(process: subprocess.Popen[bytes], timeout: float) -> bool:
+    if sys.platform == "win32":  # also tells type checkers which platform this code is for
+        raise OSError("Process groups are for Linux and macOS")
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         process.poll()  # collect the program itself once it exits, or it still counts as running
@@ -116,6 +120,8 @@ def _group_gone(process: subprocess.Popen[bytes], timeout: float) -> bool:
 # --- Windows: a job object holds the program and everything it starts ------------------------------
 
 def _kernel32() -> Any:
+    if sys.platform != "win32":
+        raise OSError("Job objects are Windows only")
     from ctypes import WinDLL, wintypes  # Windows only
 
     kernel32 = WinDLL("kernel32", use_last_error=True)
@@ -132,6 +138,8 @@ def _kernel32() -> Any:
 
 def _new_job() -> Any:
     """A job whose programs all end when it's closed, even if the tests themselves crash."""
+    if sys.platform != "win32":
+        raise OSError("Job objects are Windows only")
     import ctypes
 
     class Basic(ctypes.Structure):
@@ -158,6 +166,8 @@ def _new_job() -> Any:
 
 
 def _join_job_and_run(job: Any, process: subprocess.Popen[bytes]) -> None:
+    if sys.platform != "win32":
+        raise OSError("Job objects are Windows only")
     import ctypes
     from ctypes import wintypes
 

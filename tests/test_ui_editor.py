@@ -1,6 +1,7 @@
 import json
 import shutil
 from pathlib import Path
+from typing import Any
 
 import pytest
 from test_ui import request
@@ -101,7 +102,7 @@ def test_lines_without_a_step_open_as_text(demo):
 
 # --- validating specs ------------------------------------------------------------
 
-def spec(**overrides):
+def spec(**overrides: Any) -> dict[str, Any]:
     base = {"kind": "Scenario", "name": "Buy", "tags": "@smoke", "description": "",
             "steps": [{"line": 'Given I am logged in as "standard_user"'}], "examples": []}
     return {**base, **overrides}

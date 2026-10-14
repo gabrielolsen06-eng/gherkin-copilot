@@ -17,7 +17,7 @@ import difflib
 import json
 import sys
 import traceback
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
@@ -40,7 +40,7 @@ class UsageError(Exception):
 
 
 @contextmanager
-def _input_file() -> Iterator[None]:
+def _input_file() -> Generator[None]:
     """Around a loader only: its ValueError means a malformed input file, so report it as one line (exit 2)."""
     try:
         yield
@@ -178,7 +178,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     features = list(iter_feature_files(root))
     if not features:
         raise UsageError(f"No .feature files found in {root}")
-    results = []
+    results: list[StepResult] = []
     for feature in features:
         with _input_file():
             parsed = parse_feature(feature, feature.relative_to(base).as_posix())
@@ -420,8 +420,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     for stream in (sys.stdout, sys.stderr):  # never crash on characters a console or log file can't show
-        if hasattr(stream, "reconfigure"):
-            stream.reconfigure(errors="replace")
+        reconfigure = getattr(stream, "reconfigure", None)  # missing when output is captured, e.g. by some IDEs
+        if reconfigure:
+            reconfigure(errors="replace")
     command: Callable[[argparse.Namespace], int] = args.func
     try:
         return command(args)

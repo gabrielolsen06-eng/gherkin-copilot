@@ -24,7 +24,7 @@ from typing import Any
 from gherkin_copilot.checker import FeatureStep, stub_parts
 from gherkin_copilot.indexer import StepDef, index_file, uses_desktop_helper
 from gherkin_copilot.matcher import is_exact_match
-from gherkin_copilot.ui.builder import STEP_START, FileChange, _inside, _module_names
+from gherkin_copilot.ui.builder import STEP_START, FileChange, json_object, list_of, module_names, path_inside
 from gherkin_copilot.ui.projects import Project
 
 # element types -> how Playwright finds them
@@ -111,13 +111,13 @@ def draft(line: str, keyword: str) -> dict[str, Any]:
 
 def _renamed(info: dict[str, Any], names: object, fixture: str = "page") -> tuple[str, list[tuple[str, str]]]:
     """Apply the user's names for the step's values: {text1} -> {first_name}."""
-    names = names or {}
-    if not isinstance(names, dict):
+    chosen = json_object(names or {})
+    if chosen is None:
         raise ValueError("Value names must be an object.")
     pattern: str = info["pattern"]
     params: list[tuple[str, str]] = []
     for p in info["params"]:
-        new = names.get(p["name"], p["name"])
+        new = chosen.get(p["name"], p["name"])
         if not isinstance(new, str) or not IDENTIFIER.match(new) or py_keyword.iskeyword(new) or new == fixture:
             raise ValueError(f"“{new}” can't be a value name: use lowercase letters, numbers and _ only.")
         if new in (n for n, _ in params):
@@ -130,14 +130,15 @@ def _renamed(info: dict[str, Any], names: object, fixture: str = "page") -> tupl
 
 
 def _value(value: object, params: list[tuple[str, str]], what: str) -> str:
-    if isinstance(value, dict) and "param" in value:
-        name = value["param"]
+    data = json_object(value)
+    if data is not None and "param" in data:
+        name = data["param"]
         kinds = dict(params)
-        if name not in kinds:
+        if not isinstance(name, str) or name not in kinds:
             raise ValueError(f"{what}: “{name}” isn't one of this step's values.")
         return f"str({name})" if kinds[name] == "number" else name
-    if isinstance(value, dict):
-        value = value.get("text")
+    if data is not None:
+        value = data.get("text")
     return repr(_text(value, what))
 
 
@@ -146,22 +147,26 @@ def code(line: str, keyword: str, names: object, actions: object, kind: str = "w
     action_table, target_table, fixture = KINDS[kind]
     info = draft(line, keyword)
     pattern, params = _renamed(info, names, fixture)
-    if not isinstance(actions, list) or not actions:
+    steps = list_of(actions, object)
+    if not steps:
         raise ValueError("Add at least one action.")
-    if len(actions) > MAX_ACTIONS:
+    if len(steps) > MAX_ACTIONS:
         raise ValueError(f"A step can have up to {MAX_ACTIONS} actions.")
-    body = []
-    for n, item in enumerate(actions, start=1):
-        if not isinstance(item, dict) or item.get("action") not in action_table:
+    body: list[str] = []
+    for n, raw in enumerate(steps, start=1):
+        item = json_object(raw) or {}
+        action = item.get("action")
+        if not isinstance(action, str) or action not in action_table:
             raise ValueError(f"Action {n}: choose what it does.")
-        label, needs_target, needs_value, template = action_table[item["action"]]
-        parts = {}
+        label, needs_target, needs_value, template = action_table[action]
+        parts: dict[str, str] = {}
         if needs_target:
-            target = item.get("target")
-            if not isinstance(target, dict) or target.get("by") not in target_table:
+            target = json_object(item.get("target")) or {}
+            by = target.get("by")
+            if not isinstance(by, str) or by not in target_table:
                 raise ValueError(f"Action {n} ({label}): choose how to find the element.")
             element = _text(target.get("value"), f"action {n}'s element")
-            parts["target"] = target_table[target["by"]][1].format(v=repr(element))
+            parts["target"] = target_table[by][1].format(v=repr(element))
         if needs_value:
             parts["value"] = _value(item.get("value"), params, f"Action {n} ({label})")
             # a count needs a number: a number value is one already, anything else is converted
@@ -183,7 +188,7 @@ def code(line: str, keyword: str, names: object, actions: object, kind: str = "w
 
 
 def _imports_needed(source: str, existing: set[str]) -> list[str]:
-    lines = []
+    lines: list[str] = []
     bdd = sorted({kw for kw in ("given", "when", "then") if f"@{kw}(" in source} |
                  ({"parsers"} if "parsers." in source else set()))
     missing_bdd = [n for n in bdd if n not in existing]
@@ -212,7 +217,7 @@ def plan(project: Project, line: str, keyword: str, names: object, actions: obje
         if not NEW_FILE.match(name):
             raise ValueError("Name the new file with lowercase letters, numbers and _, "
                              "ending in .py (e.g. checkout_steps.py).")
-        path = _inside(folder, relative, ".py") if parent else folder / name
+        path = path_inside(folder, relative, ".py") if parent else folder / name
         if not path.parent.is_dir():
             raise ValueError("That folder doesn't exist in the steps folder.")
         if path.exists():
@@ -221,12 +226,12 @@ def plan(project: Project, line: str, keyword: str, names: object, actions: obje
         after = f'"""Steps built with gherkin-copilot\'s action blocks."""\n\n{header}\n\n\n{source}'
         return FileChange(path, path.relative_to(folder).as_posix(), "", after, creates=True)
 
-    path = _inside(folder, file, ".py")
+    path = path_inside(folder, file, ".py")
     if not path.is_file() or not index_file(path):
         raise ValueError("Pick one of the project's step files.")
     before = path.read_text(encoding="utf-8")
     tree = ast.parse(before)
-    existing = _module_names(tree)
+    existing = module_names(tree)
     function, new, n = generated["function"], generated["function"], 2
     while new in existing:
         new, n = f"{function}_{n}", n + 1

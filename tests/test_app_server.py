@@ -22,6 +22,7 @@ def app_server(tmp_path, capsys):
     assert main(["init", str(tmp_path / "project")]) == 0
     capsys.readouterr()
     spec = importlib.util.spec_from_file_location("generated_app_server", tmp_path / "project" / "app_server.py")
+    assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

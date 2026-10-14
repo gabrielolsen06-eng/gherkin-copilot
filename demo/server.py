@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import os
 import threading
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any
 
 APP_DIR = Path(__file__).resolve().parent / "app"
 HOST = "127.0.0.1"  # never listen on the network, only on this machine
@@ -33,14 +35,14 @@ class DemoHandler(SimpleHTTPRequestHandler):
             self.send_header(name, value)
         super().end_headers()
 
-    def list_directory(self, path):  # no directory listings
+    def list_directory(self, path: str | os.PathLike[str]) -> None:  # no directory listings
         self.send_error(404)
         return None
 
     def do_POST(self) -> None:  # static site: GET/HEAD only
         self.send_error(405)
 
-    def log_message(self, format, *args) -> None:  # keep test output clean
+    def log_message(self, format: str, *args: Any) -> None:  # keep test output clean
         pass
 
 

@@ -49,9 +49,9 @@ class MergePlan:
     score: float
     keep_uses: int = 0  # feature lines using each step before the merge
     drop_uses: int = 0
-    edits: list[LineEdit] = field(default_factory=list)
-    differences: list[str] = field(default_factory=list)  # their code differs; a person can vouch it's the same
-    blockers: list[str] = field(default_factory=list)  # the merge can't be carried out at all
+    edits: list[LineEdit] = field(default_factory=list[LineEdit])
+    differences: list[str] = field(default_factory=list[str])  # their code differs; a person can vouch it's the same
+    blockers: list[str] = field(default_factory=list[str])  # the merge can't be carried out at all
 
     @property
     def problems(self) -> list[str]:
@@ -93,7 +93,8 @@ def capture(step: StepDef, text: str) -> dict[str, str] | None:
     if step.kind == "regex":
         m = re.fullmatch(step.pattern.removeprefix("^").removesuffix("$"), text)
         return m.groupdict() if m else None
-    out, pos = [], 0
+    out: list[str] = []
+    pos = 0
     for m in PARSE_FIELD.finditer(step.pattern):
         out.append(re.escape(step.pattern[pos : m.start()]))
         out.append(f"(?P<{m.group(1).partition(':')[0]}>.+?)")  # permissive: also accepts <outline> params

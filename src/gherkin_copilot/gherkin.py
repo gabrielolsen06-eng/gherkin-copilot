@@ -25,7 +25,7 @@ class Step:
     keyword: str  # as written: Given / When / Then / And / But / *
     text: str
     line: int
-    attachment: list[str] = field(default_factory=list)  # data table / doc string, indented relative to the step
+    attachment: list[str] = field(default_factory=list[str])  # data table / doc string, indented relative to the step
 
 
 @dataclass
@@ -173,7 +173,7 @@ def render_table(header: list[str], rows: list[list[str]], indent: str) -> list[
 def render(block: Block) -> str:
     """The block as Gherkin text, at its own indentation, ending with a newline."""
     i = block.indent
-    out = []
+    out: list[str] = []
     if block.tags:
         out.append(i + " ".join(block.tags))
     out.append(f"{i}{block.kind}: {block.name}".rstrip())

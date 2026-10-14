@@ -29,8 +29,8 @@ from pathlib import Path
 from typing import Any
 
 from gherkin_copilot import gherkin
-from gherkin_copilot.report import ARTIFACT_KINDS, _short_error, attach_artifacts, load_report
-from gherkin_copilot.ui.builder import _inside
+from gherkin_copilot.report import ARTIFACT_KINDS, attach_artifacts, load_report, short_error
+from gherkin_copilot.ui.builder import path_inside
 from gherkin_copilot.ui.history import project_root
 from gherkin_copilot.ui.projects import Project
 
@@ -57,7 +57,7 @@ def parse_command(text: str) -> tuple[dict[str, str], list[str]]:
         tokens = split_command(text)
     except ValueError as exc:
         raise ValueError(f"The test command can't be read: {exc}") from exc
-    env = {}
+    env: dict[str, str] = {}
     while tokens and ENV_ASSIGNMENT.match(tokens[0]):
         key, _, value = tokens.pop(0).partition("=")
         env[key] = value
@@ -162,7 +162,7 @@ class Runner:
     def _scope(project: Project, scope: str, file: str, name: str) -> tuple[set[str] | None, str]:
         if scope == "all":
             return None, "All tests"
-        path = _inside(Path(project.features), file, ".feature")
+        path = path_inside(Path(project.features), file, ".feature")
         if not path.is_file():
             raise ValueError("That feature file no longer exists.")
         blocks = [b for b in gherkin.parse(path.read_text(encoding="utf-8")).scenarios]
@@ -248,7 +248,8 @@ class Runner:
 def latest_results(project: Project) -> dict[str, Any] | None:
     out = results_dir(project)
     report = out / "cucumber.json"
-    meta = json.loads((out / "run.json").read_text(encoding="utf-8")) if (out / "run.json").is_file() else {}
+    run_file = out / "run.json"
+    meta: dict[str, Any] = json.loads(run_file.read_text(encoding="utf-8")) if run_file.is_file() else {}
     if not report.is_file():
         return {"run": meta, "features": []} if meta else None
     try:
@@ -265,7 +266,7 @@ def latest_results(project: Project) -> dict[str, Any] | None:
                 "name": s.name, "keyword": s.keyword, "status": s.status, "seconds": round(s.seconds, 2),
                 "example": s.example, "tags": s.tags, "line": s.line,
                 "steps": [{"keyword": st.keyword, "name": st.name, "status": st.status, "seconds": round(st.seconds, 2),
-                           "error": _short_error(st.error) if st.error else ""} for st in s.steps],
+                           "error": short_error(st.error) if st.error else ""} for st in s.steps],
                 "artifacts": {kind: [p.relative_to(out).as_posix() for p in paths]
                               for kind, paths in s.artifacts.items()},
             } for s in f.scenarios],

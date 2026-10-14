@@ -18,7 +18,7 @@ from gherkin_copilot import gherkin
 from gherkin_copilot.checker import check_steps, iter_feature_files, parse_feature
 from gherkin_copilot.indexer import StepDef, build_index
 from gherkin_copilot.merger import capture
-from gherkin_copilot.ui.builder import FILE_NAME, FileChange, _inside, _one_line, clean_lines
+from gherkin_copilot.ui.builder import FILE_NAME, FileChange, clean_lines, json_object, list_of, one_line, path_inside
 from gherkin_copilot.ui.catalog import segments
 from gherkin_copilot.ui.projects import Project
 
@@ -32,9 +32,10 @@ MAX_ROWS = 500
 # --- validating what the browser sends ------------------------------------------
 
 def _texts(value: object, what: str) -> list[str]:
-    if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+    texts = list_of(value, str)
+    if texts is None:
         raise ValueError(f"{what} must be a list of text.")
-    return value
+    return texts
 
 
 def _tags(value: object) -> list[str]:
@@ -70,57 +71,60 @@ def _attachment(value: object) -> list[str]:
 
 
 def _examples(value: object) -> list[gherkin.Examples]:
-    if not isinstance(value, list):
+    tables = list_of(value, object)
+    if tables is None:
         raise ValueError("Examples must be a list of tables.")
-    out = []
-    for table in value:
-        if not isinstance(table, dict):
+    out: list[gherkin.Examples] = []
+    for item in tables:
+        table = json_object(item)
+        if table is None:
             raise ValueError("Each Examples table must be an object.")
         header = [" ".join(h.split()) for h in _texts(table.get("header"), "Column names")]
         if not header or not all(header) or len(set(header)) != len(header):
             raise ValueError("Every Examples column needs a different, non-empty name.")
-        rows = table.get("rows")
-        if not isinstance(rows, list) or len(rows) > MAX_ROWS:
+        rows = list_of(table.get("rows"), object)
+        if rows is None or len(rows) > MAX_ROWS:
             raise ValueError(f"An Examples table can have up to {MAX_ROWS} rows.")
-        rows = [[" ".join(c.split()) for c in _texts(r, "Rows")][: len(header)] for r in rows]
+        cells = [[" ".join(c.split()) for c in _texts(r, "Rows")][: len(header)] for r in rows]
         out.append(gherkin.Examples("Examples", " ".join(str(table.get("name") or "").split())[:200],
-                                    _tags(table.get("tags") or []), header, rows))
+                                    _tags(table.get("tags") or []), header, cells))
     return out
 
 
 def clean_spec(spec: object, indent: str = "  ") -> gherkin.Block:
-    if not isinstance(spec, dict):
+    data = json_object(spec)
+    if data is None:
         raise ValueError("Send the scenario as an object.")
-    kind = spec.get("kind") or "Scenario"
-    if kind not in KINDS:
+    kind = data.get("kind") or "Scenario"
+    if not isinstance(kind, str) or kind not in KINDS:
         raise ValueError("Unknown kind of scenario.")
-    name = " ".join(str(spec.get("name") or "").split())
+    name = " ".join(str(data.get("name") or "").split())
     if kind != "Background":
-        name = _one_line(name, "scenario")
-    steps_in = spec.get("steps")
-    if not isinstance(steps_in, list) or not all(isinstance(s, dict) for s in steps_in):
+        name = one_line(name, "scenario")
+    step_data: list[dict[str, object]] | None = list_of(data.get("steps"), dict)
+    if step_data is None:
         raise ValueError("Steps must be a list.")
-    lines = clean_lines([s.get("line") for s in steps_in])
+    lines = clean_lines([s.get("line") for s in step_data])
     if not lines:
         raise ValueError("Add at least one step before saving.")
-    steps = []
-    for line, raw in zip(lines, steps_in, strict=True):
+    steps: list[gherkin.Step] = []
+    for line, raw in zip(lines, step_data, strict=True):
         word, text = line.split(None, 1)
         steps.append(gherkin.Step(word, text, 0, _attachment(raw.get("attachment"))))
-    examples = _examples(spec.get("examples") or [])
+    examples = _examples(data.get("examples") or [])
     outline = kind in gherkin.OUTLINES
     if outline and not examples:
         raise ValueError("A Scenario Outline needs an Examples table.")
     if not outline and examples:
         raise ValueError("Only a Scenario Outline can have Examples.")
-    tags = _tags(spec.get("tags") or []) if kind != "Background" else []
-    return gherkin.Block(kind, name, tags, _description(spec.get("description") or ""), steps, examples, 0, 0, indent)
+    tags = _tags(data.get("tags") or []) if kind != "Background" else []
+    return gherkin.Block(kind, name, tags, _description(data.get("description") or ""), steps, examples, 0, 0, indent)
 
 
 # --- reading ------------------------------------------------------------------------
 
 def _feature_path(project: Project, file: str) -> Path:
-    path = _inside(Path(project.features), file, ".feature")
+    path = path_inside(Path(project.features), file, ".feature")
     if not path.is_file():
         raise ValueError("That feature file no longer exists.")
     return path
@@ -129,12 +133,12 @@ def _feature_path(project: Project, file: str) -> Path:
 def list_scenarios(project: Project) -> dict[str, Any]:
     folder = Path(project.features)
     index = build_index(Path(project.steps))
-    files = []
+    files: list[dict[str, Any]] = []
     for path in iter_feature_files(folder):
         text = path.read_text(encoding="utf-8")
         status = {r.step.line: r.status for r in check_steps(parse_feature(path), index)}
         feature = gherkin.parse(text)
-        blocks = []
+        blocks: list[dict[str, Any]] = []
         for b in feature.blocks:
             states = [status.get(s.line, "missing") for s in b.steps]
             blocks.append({"kind": b.kind, "name": b.name, "tags": b.tags, "start": b.start, "end": b.end,
@@ -166,7 +170,7 @@ def open_scenario(project: Project, file: str, start: object, name: object) -> d
     block = _find_block(feature, start, name)
     index = build_index(Path(project.steps))
     results = {r.step.line: r for r in check_steps(parse_feature(path), index)}
-    steps = []
+    steps: list[dict[str, Any]] = []
     for s in block.steps:
         result = results.get(s.line)
         base = result.step.keyword if result else "given"
@@ -219,7 +223,7 @@ def plan_new(project: Project, mode: str, file: str, feature_name: str, spec: ob
             raise ValueError(f"{path.name} already exists. Choose “Add to an existing file” instead.")
         block = clean_spec(spec)
         rendered = gherkin.render(block)
-        return FileChange(path, path.name, "", f"Feature: {_one_line(feature_name, 'feature')}\n\n{rendered}",
+        return FileChange(path, path.name, "", f"Feature: {one_line(feature_name, 'feature')}\n\n{rendered}",
                           creates=True), rendered
     if mode == "append":
         path = _feature_path(project, file)

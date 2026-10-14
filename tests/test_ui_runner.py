@@ -2,7 +2,9 @@ import json
 import os
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 from test_ui import request
@@ -48,12 +50,13 @@ def project(tmp_path):
                    str(tmp_path), False)
 
 
-def wait(run_status):
+def wait(run_status: Callable[[], dict[str, Any] | None]) -> dict[str, Any]:
     deadline = time.time() + 60
-    while run_status()["status"] == "running":
+    while (status := run_status()) is not None and status["status"] == "running":
         assert time.time() < deadline, "tests took too long"
         time.sleep(0.1)
-    return run_status()
+    assert status is not None
+    return status
 
 
 @pytest.mark.parametrize("command, expected", [
@@ -108,6 +111,7 @@ def test_run_all_then_one_scenario(project):
     done = wait(lambda: work.status("p"))
     assert done["status"] == "finished" and done["exit_code"] == 1 and done["done"] == 2
     results = runner.latest_results(project)
+    assert results is not None
     scenarios = {s["name"]: s for f in results["features"] for s in f["scenarios"]}
     assert scenarios["Adding works"]["status"] == "passed"
     assert scenarios["Adding works again"]["status"] == "failed"
@@ -118,7 +122,9 @@ def test_run_all_then_one_scenario(project):
     work.start(project, "scenario", "sums.feature", "Adding works")
     done = wait(lambda: work.status("p"))
     assert done["exit_code"] == 0
-    names = [s["name"] for f in runner.latest_results(project)["features"] for s in f["scenarios"]]
+    results = runner.latest_results(project)
+    assert results is not None
+    names = [s["name"] for f in results["features"] for s in f["scenarios"]]
     assert names == ["Adding works"]  # "Adding works again" also contains the name, but isn't run
 
 

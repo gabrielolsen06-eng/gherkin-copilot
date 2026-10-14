@@ -60,8 +60,9 @@ def strip_keyword(text: str) -> str:
 PARSE_TOKEN = re.compile(r"\{\{|\}\}|\{([^{}]*)\}")  # parse's escaped braces first, then {fields}
 
 
-def _parse_to_regex(pattern: str) -> str:
-    out, pos = [], 0
+def parse_to_regex(pattern: str) -> str:
+    out: list[str] = []
+    pos = 0
     for m in PARSE_TOKEN.finditer(pattern):
         out.append(re.escape(pattern[pos : m.start()]))
         if m.group(1) is None:  # {{ or }} is a literal brace
@@ -78,7 +79,7 @@ def _parse_to_regex(pattern: str) -> str:
 def to_regex(step: StepDef) -> re.Pattern[str] | None:
     if step.kind == "string":  # the indexer only keeps "string" where braces are literal (pytest-bdd)
         return re.compile(rf"^{re.escape(step.pattern)}$")
-    source = step.pattern if step.kind == "regex" else _parse_to_regex(step.pattern)
+    source = step.pattern if step.kind == "regex" else parse_to_regex(step.pattern)
     source = source.removeprefix("^").removesuffix("$")
     try:
         return re.compile(rf"^{source}$")
@@ -128,7 +129,7 @@ def similarity(a: str, b: str) -> float:
 def find(text: str, steps: list[StepDef], limit: int = 5, min_score: float = 0.4) -> list[Match]:
     """Exact matches first, then the closest fuzzy matches."""
     query = normalize_text(text)
-    matches = []
+    matches: list[Match] = []
     for step in steps:
         if is_exact_match(text, step):
             matches.append(Match(step, 1.0, True))
@@ -151,7 +152,7 @@ def find_duplicates(steps: list[StepDef], threshold: float = 0.6) -> list[Duplic
     """
     slack = 0.0005  # scores are rounded to 3 places, so keep bounds a hair generous
     normalized = [(s, n, set(n.split())) for s in steps for n in [normalize_pattern(s)]]
-    pairs = []
+    pairs: list[DuplicatePair] = []
     for (a, na, wa), (b, nb, wb) in combinations(normalized, 2):
         if not na or not nb:
             continue

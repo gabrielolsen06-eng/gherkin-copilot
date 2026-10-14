@@ -226,7 +226,8 @@ worked through on 2026-10-12 (see `gherkin-copilot-review-2026-10-11-status.md` 
 | `bandit -q -r src demo desktop_demo run_demo.py`, and on both kinds of project `init` creates (static security analysis) | No findings. The places that start a process (`run_demo.py`, the app's Run button in `ui/runner.py`, and the desktop steps starting the app under test) use fixed argument lists and no shell, and are annotated with why |
 | `mypy --strict` | No issues in 22 source files |
 | `ruff check` (rules in `pyproject.toml`), also on both kinds of project `init` creates | No issues |
-| Tool tests | 306 passed (macOS, Python 3.14; also run on Windows and Ubuntu in CI), including tests for missing paths, malformed files, non-finite numbers, Windows code pages, generated inputs, the project `init` creates, and the home page's git reader checked against git itself (every object in a delta-compressed pack, and commits to push/pull on branchy history) |
+| Pyright, the type checker in VS Code (settings in `pyproject.toml`): strict on `src`, `demo`, `desktop_demo` and both kinds of project `init` creates, standard on `tests/`, checked as macOS, Windows and Linux | No errors |
+| Tool tests | 307 passed (macOS, Python 3.14; also run on Windows and Ubuntu in CI), including tests for missing paths, malformed files, non-finite numbers, Windows code pages, generated inputs, the project `init` creates, and the home page's git reader checked against git itself (every object in a delta-compressed pack, and commits to push/pull on branchy history) |
 | Branch coverage (`coverage run -m pytest tests`) | 91% |
 | Demo scenarios in a real browser (Brave) | 6 passed |
 | Desktop scenarios on Windows (`desktop_demo/`, Character Map, CI `windows-latest`) | 3 passed: typing into a field, clicking a button and ticking a checkbox, through UI Automation with no fake mouse or keyboard. A project made by `init --desktop` passes the same scenarios as created |

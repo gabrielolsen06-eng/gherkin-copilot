@@ -55,6 +55,7 @@ def test_code_from_actions():
     ({}, [{"action": "click", "target": {"by": "xpath", "value": "//a"}}], "how to find the element"),
     ({}, [{"action": "click", "target": {"by": "css", "value": ""}}], "Fill in action 1's element"),
     ({}, [fill("label", "Name", {"param": "nope"})], "isn't one of this step's values"),
+    ({}, [fill("label", "Name", {"param": ["nope"]})], "isn't one of this step's values"),  # used to be a TypeError
     ({}, [fill("label", "Name", {"text": "line\nbreak"})], "one line"),
     ({"text1": "page"}, [{"action": "click", "target": {"by": "css", "value": "a"}}], "can't be a value name"),
     ({"text1": "x); import os; ("}, [{"action": "click", "target": {"by": "css", "value": "a"}}], "can't be a value name"),

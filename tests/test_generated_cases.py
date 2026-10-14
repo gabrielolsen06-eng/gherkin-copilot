@@ -7,7 +7,7 @@ import pytest
 
 from gherkin_copilot.checker import parse_feature_text
 from gherkin_copilot.indexer import StepDef
-from gherkin_copilot.matcher import _parse_to_regex, is_exact_match, normalize_pattern
+from gherkin_copilot.matcher import is_exact_match, normalize_pattern, parse_to_regex
 from gherkin_copilot.report import Feature, Scenario, render_html
 
 WORDS = ["user", "cart", "page", "product", "order", "total", "badge", "login", "item", "list", "error", "price"]
@@ -70,7 +70,7 @@ def test_parse_patterns_match_their_own_filled_in_text(seed):
     text = " ".join(filled)
     assert is_exact_match(f"Given {text}", step), (step.pattern, text)
     assert not is_exact_match(f"Given zulu {text.split(' ', 1)[1]}", step)  # the first fixed word changed
-    re.compile(_parse_to_regex(step.pattern))
+    re.compile(parse_to_regex(step.pattern))
 
 
 def test_escaped_braces_are_literal():

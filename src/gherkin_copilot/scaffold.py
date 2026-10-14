@@ -27,8 +27,8 @@ SHARED = {"requirements.lock", "requirements.in", ".gitignore", "steps/__init__.
 @dataclass
 class InitResult:
     root: Path
-    created: list[str] = field(default_factory=list)  # paths relative to root, with forward slashes
-    skipped: list[str] = field(default_factory=list)  # already there, so left untouched
+    created: list[str] = field(default_factory=list[str])  # paths relative to root, with forward slashes
+    skipped: list[str] = field(default_factory=list[str])  # already there, so left untouched
 
 
 def _read(folder: Traversable, prefix: str = "") -> dict[str, str]:

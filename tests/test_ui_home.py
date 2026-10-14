@@ -150,6 +150,7 @@ def test_summary_matches_git_for_loose_and_packed_objects(repos, git):
             assert not list((copy / ".git" / "objects").glob("??/*"))  # everything is in a pack now
         (copy / "tests").mkdir(exist_ok=True)
         info = gitinfo.summary(copy / "tests" if pack else copy)  # also found from a subfolder
+        assert info is not None
         assert info["branch"] == "main" and info["upstream"] == "origin/main"
         assert info["head"]["sha"] == git(copy, "rev-parse", "HEAD")
         assert (info["head"]["subject"], info["head"]["author"]) == ("Mine", "Grace")
@@ -164,6 +165,7 @@ def test_a_pull_is_recorded_and_brings_the_copy_up_to_date(repos, git):
     _, copy = repos
     git(copy, "pull", "-q", "--no-edit", who="Grace")
     info = gitinfo.summary(copy)
+    assert info is not None
     assert info["last_pull"]["action"].startswith("pull") and info["activity"][0]["kind"] == "pull"
     assert (info["ahead"], info["behind"]) == (2, 0)  # Mine and the merge commit
     assert info["head"]["subject"].startswith("Merge branch")
@@ -214,6 +216,7 @@ def test_a_linked_worktree_reads_its_own_branch(repos, git, tmp_path):
     shared, _ = repos
     git(shared, "worktree", "add", "-q", "-b", "feature", str(tmp_path / "wt"))
     info = gitinfo.summary(tmp_path / "wt")
+    assert info is not None
     assert info["branch"] == "feature" and info["head"]["subject"] == "Theirs 2"
 
 
@@ -225,6 +228,7 @@ def test_a_damaged_object_falls_back_to_the_reflog(repos, git):
     path.chmod(0o644)
     path.write_bytes(b"not zlib")
     info = gitinfo.summary(copy)
+    assert info is not None
     assert info["head"]["subject"] == "Mine" and info["head"]["author"] == ""
     assert info["ahead"] is None
 
@@ -243,6 +247,7 @@ def test_reflog_hides_credentials_and_skips_stash_resets(tmp_path):
         f"{a} {a} Ada <ada@example.com> 1700000100 +0000\treset: moving to HEAD\n"
         f"{a} {b} Ada <ada@example.com> 1700000200 -0130\tpull origin main: Fast-forward\n")
     info = gitinfo.summary(tmp_path)
+    assert info is not None
     assert [e["kind"] for e in info["activity"]] == ["pull", "clone"]
     assert info["activity"][1]["message"] == "from https://git.example.com/shop.git"
     assert "s3cret" not in json.dumps(info)

@@ -16,7 +16,7 @@ import hashlib
 import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar, cast
 
 from gherkin_copilot.checker import check_steps, iter_feature_files, make_stub, parse_feature_text
 from gherkin_copilot.indexer import build_index, index_file, iter_python_files, uses_desktop_helper
@@ -26,6 +26,23 @@ from gherkin_copilot.ui.projects import Project
 STEP_START = re.compile(r"^(Given|When|Then|And|But|\*)\s+\S")
 FILE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{0,80}$")
 MAX_LINES = 200
+T = TypeVar("T")
+
+
+# --- checking what the browser sends (JSON: anything could arrive) -------------------
+
+def list_of(value: object, kind: type[T]) -> list[T] | None:
+    """value, if it's a list whose items are all ``kind``; otherwise None."""
+    if not isinstance(value, list):
+        return None
+    items = cast("list[object]", value)
+    found = [item for item in items if isinstance(item, kind)]
+    return found if len(found) == len(items) else None
+
+
+def json_object(value: object) -> dict[str, object] | None:
+    """value, if it's a JSON object; otherwise None."""
+    return cast("dict[str, object]", value) if isinstance(value, dict) else None
 
 
 @dataclass
@@ -53,18 +70,19 @@ def _hash(text: str) -> str:
 # --- the draft --------------------------------------------------------------
 
 def clean_lines(lines: object) -> list[str]:
-    if not isinstance(lines, list) or not all(isinstance(line, str) for line in lines):
+    texts = list_of(lines, str)
+    if texts is None:
         raise ValueError("Steps must be a list of text lines.")
-    if len(lines) > MAX_LINES:
+    if len(texts) > MAX_LINES:
         raise ValueError(f"A scenario can have at most {MAX_LINES} steps.")
-    cleaned = [" ".join(line.split()) for line in lines]
+    cleaned = [" ".join(line.split()) for line in texts]
     for line in cleaned:
         if not STEP_START.match(line):
             raise ValueError(f"Every step must start with Given, When, Then, And or But: {line or '(empty)'}")
     return cleaned
 
 
-def _one_line(text: str, what: str) -> str:
+def one_line(text: str, what: str) -> str:
     text = " ".join(text.split())
     if not text:
         raise ValueError(f"Give the {what} a name.")
@@ -93,7 +111,7 @@ def check(project: Project, lines: list[str], examples: object = None) -> list[d
 
 # --- files ------------------------------------------------------------------
 
-def _inside(folder: Path, relative: str, suffix: str) -> Path:
+def path_inside(folder: Path, relative: str, suffix: str) -> Path:
     if not relative or "\\" in relative or relative.startswith("/"):
         raise ValueError("Pick a file from the list.")
     path = (folder / relative).resolve()
@@ -110,7 +128,7 @@ def project_files(project: Project) -> dict[str, list[str]]:
     }
 
 
-def _module_names(tree: ast.Module) -> set[str]:
+def module_names(tree: ast.Module) -> set[str]:
     names: set[str] = set()
     for node in tree.body:
         if isinstance(node, (ast.Import, ast.ImportFrom)):
@@ -127,20 +145,22 @@ def plan_stubs(project: Project, file: str, lines: object, only: object = None,
     The whole draft is always checked, so an "And" line gets the keyword of the line above it.
     """
     folder = Path(project.steps)
-    path = _inside(folder, file, ".py")
+    path = path_inside(folder, file, ".py")
     if not path.is_file() or not index_file(path):
         raise ValueError("Pick one of the project's step files.")
-    if only is not None and (not isinstance(only, list) or not all(isinstance(i, int) for i in only)):
+    chosen = list_of(only, int) if only is not None else None
+    if only is not None and chosen is None:
         raise ValueError("Choose which steps to add.")
     results = check(project, clean_lines(lines), examples)
-    stubs = list(dict.fromkeys(r["stub"] for i, r in enumerate(results) if r["stub"] and (only is None or i in only)))
+    stubs: list[str] = list(dict.fromkeys(r["stub"] for i, r in enumerate(results)
+                                          if r["stub"] and (chosen is None or i in chosen)))
     if not stubs:
         raise ValueError("Every step in this scenario already exists.")
 
     before = path.read_text(encoding="utf-8")
     tree = ast.parse(before)
-    existing = _module_names(tree)
-    renamed = []
+    existing = module_names(tree)
+    renamed: list[str] = []
     for stub in stubs:  # don't shadow a function that's already in the file
         found = re.search(r"^def (\w+)\(", stub, re.M)
         name = found.group(1) if found else "step"
@@ -152,7 +172,7 @@ def plan_stubs(project: Project, file: str, lines: object, only: object = None,
 
     used = {kw for kw in ("given", "when", "then") if any(s.startswith(f"@{kw}(") for s in renamed)}
     used |= {"parsers"} if any("parsers." in s for s in renamed) else set()
-    missing = sorted(used - _module_names(tree))
+    missing = sorted(used - module_names(tree))
     out = before.rstrip("\n").splitlines()
     if missing:
         imports = [n for n in tree.body if isinstance(n, (ast.Import, ast.ImportFrom))]

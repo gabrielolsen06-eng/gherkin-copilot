@@ -6,7 +6,9 @@ folder is loaded here, so a new step file works without registering it anywhere.
 
 import os
 import shlex
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import app_server
 import pytest
@@ -15,13 +17,13 @@ STEPS_DIR = Path(__file__).resolve().parent / "steps"
 pytest_plugins = [f"steps.{p.stem}" for p in sorted(STEPS_DIR.glob("*.py")) if p.stem != "__init__"]
 
 
-def pytest_addoption(parser):
+def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addini("app_server", "program that starts the site under test (the APP_SERVER variable overrides it)")
     parser.addini("app_server_args", "what to put after the program's name, separated by spaces")
     parser.addini("app_server_wait", "seconds to wait for base_url to answer", default="300")
 
 
-def pytest_configure(config):
+def pytest_configure(config: pytest.Config) -> None:
     """pytest-bdd doesn't create the --cucumberjson folder, so reports/cucumber.json would fail on a fresh checkout."""
     path = config.getoption("cucumber_json_path", None)
     if path:
@@ -29,7 +31,7 @@ def pytest_configure(config):
 
 
 @pytest.fixture(scope="session")
-def browser_type_launch_args(browser_type_launch_args):
+def browser_type_launch_args(browser_type_launch_args: dict[str, Any]) -> dict[str, Any]:
     """BROWSER_PATH=... runs a Chromium-based browser that has no --browser-channel name,
     such as Brave or a company-approved build."""
     path = os.environ.get("BROWSER_PATH")
@@ -37,7 +39,7 @@ def browser_type_launch_args(browser_type_launch_args):
 
 
 @pytest.fixture(scope="session", autouse=True)
-def site_started(pytestconfig, base_url):
+def site_started(pytestconfig: pytest.Config, base_url: str | None) -> Iterator[None]:
     """If pytest.ini names a program that starts the site, start it once, and stop it after the last scenario."""
     program = os.environ.get("APP_SERVER") or pytestconfig.getini("app_server")
     if not program:

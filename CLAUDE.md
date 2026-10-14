@@ -40,7 +40,10 @@ After changing `src/`, reinstall with `python -m pip install --no-deps --no-buil
 .venv-dev/bin/bandit -q -r src demo desktop_demo run_demo.py && .venv-dev/bin/pip-audit --strict -r requirements.lock -r requirements-desktop.lock
 ```
 
-All four must stay clean. Exit codes: 0 ok, 1 finding, 2 bad input (`UsageError`; wrap loaders in
+All four must stay clean. So must VS Code's Pylance, which reads `[tool.pyright]` in `pyproject.toml`
+(strict everywhere but `tests/`): `npx pyright@1.1.414 --pythonpath .venv/bin/python`, also with
+`--pythonplatform Windows`. Windows-only code starts with `if sys.platform != "win32": raise OSError(...)`
+so Pyright checks it on Windows and skips it on macOS (not `assert`: bandit flags it). Exit codes: 0 ok, 1 finding, 2 bad input (`UsageError`; wrap loaders in
 `cli._input_file()` to turn their ValueError into one), 3 internal error. Displayed paths use `.as_posix()`. CI: `.github/workflows/ci.yml`.
 
 ### Dependencies

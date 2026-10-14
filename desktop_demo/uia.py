@@ -14,6 +14,7 @@ from __future__ import annotations
 import contextlib
 import ctypes
 import functools
+import importlib
 import os
 import signal
 import subprocess  # nosec B404: the tests start the app under test from its configured path, no shell
@@ -22,7 +23,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 TIMEOUT = 15.0  # seconds to wait for a window, control or text to appear
 
@@ -50,10 +51,9 @@ class App:
 @functools.cache
 def _uia() -> tuple[Any, Any]:
     """The UI Automation client and its type library (Windows only, loaded on first use)."""
-    import comtypes.client
-
-    library = comtypes.client.GetModule("UIAutomationCore.dll")
-    return comtypes.client.CreateObject(library.CUIAutomation, interface=library.IUIAutomation), library
+    client: Any = importlib.import_module("comtypes.client")  # Any: COM objects have no static types
+    library = client.GetModule("UIAutomationCore.dll")
+    return client.CreateObject(library.CUIAutomation, interface=library.IUIAutomation), library
 
 
 def _safe(read: Callable[[], Any], default: Any = None) -> Any:
@@ -111,8 +111,7 @@ def _act(action: Callable[[], Any], what: str, wait: float = 1.0) -> None:
     errors: list[BaseException] = []
 
     def run() -> None:
-        import comtypes
-
+        comtypes: Any = importlib.import_module("comtypes")
         comtypes.CoInitializeEx(comtypes.COINIT_MULTITHREADED)
         try:
             action()
@@ -128,7 +127,7 @@ def _act(action: Callable[[], Any], what: str, wait: float = 1.0) -> None:
 
 def _exe(pid: int) -> str:
     """The full path of a running program, to spot an app that's already open."""
-    kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+    kernel32 = cast(Any, ctypes).windll.kernel32  # windll exists on Windows only
     handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
     if not handle:
         return ""
@@ -191,7 +190,7 @@ def close(app: App) -> None:
 
 def describe(app: App) -> str:
     """The named controls the app shows, for error messages: what the test could have meant."""
-    seen = []
+    seen: list[str] = []
     for element in _elements(app):
         kind, name = _safe(lambda e=element: (e.CurrentControlType, e.CurrentName), (None, ""))
         if kind in KINDS and name:
