@@ -197,6 +197,7 @@ class Runner:
               wanted: set[str] | None) -> None:
         deadline = run.started + TIME_LIMIT
         out = results_dir(project)
+        status = "error"  # shown only once run.json is saved: whoever sees the run end can read its results
         try:
             if out.name == "results" and out.parent.name == ".gherkin-copilot" and out.exists():
                 shutil.rmtree(out)
@@ -217,11 +218,10 @@ class Runner:
                     run.log.append("")
                     run.log.append("No test matches. Is the feature file loaded by a test module, e.g. "
                                    "scenarios(\"that.feature\") in a test_*.py file?")
-                    run.status, run.ended = "error", time.time()
                     return
                 if run.stop_requested:  # Stop was pressed while collecting: don't start the real run
                     run.log.append("Stopped before the tests started.")
-                    run.status = "stopped"
+                    status = "stopped"
                     return
             command = [*args, *extra]
             run.log.append(f"$ cd {cwd}")
@@ -232,17 +232,20 @@ class Runner:
                 run.log.append("")
                 run.log.append(f"pytest couldn't find “{missing.split(':', 2)[-1].strip()}” from {cwd}. Set “Run from "
                                "folder” in Details to the folder you'd run this command from in a terminal.")
-            run.status = "stopped" if run.stop_requested else "error" if time.time() > deadline else "finished"
-            if run.status == "error":
+            status = "stopped" if run.stop_requested else "error" if time.time() > deadline else "finished"
+            if status == "error":
                 run.log.append(f"Stopped after the {TIME_LIMIT // 60}-minute time limit.")
         except OSError as exc:
             run.log.append(f"Couldn't start the tests: {exc}")
-            run.status = "error"
         finally:
-            run.ended = run.ended or time.time()
-            if out.is_dir():
-                (out / "run.json").write_text(json.dumps({k: v for k, v in run.describe().items() if k != "log"}),
-                                              encoding="utf-8")
+            run.ended = time.time()
+            try:
+                if out.is_dir():
+                    saved = {**run.describe(), "status": status}
+                    del saved["log"]
+                    (out / "run.json").write_text(json.dumps(saved), encoding="utf-8")
+            finally:
+                run.status = status  # even if saving failed, or the project could never run again
 
 
 def latest_results(project: Project) -> dict[str, Any] | None:

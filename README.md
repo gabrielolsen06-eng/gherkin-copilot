@@ -437,7 +437,7 @@ signed in" won't be flagged as duplicates.
 ## Development
 
 ```bash
-python -m pytest tests       # tool tests (307)
+python -m pytest tests       # tool tests (308)
 python -m pytest demo        # browser scenarios (6)
 python -m pytest desktop_demo  # desktop scenarios (3, Windows only)
 ```

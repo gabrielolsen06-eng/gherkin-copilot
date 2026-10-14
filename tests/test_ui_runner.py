@@ -128,6 +128,24 @@ def test_run_all_then_one_scenario(project):
     assert names == ["Adding works"]  # "Adding works again" also contains the name, but isn't run
 
 
+def test_a_run_shows_as_ended_only_once_its_results_are_saved(project, monkeypatch):
+    """The app loads the results as soon as a run ends; run.json used to be written just after (flaky on Windows)."""
+    work = runner.Runner()
+    shown_while_saving = []
+    write_text = Path.write_text
+
+    def spy(path, *args, **kwargs):
+        if path.name == "run.json":
+            shown_while_saving.append((work.status("p") or {}).get("status"))
+        return write_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", spy)
+    work.start(project, "all")
+    assert wait(lambda: work.status("p"))["status"] == "finished"
+    assert shown_while_saving == ["running"]
+    assert json.loads((runner.results_dir(project) / "run.json").read_text())["status"] == "finished"
+
+
 def test_scopes_that_cant_run(project):
     work = runner.Runner()
     work.start(project, "file", "other.feature")
