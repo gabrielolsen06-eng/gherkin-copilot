@@ -12,7 +12,7 @@ and helps you:
 | `find "STEP"` | Says whether a line of Gherkin binds to a step, and suggests close matches if it doesn't |
 | `dupes` | Spots step definitions that say the same thing in slightly different words |
 | `merge` | Merges those duplicates: rewrites feature files to use one wording and deletes the other step (preview first, `--apply` to write) |
-| `check FEATURES` | Checks every line of your .feature files (including lines that aren't Gherkin, which pytest-bdd would reject), and drafts Python code for missing steps (`--stubs`) |
+| `check FEATURES` | Checks every line of your .feature files (including lines that aren't Gherkin, which pytest-bdd would reject, and steps that only raise `NotImplementedError`), and drafts Python code for missing steps (`--stubs`) |
 | `ui` | Opens the gherkin-copilot app in your browser: build and edit scenarios with blocks, run them, browse every step, merge duplicates, see the history of changes |
 | `report [JSON]` | Turns a Cucumber JSON results file into a single HTML page, with screenshots, videos and traces linked |
 
@@ -440,7 +440,7 @@ signed in" won't be flagged as duplicates.
 ## Development
 
 ```bash
-python -m pytest tests       # tool tests (325)
+python -m pytest tests       # tool tests (331)
 python -m pytest demo        # browser scenarios (6)
 python -m pytest desktop_demo  # desktop scenarios (3, Windows only)
 ```

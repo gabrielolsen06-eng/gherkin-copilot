@@ -87,11 +87,13 @@ def binds(step: FeatureStep, definition: StepDef) -> bool:
     return is_exact_match(step.text, definition)
 
 
-def check_steps(feature_steps: list[FeatureStep], definitions: list[StepDef]) -> list[StepResult]:
+def check_steps(feature_steps: list[FeatureStep], definitions: list[StepDef],
+                suggest: bool = True) -> list[StepResult]:
+    """Bind every line; ``suggest`` adds "did you mean" steps for lines with none (the slow part)."""
     results: list[StepResult] = []
     for fs in feature_steps:
         bound = [d for d in definitions if binds(fs, d)]
-        suggestions = [] if bound else find(fs.text, definitions, limit=3, min_score=0.5)
+        suggestions = [] if bound or not suggest else find(fs.text, definitions, limit=3, min_score=0.5)
         results.append(StepResult(fs, bound, suggestions))
     return results
 
@@ -132,6 +134,8 @@ def make_stub(step: FeatureStep, fixture: str = "page") -> str:
     """Draft a pytest-bdd step definition, turning quoted values and numbers into parameters.
     ``fixture`` is what the step works on: Playwright's ``page``, or ``app`` for a desktop app."""
     pattern, params, function = stub_parts(step)
+    if not params:  # a plain string step: no {placeholders}, so its braces are literal
+        pattern = pattern.replace("{{", "{").replace("}}", "}")
     args = ", ".join([fixture] + [p for p, _ in params])
     decorator = f"@{step.keyword}(parsers.parse({pattern!r}))" if params else f"@{step.keyword}({pattern!r})"
     return (

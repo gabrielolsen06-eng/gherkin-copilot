@@ -159,7 +159,7 @@ def plan_stubs(project: Project, file: str, lines: object, only: object = None,
         raise ValueError("Every step in this scenario already exists.")
 
     before = path.read_text(encoding="utf-8")
-    tree = ast.parse(before)
+    tree = ast.parse(before.removeprefix("\ufeff"))  # a BOM some Windows editors add
     existing = module_names(tree)
     renamed: list[str] = []
     for stub in stubs:  # don't shadow a function that's already in the file

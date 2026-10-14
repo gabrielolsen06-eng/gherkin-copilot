@@ -153,15 +153,18 @@ def _print_results(results: list[StepResult]) -> None:
         if r.step.file != current:
             current = r.step.file
             print(f"\n{current}")
-        where = r.bound[0].location if r.status == "ok" else ""
-        print(f"  {_mark(r.status)} {r.step.line:>3}  {r.step.raw}   {where}".rstrip())
+        unwritten = r.status == "ok" and r.bound[0].stub
+        where = r.bound[0].location + ("  (not written yet)" if unwritten else "") if r.status == "ok" else ""
+        print(f"  {_mark('missing' if unwritten else r.status)} {r.step.line:>3}  {r.step.raw}   {where}".rstrip())
         if r.status == "ambiguous":
             for s in r.bound:
                 print(f"           matches {_describe(s)}")
         for m in r.suggestions:
             print(f"           did you mean ({m.score:.2f}) {_describe(m.step)}")
     counts = {k: sum(r.status == k for r in results) for k in ("ok", "missing", "ambiguous")}
-    print(f"\n{len(results)} steps: {counts['ok']} ok, {counts['missing']} missing, {counts['ambiguous']} ambiguous")
+    stubs = sum(r.status == "ok" and r.bound[0].stub for r in results)
+    print(f"\n{len(results)} steps: {counts['ok']} ok, {counts['missing']} missing, {counts['ambiguous']} ambiguous"
+          + (f" ({stubs} of the ok ones only raise NotImplementedError: not written yet)" if stubs else ""))
 
 
 def _steps_root(args: argparse.Namespace) -> Path:
@@ -196,7 +199,8 @@ def cmd_check(args: argparse.Namespace) -> int:
         results.extend(check_steps(parsed, steps))
 
     if args.json:
-        print(json.dumps([{"file": r.step.file, "line": r.step.line, "step": r.step.raw, "status": r.status,
+        print(json.dumps([{"file": r.step.file, "line": r.step.line, "step": r.step.raw,
+                           "status": "unwritten" if r.status == "ok" and r.bound[0].stub else r.status,
                            "bound_to": [s.location for s in r.bound]} for r in results] +
                          [{"file": file, "line": n, "step": line, "status": "invalid", "bound_to": []}
                           for file, n, line in invalid], indent=2))
@@ -209,7 +213,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         missing = [r.step for r in results if r.status == "missing"]
         if args.stubs and missing:
             _print_stubs(missing, "app" if uses_desktop_helper(_steps_root(args)) else "page")
-    return 0 if not invalid and all(r.status == "ok" for r in results) else 1
+    return 0 if not invalid and all(r.status == "ok" and not r.bound[0].stub for r in results) else 1
 
 
 def _merge_json(result: MergeResult, applied: bool) -> str:

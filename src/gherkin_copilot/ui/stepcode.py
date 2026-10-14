@@ -230,7 +230,7 @@ def plan(project: Project, line: str, keyword: str, names: object, actions: obje
     if not path.is_file() or not index_file(path):
         raise ValueError("Pick one of the project's step files.")
     before = path.read_text(encoding="utf-8")
-    tree = ast.parse(before)
+    tree = ast.parse(before.removeprefix("\ufeff"))  # a BOM some Windows editors add
     existing = module_names(tree)
     function, new, n = generated["function"], generated["function"], 2
     while new in existing:

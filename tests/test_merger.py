@@ -274,3 +274,19 @@ def put(page, product):
     (tmp_path / "helpers.py").write_text("from steps import put\n")
     plan = plan_merges(tmp_path).plans[0]
     assert not plan.can_force and any("put is used elsewhere" in b for b in plan.blockers)
+
+
+def test_plain_string_steps_with_braces_merge(tmp_path):
+    root = project(tmp_path, '''@when("the request body is {}")
+def a(page):
+    page.post("{}")
+
+
+@when("the request body is {} now")
+def b(page):
+    page.post("{}")
+''', "Feature: x\n  Scenario: y\n    When the request body is {}\n    When the request body is {} now\n")
+    result = plan_merges(root)  # used to raise re.error: the {} was read as a placeholder
+    assert result.plans[0].ok
+    apply(result)
+    assert (root / "shop.feature").read_text().count("    When the request body is {}\n") == 2

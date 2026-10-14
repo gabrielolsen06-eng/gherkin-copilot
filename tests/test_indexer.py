@@ -100,3 +100,9 @@ def test_older_index_files_still_load_and_bad_ones_say_so(tmp_path):
         old.write_text(text)
         with pytest.raises(ValueError, match="isn't a valid index file"):
             load_index(old)
+
+
+def test_reads_a_step_file_saved_with_a_byte_order_mark(tmp_path):
+    path = tmp_path / "steps.py"
+    path.write_text('from pytest_bdd import given\n\n\n@given("I am here")\ndef here(page): ...\n', encoding="utf-8-sig")
+    assert [s.pattern for s in index_file(path)] == ["I am here"]  # used to be skipped without a word

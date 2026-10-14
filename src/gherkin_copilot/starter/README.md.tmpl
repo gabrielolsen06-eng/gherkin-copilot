@@ -109,7 +109,7 @@ CI machines usually have no browser, so the second line installs Playwright's.
 ```bash
 python -m pip install --require-hashes -r requirements.lock
 python -m playwright install --with-deps chromium
-gherkin-copilot check features          # fails if a line has no step, or matches two
+gherkin-copilot check features          # fails if a line has no step, matches two, or its step isn't written yet
 python -m pytest --cucumberjson=reports/cucumber.json --output=reports/artifacts --screenshot=only-on-failure --tracing=retain-on-failure
 gherkin-copilot report reports/cucumber.json -o reports/report.html
 ```

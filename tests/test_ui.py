@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from gherkin_copilot.indexer import StepDef
+from gherkin_copilot.ui import history
 from gherkin_copilot.ui.catalog import editor_url, segments
 from gherkin_copilot.ui.projects import ProjectStore
 from gherkin_copilot.ui.server import start_in_background
@@ -129,3 +130,23 @@ def test_segments_mark_slots_and_their_types():
     assert segments(step(r"^the cart has (?P<count>\d+) items?$", "regex")) == [
         {"text": "the cart has "}, {"slot": "count", "type": "number"}, {"text": " items"}]
     assert segments(step("I wait", "string")) == [{"text": "I wait"}]
+
+
+def test_unexpected_errors_get_a_readable_answer(app, monkeypatch):
+    app, port = app
+    app.store.add("Demo shop", str(DEMO))
+
+    def bug(*_):
+        raise RuntimeError("a bug")
+
+    def refused(*_):
+        raise PermissionError(13, "Permission denied", "steps.py")
+
+    monkeypatch.setattr(history, "entries", bug)
+    status, content_type, data, _ = request(port, "GET", "/api/history?project=demo-shop")
+    assert status == 500 and content_type.startswith("application/json") and b"terminal window" in data
+    monkeypatch.setattr(history, "entries", refused)
+    status, _, data, _ = request(port, "GET", "/api/history?project=demo-shop")
+    assert status == 400 and b"Permission denied" in data  # used to drop the connection: "Failed to fetch"
+    monkeypatch.setattr(app, "post", bug)
+    assert request(port, "POST", "/api/check", {}, app.token)[0] == 500

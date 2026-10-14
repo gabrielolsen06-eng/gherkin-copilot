@@ -33,6 +33,7 @@ class StepDef:
     function: str
     file: str
     line: int
+    stub: bool = False  # its body only raises NotImplementedError, like the stubs `check --stubs` drafts
 
     @property
     def location(self) -> str:
@@ -95,9 +96,17 @@ def _pattern_from_arg(arg: ast.expr) -> tuple[str, str] | None:
     return None
 
 
+def _not_written(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    body = [s for s in node.body if not (isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant))]  # docstring
+    if len(body) != 1 or not isinstance(body[0], ast.Raise):
+        return False
+    error = body[0].exc.func if isinstance(body[0].exc, ast.Call) else body[0].exc
+    return isinstance(error, ast.Name) and error.id == "NotImplementedError"
+
+
 def index_file(path: Path, root: Path | None = None) -> list[StepDef]:
     try:
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))  # -sig: a BOM from Windows editors
     except (SyntaxError, UnicodeDecodeError):
         return []
 
@@ -128,6 +137,7 @@ def index_file(path: Path, root: Path | None = None) -> list[StepDef]:
                     function=node.name,
                     file=shown_path,
                     line=deco.lineno,
+                    stub=_not_written(node),
                 )
             )
     return steps
@@ -147,7 +157,7 @@ def uses_desktop_helper(root: Path) -> bool:
     Its steps then take the app (the `app` fixture) where browser steps take Playwright's `page`."""
     for path in iter_python_files(root):
         try:
-            if _imports(ast.parse(path.read_text(encoding="utf-8")), "uia"):
+            if _imports(ast.parse(path.read_text(encoding="utf-8-sig")), "uia"):
                 return True
         except (SyntaxError, UnicodeDecodeError):
             continue

@@ -91,6 +91,8 @@ def placeholder_names(step: StepDef) -> list[str] | None:
 
 def capture(step: StepDef, text: str) -> dict[str, str] | None:
     """Pull placeholder values out of step text (keyword already stripped)."""
+    if step.kind == "string":  # braces in a plain string are literal: no values to carry
+        return {} if text == step.pattern else None
     if step.kind == "regex":
         m = re.fullmatch(step.pattern.removeprefix("^").removesuffix("$"), text)
         return m.groupdict() if m else None
@@ -118,6 +120,8 @@ def _field(name: str, types: dict[str, str]) -> str:
 
 def render(step: StepDef, values: dict[str, str]) -> str:
     """Write the kept step's wording with the captured values filled in."""
+    if step.kind == "string":
+        return step.pattern
     return PARSE_FIELD.sub(lambda m: values[m.group(1).partition(":")[0]], step.pattern)
 
 
@@ -154,7 +158,7 @@ def _scan(root: Path) -> tuple[dict[Path, ast.Module], dict[str, list[str]]]:
     mentions: dict[str, list[str]] = defaultdict(list)
     for path in iter_python_files(root):
         try:
-            trees[path] = tree = ast.parse(path.read_text(encoding="utf-8"))
+            trees[path] = tree = ast.parse(path.read_text(encoding="utf-8-sig"))
         except (SyntaxError, UnicodeDecodeError):
             continue
         for node in ast.walk(tree):
@@ -173,7 +177,7 @@ def _scan(root: Path) -> tuple[dict[Path, ast.Module], dict[str, list[str]]]:
 def function_source(root: Path, step: StepDef) -> str | None:
     """A step's decorators and function as written, to compare the two sides of a pair."""
     source = (root / step.file).read_text(encoding="utf-8")
-    node = _function_node(ast.parse(source), step)
+    node = _function_node(ast.parse(source.removeprefix("\ufeff")), step)
     if node is None:
         return None
     return "\n".join(source.splitlines()[min(d.lineno for d in node.decorator_list) - 1 : node.end_lineno])
@@ -319,7 +323,7 @@ def file_changes(plans: list[MergePlan], root: Path) -> dict[Path, tuple[str, st
     for plan in sorted(plans, key=lambda p: -p.drop.line):
         path = root / plan.drop.file
         load(path)
-        node = _function_node(ast.parse(after[path]), plan.drop)
+        node = _function_node(ast.parse(after[path].removeprefix("\ufeff")), plan.drop)
         if node is not None:
             after[path] = _remove_function(after[path], node)
     return {p: (before[p], after[p]) for p in before if before[p] != after[p]}

@@ -2,9 +2,10 @@ import ast
 import json
 from pathlib import Path
 
-from gherkin_copilot.checker import check_steps, make_stub, parse_feature
+from gherkin_copilot.checker import FeatureStep, check_steps, make_stub, parse_feature
 from gherkin_copilot.cli import main
-from gherkin_copilot.indexer import StepDef
+from gherkin_copilot.indexer import StepDef, index_file
+from gherkin_copilot.matcher import is_exact_match
 
 DEMO = Path(__file__).parent.parent / "demo"
 
@@ -72,8 +73,6 @@ def test_check_is_keyword_aware_and_flags_ambiguity(tmp_path):
 
 
 def test_stubs_are_valid_python_with_parameters():
-    from gherkin_copilot.checker import FeatureStep
-
     stub = make_stub(FeatureStep("when", 'I enter postcode "90210" and 2 gift cards', "", "f", 1))
     assert "parsers.parse('I enter postcode \"{text1}\" and {number2:d} gift cards')" in stub
     assert "def i_enter_postcode_and_gift_cards(page, text1, number2):" in stub
@@ -103,3 +102,29 @@ def test_check_reports_missing_with_stubs(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "✗   4  When I go to checkout" in out
     assert "def i_go_to_checkout(page):" in out
+
+
+def test_stub_for_a_line_with_braces_binds(tmp_path):
+    stub = make_stub(FeatureStep("given", "the request body is {}", "", "f", 1))
+    assert "@given('the request body is {}')" in stub  # used to be {{}}, which a plain string never matches
+    path = tmp_path / "steps.py"
+    path.write_text("from pytest_bdd import given\n\n\n" + stub)
+    assert is_exact_match("Given the request body is {}", index_file(path)[0])
+
+
+def test_lines_bound_to_unwritten_stubs_fail_check(tmp_path, capsys):
+    feature = tmp_path / "pay.feature"
+    feature.write_text("Feature: x\n  Scenario: y\n    Given I pay by card\n")
+    stub = make_stub(FeatureStep("given", "I pay by card", "", "f", 3))
+    (tmp_path / "steps.py").write_text("from pytest_bdd import given\n\n\n" + stub)
+    assert main(["check", str(feature), "--path", str(tmp_path)]) == 1  # used to pass: the stub exists
+    assert "(not written yet)" in capsys.readouterr().out
+    assert main(["check", str(feature), "--path", str(tmp_path), "--json"]) == 1
+    assert json.loads(capsys.readouterr().out)[0]["status"] == "unwritten"
+
+
+def test_check_steps_can_skip_suggestions():
+    line = FeatureStep("given", "I am on the logn page", "", "f", 1)
+    steps = [defn("given", "I am on the login page", "string")]
+    assert check_steps([line], steps)[0].suggestions
+    assert not check_steps([line], steps, suggest=False)[0].suggestions  # the Scenarios list doesn't need them

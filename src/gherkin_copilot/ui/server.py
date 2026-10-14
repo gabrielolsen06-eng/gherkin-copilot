@@ -13,6 +13,7 @@ import hmac
 import json
 import secrets
 import threading
+import traceback
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
@@ -264,6 +265,8 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 self._json(exc.status, {"error": str(exc)})
             except ValueError as exc:
                 self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+            except Exception as exc:
+                self._unexpected(exc)
 
         def do_POST(self) -> None:
             if not self._host_ok():
@@ -287,6 +290,16 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 self._json(HTTPStatus.BAD_REQUEST, {"error": "Invalid JSON."})
             except ApiError as exc:
                 self._json(exc.status, {"error": str(exc)})
+            except Exception as exc:
+                self._unexpected(exc)
+
+        def _unexpected(self, exc: Exception) -> None:
+            """A file the OS refused, or a bug: say so, rather than drop the connection ("Failed to fetch")."""
+            if isinstance(exc, OSError):
+                return self._json(HTTPStatus.BAD_REQUEST, {"error": f"Couldn't read or write a file: {exc}"})
+            traceback.print_exc()
+            self._json(HTTPStatus.INTERNAL_SERVER_ERROR,
+                       {"error": "Something went wrong in the app. The details are in its terminal window."})
 
         def log_message(self, format: str, *args: Any) -> None:  # keep the terminal quiet
             pass

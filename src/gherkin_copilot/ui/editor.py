@@ -143,7 +143,7 @@ def list_scenarios(project: Project) -> dict[str, Any]:
     files: list[dict[str, Any]] = []
     for path in iter_feature_files(folder):
         text = path.read_text(encoding="utf-8")
-        status = {r.step.line: r.status for r in check_steps(parse_feature(path), index)}
+        status = {r.step.line: r.status for r in check_steps(parse_feature(path), index, suggest=False)}
         feature = gherkin.parse(text)
         blocks: list[dict[str, Any]] = []
         for b in feature.blocks:
@@ -187,7 +187,7 @@ def open_scenario(project: Project, file: str, start: object, name: object) -> d
     feature = gherkin.parse(text)
     block = _keepable(text, _find_block(feature, start, name))
     index = build_index(Path(project.steps))
-    results = {r.step.line: r for r in check_steps(parse_feature(path), index)}
+    results = {r.step.line: r for r in check_steps(parse_feature(path), index, suggest=False)}
     steps: list[dict[str, Any]] = []
     for s in block.steps:
         result = results.get(s.line)

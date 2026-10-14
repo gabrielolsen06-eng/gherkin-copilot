@@ -31,7 +31,8 @@ gherkin-copilot init|index|find|dupes|merge|check|report|ui --help
 gherkin-copilot ui                        # the app, on 127.0.0.1:8765
 ```
 
-After changing `src/`, reinstall with `python -m pip install --no-deps --no-build-isolation .`
+After changing `src/`, reinstall with `rm -rf build && python -m pip install --no-deps --no-build-isolation .`
+(a stale `build/` would ship deleted modules in the installed copy).
 
 ### Quality checks (dev-only tools in `.venv-dev`, never runtime dependencies)
 
@@ -59,7 +60,7 @@ and `.github/workflows/ci.yml` if playwright changed; `tests/test_init.py` fails
 ## Layout
 
 - `src/gherkin_copilot/`: `scaffold.py` + `starter/` (`init`: starter project from `*.tmpl`
-  files shipped as package data; only creates files, never overwrites), `indexer.py` (find step defs via ast), `matcher.py` (exact and
+  files shipped as package data; only creates files, never overwrites), `indexer.py` (find step defs via ast; `StepDef.stub` marks bodies that only raise NotImplementedError, which `check` fails on), `matcher.py` (exact and
   fuzzy matching), `gherkin.py` (the one feature-file parser: exact scenario line spans + renderer; comments above a step are kept,
   other lines it can't write back are in `Block.unkept`, and the editor refuses those scenarios), `files.py`
   (`save_text`: every write of a user's file keeps its line endings and is atomic; `resolves_inside` for links), `checker.py` (steps
