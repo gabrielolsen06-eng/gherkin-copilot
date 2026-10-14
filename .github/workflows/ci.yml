@@ -41,7 +41,12 @@ jobs:
       - name: Install gherkin-copilot
         run: python -m pip install --no-deps --no-build-isolation .
       - name: Tool tests
-        run: python -m pytest tests -q
+        run: python -m pytest tests -q --junitxml=reports/tests.xml
+      - name: Show each failure on the run page
+        if: failure()
+        env:
+          PYTHONIOENCODING: utf-8
+        run: python .github/annotate_failures.py reports/tests.xml
       - name: The CLI fails a CI gate on a typo'd path
         shell: bash
         run: |
@@ -118,15 +123,9 @@ jobs:
         run: python -m pytest desktop_demo -v -p no:cacheprovider --cucumberjson=reports/desktop.json --junitxml=reports/desktop.xml
       - name: Show each failure on the run page
         if: failure()
-        shell: python
         env:
           PYTHONIOENCODING: utf-8  # the runner reads annotations as UTF-8
-        run: |
-          import xml.etree.ElementTree as ET
-          for case in ET.parse("reports/desktop.xml").iter("testcase"):
-              for bad in [*case.iter("failure"), *case.iter("error")]:
-                  text = f"{bad.get('message') or ''}\n{(bad.text or '')[-1500:]}"
-                  print(f"::error title={case.get('name')}::" + text.replace("%", "%25").replace("\r", "").replace("\n", "%0A"))
+        run: python .github/annotate_failures.py reports/desktop.xml
       - name: HTML report
         if: always()
         run: gherkin-copilot report reports/desktop.json -o reports/desktop.html
