@@ -15,15 +15,19 @@ This page is written for whoever approves software on a managed work laptop.
   data, loaded with `json.loads`, never `pickle` or `eval`). Use `--no-save` to avoid even
   that. `merge` edits `.feature` and step files only with `--apply`; without it, it prints
   the planned diff and changes nothing. It only edits files inside the folder it's given,
-  and refuses any merge that could change what a test does. `init` creates a starter
+  and refuses a merge it can't show is safe: the two steps' code differs, they convert values
+  differently (`{count}` vs `{count:d}`), a function is used elsewhere, or a line wouldn't
+  match the kept step. Every file it writes keeps its line endings and is replaced in one
+  step (written to a temporary file first), so a crash can't leave half a file. `init` creates a starter
   project's files inside the folder it's given; it never overwrites or edits a file that
   already exists (each file is opened in create-only mode), and `--dry-run` writes nothing.
   The files are fixed templates that ship with the tool; the only value filled in is the
   project name, in its README.
-- **No shell commands.** The command line tool never starts other programs. The only
-  exception is the app's **Run tests** button (see below), which runs the test command you
-  saved for a project. `run_demo.py` runs Python subprocesses with argument lists, never
-  through a shell.
+- **No shell commands.** The tool starts only two programs: your web browser, through
+  Python's standard `webbrowser` module, when `ui` starts (skip it with `--no-open`) or when
+  you ask `report` to `--open` a report; and the test command you saved for a project, when
+  you press the app's **Run tests** button (see below). `run_demo.py` runs Python
+  subprocesses with argument lists, never through a shell.
 
 ## The app (`gherkin-copilot ui`)
 
@@ -34,8 +38,9 @@ This page is written for whoever approves software on a managed work laptop.
   fresh each time the app starts and only given to the app's own page, and must come from
   the app's own address. Requests addressed to any other host name are refused, which
   blocks DNS-rebinding attacks.
-- **Serves a fixed list of files.** Only the app's own page, script, stylesheet and icon,
-  never files from your disk. Pages have a strict `Content-Security-Policy` (no inline or
+- **Serves a fixed list of files.** The app's own page, script, stylesheet and icon, and the
+  screenshots, videos and traces of the last test run in the project's
+  `.gherkin-copilot/results` folder (see **Runs tests** below); nothing else from your disk. Pages have a strict `Content-Security-Policy` (no inline or
   external scripts, no external connections) and build all text with `textContent`, so
   step text from a project can never run as code.
 - **The home page reads git's files; it never runs git.** To show the branch, latest
@@ -55,7 +60,8 @@ This page is written for whoever approves software on a managed work laptop.
   - a scenario into a `.feature` file, and step templates into an existing step file, but
     only when you press Save or Add, after the app has shown you exactly what will change.
     The server re-checks the file when you confirm and refuses if it changed since the
-    preview. It only writes inside the selected project's folders: new files only as plain
+    preview. It only writes inside the selected project's folders (a link that points outside
+    them is refused): new files only as plain
     names in the features folder, appends only to existing `.feature` files, and step
     templates only to `.py` files that already contain step definitions. The step code it
     writes is generated on the server from the scenario text, never taken from the
@@ -90,8 +96,12 @@ This page is written for whoever approves software on a managed work laptop.
   command (for example `python -m pytest tests`), typed in by you in the project's
   details and stored in your `~/.gherkin-copilot/projects.json`. Until you set one, the
   app can't run anything. When you press Run, the app:
-  - accepts only commands that run pytest (`pytest …` or `python -m pytest …`), optionally
-    preceded by `NAME=value` environment settings;
+  - checks that the command runs pytest (`pytest …` or `python -m pytest …`), optionally
+    preceded by `NAME=value` environment settings. That check catches typing mistakes; it
+    isn't a security boundary. pytest runs the project's own `conftest.py` and test code
+    with your rights, as it would in a terminal, and settings such as `PYTEST_ADDOPTS` change
+    what it does. The session token is what stops anyone else pressing Run: other websites
+    can't send it;
   - splits the command into an argument list and starts it directly, never through a
     shell, so characters like `;`, `|` or `&&` have no special meaning;
   - runs it from the folder you chose, at most one run per project, with a Stop button and
@@ -108,11 +118,15 @@ This page is written for whoever approves software on a managed work laptop.
 - **`report.html` contains no JavaScript.** It has a strict `Content-Security-Policy` that blocks
   all scripts and network requests, and only shows local images and videos. Every value taken
   from the test results (step names, error messages) is HTML-escaped.
-- **Everything stays on your machine.** Screenshots, videos and traces are written to the local
-  `reports/` folder and nothing is uploaded. The trace viewer command serves on `127.0.0.1` only.
-- **Recordings can include whatever was on the page.** The demo shop shows no real data. If you
-  point the suite at a real application, treat `reports/` as sensitive and don't share it
-  outside your team. It is excluded from git by `.gitignore`.
+- **The tool uploads nothing.** Screenshots, videos and traces are written to the local
+  `reports/` folder. The trace viewer command serves on `127.0.0.1` only.
+- **Recordings can include whatever was on the page, and traces hold secrets.** A trace records
+  everything a scenario typed, passwords included (masking a CI variable only hides it in the
+  job log), and the site's cookies. The demo shop shows no real data. If you point the suite at
+  a real application, treat `reports/` like a password. It is excluded from git by
+  `.gitignore`. The GitLab pipeline that `init --ci gitlab` writes keeps `reports/` as a job
+  artifact for 30 days, downloadable only by project members with Developer role or above
+  (`artifacts:access`, GitLab 16.11 or later).
 
 ## The demo
 
@@ -212,6 +226,22 @@ python -m pip install --no-deps --no-build-isolation .
 
 If your company runs an internal package mirror (Artifactory, Nexus, Azure Artifacts),
 point pip at it with `--index-url`; the hashes still guarantee the same files.
+
+## Known gaps
+
+- **No human security review yet.** The reviews so far were automated or AI-assisted, and most
+  of the code was written with an AI coding assistant (the commit history says so). A review by
+  your security team against this page is the next step.
+- **No licence yet.** The repository has no LICENSE file until the owner has confirmed who owns
+  the code.
+- **CI actions are pinned to major versions** (for example `@v7`), and the Playwright image in
+  the GitLab template to a version tag, not to exact commits or digests.
+- **Dependency updates are manual.** Nothing watches for new vulnerabilities between changes;
+  `pip-audit` runs on every push.
+- **Desktop tests can control any window the test user can see** (see above). Run them on test
+  VMs only.
+- **Playwright starts its own helper program,** a bundled Node.js driver (`node.exe` inside the
+  playwright package), to control the browser. Strict application control can block it.
 
 ## Checks run on this version
 

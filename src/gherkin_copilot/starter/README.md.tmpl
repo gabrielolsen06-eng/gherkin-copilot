@@ -116,6 +116,9 @@ gherkin-copilot report reports/cucumber.json -o reports/report.html
 
 The `gherkin-copilot` lines need the tool installed on the CI machine; leave them out if
 it isn't. Keep `reports/` as the pipeline's artifact: `report.html` shows every scenario,
-with a screenshot and a trace for each failure.
+with a screenshot and a trace for each failure. Treat `reports/` like a password: a trace
+records everything a scenario typed (passwords too, even from masked CI variables) and the
+site's cookies. The GitLab pipeline `init --ci gitlab` writes lets only Developers and above
+download it.
 
 This project was created with `gherkin-copilot init`.

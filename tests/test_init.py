@@ -110,6 +110,7 @@ def test_gitlab_pipeline_only_when_asked(tmp_path, capsys):
     pipeline = (tmp_path / "gl" / ".gitlab-ci.yml").read_text(encoding="utf-8")
     assert code == 0 and "Created 13 files" in out and "  + .gitlab-ci.yml" in out
     assert "--require-hashes -r requirements.lock" in pipeline and "junit: reports/junit.xml" in pipeline
+    assert "    access: developer\n" in pipeline  # traces hold typed passwords and cookies
     with pytest.raises(SystemExit) as unknown:  # argparse rejects a CI system it doesn't know
         main(["init", str(tmp_path / "x"), "--ci", "jenkins"])
     assert unknown.value.code == 2 and not (tmp_path / "x").exists()
