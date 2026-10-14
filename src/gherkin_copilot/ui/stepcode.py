@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from gherkin_copilot.checker import FeatureStep, stub_parts
-from gherkin_copilot.indexer import StepDef, index_file
+from gherkin_copilot.indexer import StepDef, index_file, uses_desktop_helper
 from gherkin_copilot.matcher import is_exact_match
 from gherkin_copilot.ui.builder import STEP_START, FileChange, _inside, _module_names
 from gherkin_copilot.ui.projects import Project
@@ -55,17 +55,36 @@ ACTIONS = {
                    "expect(page).to_have_url(re.compile(re.escape({value})))"),
     "wait": ("Wait for it to appear", True, False, "{target}.wait_for()"),
 }
+# Desktop apps (projects whose steps import uia, the helper `init --desktop` creates): a control is
+# found by the name Narrator reads out, or its AutomationId, and the helper does the rest
+DESKTOP_TARGETS = {"name": ("Control called", "{v}")}
+DESKTOP_ACTIONS = {
+    "click": ("Click", True, False, "uia.click(app, {target})"),
+    "tick": ("Tick", True, False, "uia.tick(app, {target})"),
+    "fill": ("Type into", True, True, "uia.type_into(app, {target}, {value})"),
+    "expect_text": ("Check it shows", True, True, "uia.expect_text(app, {target}, {value})"),
+    "expect_ticked": ("Check it's ticked", True, False, "uia.expect_ticked(app, {target})"),
+    "expect_visible": ("Check text appears", False, True, "uia.expect_visible(app, {value})"),
+}
+KINDS = {"web": (ACTIONS, TARGETS, "page"), "desktop": (DESKTOP_ACTIONS, DESKTOP_TARGETS, "app")}
 MAX_ACTIONS = 50
 MAX_TEXT = 500
 IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]{0,40}$")
 NEW_FILE = re.compile(r"^[a-z0-9_]{1,60}\.py$")
 
 
-def catalogue() -> dict[str, Any]:
-    """What the editor can offer."""
+def project_kind(project: Project) -> str:
+    """"desktop" if the project's steps drive a Windows app through the uia helper, otherwise "web"."""
+    return "desktop" if uses_desktop_helper(Path(project.steps)) else "web"
+
+
+def catalogue(kind: str = "web") -> dict[str, Any]:
+    """What the editor can offer for this kind of project."""
+    actions, targets, _ = KINDS[kind]
     return {
-        "actions": [{"id": k, "label": v[0], "target": v[1], "value": v[2]} for k, v in ACTIONS.items()],
-        "targets": [{"id": k, "label": v[0]} for k, v in TARGETS.items()],
+        "kind": kind,
+        "actions": [{"id": k, "label": v[0], "target": v[1], "value": v[2]} for k, v in actions.items()],
+        "targets": [{"id": k, "label": v[0]} for k, v in targets.items()],
     }
 
 
@@ -90,7 +109,7 @@ def draft(line: str, keyword: str) -> dict[str, Any]:
             "params": [{"name": name, "type": "number" if fmt else "text"} for name, fmt in params]}
 
 
-def _renamed(info: dict[str, Any], names: object) -> tuple[str, list[tuple[str, str]]]:
+def _renamed(info: dict[str, Any], names: object, fixture: str = "page") -> tuple[str, list[tuple[str, str]]]:
     """Apply the user's names for the step's values: {text1} -> {first_name}."""
     names = names or {}
     if not isinstance(names, dict):
@@ -99,7 +118,7 @@ def _renamed(info: dict[str, Any], names: object) -> tuple[str, list[tuple[str, 
     params: list[tuple[str, str]] = []
     for p in info["params"]:
         new = names.get(p["name"], p["name"])
-        if not isinstance(new, str) or not IDENTIFIER.match(new) or py_keyword.iskeyword(new) or new == "page":
+        if not isinstance(new, str) or not IDENTIFIER.match(new) or py_keyword.iskeyword(new) or new == fixture:
             raise ValueError(f"“{new}” can't be a value name: use lowercase letters, numbers and _ only.")
         if new in (n for n, _ in params):
             raise ValueError(f"Two values are both called “{new}”.")
@@ -122,26 +141,27 @@ def _value(value: object, params: list[tuple[str, str]], what: str) -> str:
     return repr(_text(value, what))
 
 
-def code(line: str, keyword: str, names: object, actions: object) -> dict[str, Any]:
+def code(line: str, keyword: str, names: object, actions: object, kind: str = "web") -> dict[str, Any]:
     """The full step definition for these actions. Raises ValueError with a readable message."""
+    action_table, target_table, fixture = KINDS[kind]
     info = draft(line, keyword)
-    pattern, params = _renamed(info, names)
+    pattern, params = _renamed(info, names, fixture)
     if not isinstance(actions, list) or not actions:
         raise ValueError("Add at least one action.")
     if len(actions) > MAX_ACTIONS:
         raise ValueError(f"A step can have up to {MAX_ACTIONS} actions.")
     body = []
     for n, item in enumerate(actions, start=1):
-        if not isinstance(item, dict) or item.get("action") not in ACTIONS:
+        if not isinstance(item, dict) or item.get("action") not in action_table:
             raise ValueError(f"Action {n}: choose what it does.")
-        label, needs_target, needs_value, template = ACTIONS[item["action"]]
+        label, needs_target, needs_value, template = action_table[item["action"]]
         parts = {}
         if needs_target:
             target = item.get("target")
-            if not isinstance(target, dict) or target.get("by") not in TARGETS:
+            if not isinstance(target, dict) or target.get("by") not in target_table:
                 raise ValueError(f"Action {n} ({label}): choose how to find the element.")
             element = _text(target.get("value"), f"action {n}'s element")
-            parts["target"] = TARGETS[target["by"]][1].format(v=repr(element))
+            parts["target"] = target_table[target["by"]][1].format(v=repr(element))
         if needs_value:
             parts["value"] = _value(item.get("value"), params, f"Action {n} ({label})")
             # a count needs a number: a number value is one already, anything else is converted
@@ -149,7 +169,7 @@ def code(line: str, keyword: str, names: object, actions: object) -> dict[str, A
             parts["count"] = parts["value"][4:-1] if number_param else f"int({parts['value']})"
         body.append("    " + template.format(**parts))
 
-    args = ", ".join(["page", *(name for name, _ in params)])
+    args = ", ".join([fixture, *(name for name, _ in params)])
     if not params:  # a plain string step: no {placeholders}, so braces are literal
         pattern = pattern.replace("{{", "{").replace("}}", "}")
     decorator = f"@{keyword}(parsers.parse({pattern!r}))" if params else f"@{keyword}({pattern!r})"
@@ -173,6 +193,8 @@ def _imports_needed(source: str, existing: set[str]) -> list[str]:
         lines.append("from playwright.sync_api import expect")
     if "re.compile(" in source and "re" not in existing:
         lines.append("import re")
+    if "uia." in source and "uia" not in existing:
+        lines.append("import uia")
     return lines
 
 
@@ -181,7 +203,7 @@ def plan(project: Project, line: str, keyword: str, names: object, actions: obje
     """Where the code goes: appended to an existing step file, or a new one in the steps folder."""
     if already_exists(line):
         raise ValueError("This step already exists. Remove the line's text block and use the existing step instead.")
-    generated = code(line, keyword, names, actions)
+    generated = code(line, keyword, names, actions, project_kind(project))
     source = generated["code"]
     folder = Path(project.steps)
     if new_file:

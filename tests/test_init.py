@@ -113,3 +113,42 @@ def test_gitlab_image_matches_the_locked_playwright():
     image = f"mcr.microsoft.com/playwright/python:v{version}-noble"
     assert image in templates("gitlab")[".gitlab-ci.yml"]
     assert image in (REPO / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")  # CI tests the same image
+
+
+# --- init --desktop ---------------------------------------------------------------------------
+
+DESKTOP_DEMO = REPO / "desktop_demo"
+
+
+def test_desktop_starter_is_the_repos_desktop_demo():
+    """The starter's desktop files are copies of desktop_demo/, which CI runs on Windows; copy any change across."""
+    made = templates(desktop=True)
+    copies = [p for p in made if p not in ("README.md", "requirements-desktop.lock") and p not in
+              {".gitignore", "requirements.in", "requirements.lock"}]
+    assert sorted(copies) == ["conftest.py", "features/character_map.feature", "pytest.ini", "steps/__init__.py",
+                              "steps/app_steps.py", "tests/test_features.py", "uia.py"]
+    for path in copies:
+        assert made[path] == (DESKTOP_DEMO / path).read_text(encoding="utf-8"), f"{path} differs from desktop_demo/{path}"
+    assert made["requirements-desktop.lock"] == (REPO / "requirements-desktop.lock").read_text(encoding="utf-8")
+    assert made["requirements.lock"] == (REPO / "requirements.lock").read_text(encoding="utf-8")
+    assert "example.feature" not in " ".join(made) and "navigation_steps.py" not in " ".join(made)  # no web files
+
+
+def test_desktop_project_binds_every_step_and_skips_off_windows(tmp_path, capsys):
+    code, out, _ = run(["init", str(tmp_path), "--desktop", "--name", "Billing tests"], capsys)
+    assert code == 0 and "Created 12 files" in out and "requirements-desktop.lock" in out
+    assert (tmp_path / "README.md").read_text(encoding="utf-8").startswith("# Billing tests\n")
+    code, out, _ = run(["check", str(tmp_path / "features"), "--path", str(tmp_path / "steps")], capsys)
+    assert code == 0 and "10 ok, 0 missing, 0 ambiguous" in out
+    # pytest loads conftest.py (with its pytest.ini settings), the steps and uia.py, then skips: they need Windows
+    done = subprocess.run([sys.executable, "-m", "pytest", "-q", "-rs", "-p", "no:cacheprovider", "-W", "error"],  # nosec B603
+                          cwd=tmp_path, capture_output=True, text=True, timeout=120, check=False)
+    if sys.platform == "win32":  # CI's Windows test jobs have no comtypes: the desktop job runs these for real
+        assert "test_features.py" in done.stdout
+    else:
+        assert done.returncode == 0 and "needs Windows" in done.stdout, done.stdout + done.stderr
+
+
+def test_desktop_init_refuses_a_linux_pipeline(tmp_path, capsys):
+    code, _, err = run(["init", str(tmp_path / "d"), "--desktop", "--ci", "gitlab"], capsys)
+    assert code == 2 and "Windows runner" in err and not (tmp_path / "d").exists()

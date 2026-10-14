@@ -37,7 +37,7 @@ version = { attr = "gherkin_copilot.__version__" }
 where = ["src"]
 
 [tool.setuptools.package-data]
-"gherkin_copilot" = ["py.typed", "starter/**/*.tmpl"]
+"gherkin_copilot" = ["py.typed", "starter/**/*.tmpl", "starter_desktop/**/*.tmpl"]
 "gherkin_copilot.ui" = ["static/*"]
 
 [tool.pytest.ini_options]

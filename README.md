@@ -128,6 +128,7 @@ and `cart.feature` uses one of them so `merge` has a line to rewrite.
 ```bash
 gherkin-copilot init payments-tests           # or --dry-run to see the list first
 gherkin-copilot init payments-tests --ci gitlab   # also add a GitLab pipeline
+gherkin-copilot init billing-tests --desktop    # a Windows desktop app instead of a website (see below)
 ```
 
 This creates a ready-to-run pytest-bdd + Playwright project:
@@ -357,12 +358,13 @@ to use a different project list file.
 If your `.feature` files live outside the folder with your step definitions, the command
 line `merge` takes the same split: `gherkin-copilot merge path/to/steps --features path/to/features`.
 
-## Testing Windows desktop apps (proof of concept)
+## Testing Windows desktop apps
 
-The same plain-English scenarios can drive a Windows program instead of a website.
-`desktop_demo/` is a separate project whose steps press buttons, fill fields and read text
-through **UI Automation**, the accessibility interface built into Windows (what screen
-readers use), so it needs no extra driver and works on a locked screen.
+The same plain-English scenarios can drive a Windows program instead of a website. Steps
+press buttons, fill fields and read text through **UI Automation**, the accessibility
+interface built into Windows (what screen readers use), so there's no extra driver and it
+works on a locked screen. The only extra package is `comtypes` (pure Python), pinned in
+`requirements-desktop.lock`.
 
 ```gherkin
 Given the app is open
@@ -371,34 +373,48 @@ And I click "Save"
 Then I see "Customer saved"
 ```
 
-On Windows (a test VM, not a machine with real work open):
+Start a desktop test project with:
 
 ```bash
-python -m pip install --require-hashes -r requirements.lock -r requirements-desktop.lock
-python -m pytest desktop_demo                      # Character Map, which every Windows has
-set DESKTOP_APP=C:\Apps\Billing\Billing.exe       # or your own app (PowerShell: $env:DESKTOP_APP = "...")
-python -m pytest desktop_demo
+gherkin-copilot init my-app-tests --desktop
 ```
 
-| Variable | Purpose |
+It's ready to run on Windows (a test VM, not a machine with real work open), and its README
+covers the rest:
+
+```powershell
+cd my-app-tests
+python -m venv .venv
+.venv\Scripts\python -m pip install --require-hashes -r requirements.lock -r requirements-desktop.lock
+.venv\Scripts\python -m pytest          # the example tests Character Map, which every Windows has
+```
+
+Point it at your app in `pytest.ini`, like `base_url` for a website:
+
+| Setting | Purpose |
 |---|---|
-| `DESKTOP_APP` | Path to the `.exe` to test (default: Character Map) |
-| `DESKTOP_WINDOW` | Part of its main window's title. Only needed if it starts through a launcher or splash screen |
-| `DESKTOP_WORKDIR` | Folder to start it in (default: the `.exe`'s own folder) |
+| `desktop_app` | Path to the `.exe` to test. `DESKTOP_APP` overrides it for one run |
+| `desktop_window` | Part of its main window's title. Only needed if it starts through a launcher or splash screen |
+| `desktop_workdir` | Folder to start it in (default: the `.exe`'s own folder) |
 
 Steps: `the app is open`, `I click "…"`, `I tick "…"`, `I type "…" into "…"`,
 `"…" shows "…"`, `"…" is not empty`, `"…" is ticked`, `I see "…"`. Controls are found by the
-name a screen reader would read out (a trailing colon or `&` shortcut marker doesn't matter),
-or by the developer's AutomationId. To check an app can be tested this way, start Narrator
+name a screen reader reads out (a trailing colon or `&` shortcut marker doesn't matter), or by
+the developer's AutomationId. To check an app can be tested this way, start Narrator
 (Win + Ctrl + Enter) and Tab through it: if Narrator reads the names, the steps can use them.
 
-Each scenario starts the app, and closes it afterwards even if the scenario fails. If the
-app is already open, the scenario stops rather than take over (and later close) that window.
-Apps that need administrator rights need the tests started as administrator.
+Each scenario starts the app, and closes it afterwards even if the scenario fails. If the app
+is already open, the scenario stops rather than take over (and later close) that window. Apps
+that need administrator rights need the tests started as administrator. On macOS and Linux the
+scenarios are skipped.
 
-Not yet: action blocks for desktop steps in the app, and an `init` starter for desktop
-projects. Add the folder in the app as its own project to use the step catalogue, duplicates,
-`check` and the Run button.
+**In the app:** add the project like any other. A project whose steps use the desktop helper
+gets desktop **action blocks** (click, tick, type into, check what a field shows, check text
+appears), and **Add missing steps to code** writes steps that take the app instead of a
+browser page; so does `check --stubs`.
+
+`desktop_demo/` in this repository is the project `init --desktop` creates (a test keeps the
+two identical), and CI runs it against Character Map on Windows.
 
 ## How matching works
 

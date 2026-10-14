@@ -1,11 +1,11 @@
-"""Turn every scenario in desktop_demo/features into a pytest test. Windows only."""
+"""Turn every scenario in features/ into a pytest test. They need Windows: elsewhere each one is skipped."""
 
 import sys
 
 import pytest
 from pytest_bdd import scenarios
 
-if sys.platform != "win32":  # a skip here works; in conftest.py it would crash the whole run
-    pytest.skip("needs Windows: these scenarios drive a desktop app", allow_module_level=True)
+# Skip each scenario rather than the whole file: a whole-file skip makes pytest exit with "no tests collected"
+pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="needs Windows: these scenarios drive a desktop app")
 
 scenarios(".")  # the whole bdd_features_base_dir (features/), subfolders included

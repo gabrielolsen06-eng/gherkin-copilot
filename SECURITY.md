@@ -130,17 +130,18 @@ This page is written for whoever approves software on a managed work laptop.
 - **No internet needed.** Point the suite at an external site only if you choose to, with
   `DEMO_BASE_URL`.
 
-## Desktop testing (`desktop_demo/`, proof of concept)
+## Desktop testing (`init --desktop`, `desktop_demo/`)
 
-The tool itself is unchanged by this: it stays standard-library only and starts no
-programs. These are the test project's steps, which drive a Windows program the way a
-screen reader does.
+The tool itself stays standard-library only and starts no programs. Desktop testing lives in
+the test project: `init --desktop` writes its files from fixed templates (the same as
+`desktop_demo/` in this repository), and its steps drive a Windows program the way a screen
+reader does.
 
 - **What it can do:** UI Automation (built into Windows) can read and press the controls of
   **any window the test user can see**, not just the app under test. Run desktop tests on a
   test VM, not on a machine with real work or sensitive data open.
-- **What it actually does:** starts the configured `.exe` (`DESKTOP_APP`) as an argument
-  list, never through a shell; only touches the windows of that app's process; and closes
+- **What it actually does:** starts the configured `.exe` (`desktop_app` in `pytest.ini`, or
+  `DESKTOP_APP`) as an argument list, never through a shell; only touches the windows of that app's process; and closes
   the app after every scenario, ending its process if it won't close.
 - **Protects open work:** if the app is already open, the scenario stops instead of taking
   over that window (and later closing it, losing anything unsaved).
@@ -153,6 +154,11 @@ screen reader does.
   code for UI Automation into its own cache folder.
 - **No network, no downloads at run time.** Character Map, which the CI scenarios use, is
   part of Windows.
+- **Action blocks for desktop steps** follow the same rules as the browser ones: a fixed menu
+  (click, tick, type into, check what a field shows, check text appears), every typed name and
+  value placed inside a quoted Python string, and the result compiled and checked against the
+  scenario line before it can be saved. The generated code only calls the project's own
+  `uia.py`.
 
 ## Dependencies
 
@@ -202,7 +208,7 @@ added after them:
 | `bandit -q -r src demo desktop_demo run_demo.py` (static security analysis) | No findings. The places that start a process (`run_demo.py`, the app's Run button in `ui/runner.py`, and the desktop steps starting the app under test) use fixed argument lists and no shell, and are annotated with why |
 | `mypy --strict` | No issues in 22 source files |
 | `ruff check` (rules in `pyproject.toml`) | No issues |
-| Tool tests | 295 passed (macOS, Python 3.14; also run on Windows and Ubuntu in CI), including tests for missing paths, malformed files, non-finite numbers, Windows code pages, generated inputs, the project `init` creates, and the home page's git reader checked against git itself (every object in a delta-compressed pack, and commits to push/pull on branchy history) |
+| Tool tests | 303 passed (macOS, Python 3.14; also run on Windows and Ubuntu in CI), including tests for missing paths, malformed files, non-finite numbers, Windows code pages, generated inputs, the project `init` creates, and the home page's git reader checked against git itself (every object in a delta-compressed pack, and commits to push/pull on branchy history) |
 | Branch coverage (`coverage run -m pytest tests`) | 92% |
 | Demo scenarios in a real browser (Brave) | 6 passed |
 | Desktop scenarios on Windows (`desktop_demo/`, Character Map, CI `windows-latest`) | 3 passed: typing into a field, clicking a button and ticking a checkbox, through UI Automation with no fake mouse or keyboard |

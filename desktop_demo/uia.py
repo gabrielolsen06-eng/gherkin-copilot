@@ -4,6 +4,9 @@ Buttons are pressed and fields filled through UI Automation's own actions (invok
 value), never a fake mouse or keyboard, so tests also run on a locked screen and in CI. Only
 Windows' own UIAutomationCore.dll is used, through comtypes (pure Python). comtypes is imported on
 first use, so the step library still loads on a Mac or Linux machine (the tests skip there).
+
+Generated step code (the app's desktop action blocks) calls the functions below the "what the
+steps use" line, so keep their names and arguments stable.
 """
 
 from __future__ import annotations
@@ -255,10 +258,6 @@ def text_of(app: App, name: str) -> str:
     return " ".join(text.split())  # as a person reads it: Character Map's field ends with a line break
 
 
-def wait_until(check: Callable[[], bool], what: str | Callable[[], str]) -> None:
-    _wait(check, what)
-
-
 def shows(app: App, text: str) -> bool:
     """Whether any visible control's name or value contains this text."""
     wanted = text.casefold()
@@ -270,3 +269,23 @@ def shows(app: App, text: str) -> bool:
         return f"{element.CurrentName} {value.CurrentValue if value else ''}".casefold()
 
     return any(wanted in _safe(lambda e=e: visible_text(e), "") for e in _elements(app))
+
+
+# --- checks: each waits up to TIMEOUT for the app to catch up, then fails with what it saw ----
+
+def expect_text(app: App, name: str, text: str) -> None:
+    wanted = " ".join(text.split())
+    _wait(lambda: text_of(app, name) == wanted,
+          lambda: f"“{name}” to show “{wanted}” (it shows “{text_of(app, name)}”)")
+
+
+def expect_not_empty(app: App, name: str) -> None:
+    _wait(lambda: bool(text_of(app, name)), f"“{name}” to have something in it")
+
+
+def expect_ticked(app: App, name: str) -> None:
+    _wait(lambda: is_ticked(app, name), f"“{name}” to be ticked")
+
+
+def expect_visible(app: App, text: str) -> None:
+    _wait(lambda: shows(app, text), lambda: f"“{text}” to appear. The app shows: {describe(app)}")

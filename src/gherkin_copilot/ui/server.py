@@ -112,11 +112,13 @@ class App:
                 lines = builder.clean_lines(body.get("lines"))
                 return {"results": builder.check(project, lines, body.get("examples"))}
             if route == "/api/stepcode/draft":
-                return {**stepcode.draft(text("line"), text("keyword")), **stepcode.catalogue(),
+                kind = stepcode.project_kind(project)
+                return {**stepcode.draft(text("line"), text("keyword")), **stepcode.catalogue(kind),
                         "files": builder.project_files(project)["steps"]}
             if route == "/api/stepcode/code":
                 try:
-                    return stepcode.code(text("line"), text("keyword"), body.get("names"), body.get("actions"))
+                    return stepcode.code(text("line"), text("keyword"), body.get("names"), body.get("actions"),
+                                         stepcode.project_kind(project))
                 except ValueError as exc:  # shown next to the live preview while the user is still editing
                     return {"code": None, "error": str(exc)}
             base, _, step = route.rpartition("/")

@@ -126,3 +126,80 @@ def test_build_over_http_runs_with_pytest(demo, tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+# --- desktop apps ------------------------------------------------------------------------------
+
+DESKTOP_DEMO = Path(__file__).parent.parent / "desktop_demo"
+DESKTOP_LINE = 'When I add customer "ACME Ltd"'
+
+
+@pytest.fixture
+def desktop(tmp_path):
+    root = tmp_path / "desk"
+    shutil.copytree(DESKTOP_DEMO, root, ignore=shutil.ignore_patterns("__pycache__", ".gherkin-copilot"))
+    return Project("desk", "Desk", str(root / "steps"), str(root / "features"))
+
+
+def test_projects_that_import_the_desktop_helper_get_desktop_actions(desktop, demo):
+    assert stepcode.project_kind(desktop) == "desktop" and stepcode.project_kind(demo) == "web"
+    offered = stepcode.catalogue("desktop")
+    assert [t["id"] for t in offered["targets"]] == ["name"]
+    assert {"click", "tick", "fill", "expect_text", "expect_visible"} <= {a["id"] for a in offered["actions"]}
+
+
+def test_desktop_code_uses_the_app_and_the_helper():
+    result = stepcode.code(DESKTOP_LINE, "when", {"text1": "customer"}, [
+        {"action": "fill", "target": {"by": "name", "value": "Customer name"}, "value": {"param": "customer"}},
+        {"action": "click", "target": {"by": "name", "value": 'Save "now"'}},
+        {"action": "expect_visible", "value": {"text": "Customer saved"}},
+    ], "desktop")
+    assert result["code"].splitlines()[1:] == [
+        "def i_add_customer(app, customer):",
+        "    uia.type_into(app, 'Customer name', customer)",
+        "    uia.click(app, 'Save \"now\"')",
+        "    uia.expect_visible(app, 'Customer saved')",
+    ]
+    with pytest.raises(ValueError, match="choose what it does"):  # browser-only actions aren't offered for an app
+        stepcode.code(DESKTOP_LINE, "when", {}, [{"action": "expect_url", "value": {"text": "x"}}], "desktop")
+    with pytest.raises(ValueError, match="can't be a value name"):  # `app` is taken by the app itself
+        stepcode.code(DESKTOP_LINE, "when", {"text1": "app"}, [{"action": "click", "target": {"by": "name", "value": "Go"}}],
+                      "desktop")
+
+
+def test_desktop_step_code_is_saved_with_the_helper_import(desktop):
+    actions = [{"action": "click", "target": {"by": "name", "value": "Save"}}]
+    change = stepcode.plan(desktop, DESKTOP_LINE, "when", {}, actions, "app_steps.py", False, lambda line: False)
+    assert "def i_add_customer(app, text1):" in change.after and change.after.count("import uia") == 1
+    new = stepcode.plan(desktop, DESKTOP_LINE, "when", {}, actions, "customer_steps.py", True, lambda line: False)
+    assert new.creates and "\nimport uia\n" in new.after and "from pytest_bdd import parsers, when" in new.after
+    compile(new.after, "customer_steps.py", "exec")
+
+
+def test_stubs_for_a_desktop_project_take_the_app(desktop, capsys):
+    result = builder.check(desktop, ['When I archive "ACME Ltd"'])
+    assert result[0]["status"] == "missing" and "def i_archive(app, text1):" in result[0]["stub"]
+    feature = Path(desktop.features) / "extra.feature"
+    feature.write_text('Feature: x\n  Scenario: y\n    When I archive "ACME Ltd"\n', encoding="utf-8")
+    from gherkin_copilot.cli import main
+    assert main(["check", str(feature), "--path", desktop.steps, "--stubs"]) == 1
+    assert "def i_archive(app, text1):" in capsys.readouterr().out
+
+
+def test_desktop_catalogue_over_http(desktop, tmp_path):
+    store = ProjectStore(tmp_path / "projects.json")
+    project = store.add("Desk", desktop.steps, desktop.features)
+    server, app, _ = start_in_background(store)
+    try:
+        port = server.server_address[1]
+        status, _, data, _ = request(port, "POST", "/api/stepcode/draft",
+                                     {"project": project.id, "line": DESKTOP_LINE, "keyword": "when"}, app.token)
+        info = json.loads(data)
+        assert status == 200 and info["kind"] == "desktop" and info["files"] == ["app_steps.py"]
+        status, _, data, _ = request(port, "POST", "/api/stepcode/code", {
+            "project": project.id, "line": DESKTOP_LINE, "keyword": "when", "names": {},
+            "actions": [{"action": "tick", "target": {"by": "name", "value": "Active"}}]}, app.token)
+        assert status == 200 and "uia.tick(app, 'Active')" in json.loads(data)["code"]
+    finally:
+        server.shutdown()
+        server.server_close()

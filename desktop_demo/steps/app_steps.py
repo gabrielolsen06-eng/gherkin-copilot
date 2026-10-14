@@ -1,8 +1,7 @@
-"""Steps for a Windows desktop app. Which app is set by DESKTOP_APP (see conftest.py)."""
+"""Steps for a Windows desktop app. Which app: desktop_app in pytest.ini (or the DESKTOP_APP variable)."""
 
+import uia
 from pytest_bdd import given, parsers, then, when
-
-from desktop_demo import uia
 
 
 @given("the app is open", target_fixture="app")
@@ -29,20 +28,19 @@ def type_into(app, text, field):
 
 @then(parsers.parse('"{field}" shows "{text}"'))
 def field_shows(app, field, text):
-    uia.wait_until(lambda: uia.text_of(app, field) == text,
-                   lambda: f"“{field}” to show “{text}” (it shows “{uia.text_of(app, field)}”)")
+    uia.expect_text(app, field, text)
 
 
 @then(parsers.parse('"{field}" is not empty'))
 def field_not_empty(app, field):
-    uia.wait_until(lambda: bool(uia.text_of(app, field)), f"“{field}” to have something in it")
+    uia.expect_not_empty(app, field)
 
 
 @then(parsers.parse('"{name}" is ticked'))
 def is_ticked(app, name):
-    uia.wait_until(lambda: uia.is_ticked(app, name), f"“{name}” to be ticked")
+    uia.expect_ticked(app, name)
 
 
 @then(parsers.parse('I see "{text}"'))
 def i_see(app, text):
-    uia.wait_until(lambda: uia.shows(app, text), f"“{text}” to appear")
+    uia.expect_visible(app, text)

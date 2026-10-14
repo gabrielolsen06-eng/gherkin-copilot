@@ -78,14 +78,19 @@ and `.github/workflows/ci.yml` if playwright changed; `tests/test_init.py` fails
   `conftest.py` (loads every file in `steps/`), `browsers.py` (finds Brave), `server.py`. `demo/` is a
   package: import as `demo.server`, `demo.browsers`, `demo.steps.*`
 - `tests/`: unit tests for the tool
-- `desktop_demo/`: Windows desktop testing proof of concept, a separate project (own pytest.ini,
-  conftest, steps, features) so its steps never clash with `demo/`. `uia.py` drives apps through
-  Windows UI Automation via `comtypes` (imported lazily, so it loads on macOS; the test module
-  skips off Windows; a skip in conftest.py would crash). App from `DESKTOP_APP` (default
-  Character Map), `DESKTOP_WINDOW` for launchers. Actions run in a background thread (invoke
-  blocks while a message box is open). `requirements-desktop.lock` is hand-written: one
-  pure-Python package; update its hashes from PyPI's JSON when bumping, never via pip-compile
-  on macOS (it drops Windows-only packages). Desktop failures show as annotations on the CI run.
+- `desktop_demo/`: Windows desktop testing, exactly the project `init --desktop` creates: its
+  files are copied to `src/gherkin_copilot/starter_desktop/*.tmpl` (plus a README template)
+  and `test_init.py` fails until they match, like the lock files. Standalone project (no
+  `__init__.py`; `import uia`, `steps.*`). `uia.py` drives apps through Windows UI Automation via
+  `comtypes` (imported lazily so it loads on macOS); scenarios skip off Windows via `pytestmark`
+  (a whole-module skip exits 5, a skip in conftest.py crashes). App from `desktop_app` in
+  pytest.ini (env `DESKTOP_APP` overrides). Actions run in a background thread (invoke blocks
+  while a message box is open). A project counts as desktop when its step code imports `uia`
+  (`indexer.uses_desktop_helper`): the app then offers desktop action blocks
+  (`stepcode.DESKTOP_ACTIONS`, calling `uia.*`; keep those function names stable) and stubs
+  take `app` instead of `page`. `requirements-desktop.lock` is hand-written: one pure-Python
+  package; update its hashes from PyPI's JSON when bumping, never via pip-compile on macOS (it
+  drops Windows-only packages). Desktop failures show as annotations on the CI run.
 
 ## Conventions
 

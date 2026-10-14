@@ -309,9 +309,12 @@
       <section id="stepcode-params" class="stepcode-params"></section>
       <section>
         <h3>What should this step do?</h3>
-        <p class="field-hint">Add the actions a person would do, in order. Describe elements the way a user sees them
+        <p class="field-hint" id="stepcode-hint-web">Add the actions a person would do, in order. Describe elements the way a user sees them
           where you can (a button's text, a field's label). For anything else, right-click it in the browser, choose
           Inspect, and use its id or class as a CSS selector, like <code>#checkout</code> or <code>.cart_list</code>.</p>
+        <p class="field-hint" id="stepcode-hint-desktop" hidden>Add the actions a person would do in the app, in order.
+          Name each control the way Narrator reads it out (a button's text, a field's label), or use the developer's
+          AutomationId if it has no name. The scenario needs <code>Given the app is open</code> before this step.</p>
         <ol id="stepcode-actions" class="actions"></ol>
         <button type="button" class="ghost small" id="stepcode-add">+ Add action</button>
       </section>

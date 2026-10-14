@@ -24,7 +24,7 @@ from pathlib import Path
 
 from gherkin_copilot import __version__
 from gherkin_copilot.checker import FeatureStep, StepResult, check_steps, iter_feature_files, make_stub, parse_feature
-from gherkin_copilot.indexer import StepDef, build_index, load_index, save_index
+from gherkin_copilot.indexer import StepDef, build_index, load_index, save_index, uses_desktop_helper
 from gherkin_copilot.matcher import find, find_duplicates
 from gherkin_copilot.merger import MergeResult, apply, plan_merges
 from gherkin_copilot.report import write_report
@@ -156,10 +156,18 @@ def _print_results(results: list[StepResult]) -> None:
     print(f"\n{len(results)} steps: {counts['ok']} ok, {counts['missing']} missing, {counts['ambiguous']} ambiguous")
 
 
-def _print_stubs(missing: list[FeatureStep]) -> None:
+def _steps_root(args: argparse.Namespace) -> Path:
+    """The folder the step definitions came from: --path, or the one the saved index was made from."""
+    if args.path is None and args.index.exists():
+        with _input_file():
+            return load_index(args.index).root or Path(".")
+    return Path(args.path or ".")
+
+
+def _print_stubs(missing: list[FeatureStep], fixture: str) -> None:
     print("\n# --- Stubs for missing steps (pytest-bdd) ---")
     print("from pytest_bdd import given, parsers, then, when\n")
-    for stub in dict.fromkeys(make_stub(step) for step in missing):
+    for stub in dict.fromkeys(make_stub(step, fixture) for step in missing):
         print(f"\n{stub}")
 
 
@@ -183,7 +191,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         _print_results(results)
         missing = [r.step for r in results if r.status == "missing"]
         if args.stubs and missing:
-            _print_stubs(missing)
+            _print_stubs(missing, "app" if uses_desktop_helper(_steps_root(args)) else "page")
     return 0 if all(r.status == "ok" for r in results) else 1
 
 
@@ -266,9 +274,12 @@ def cmd_init(args: argparse.Namespace) -> int:
     name = " ".join((args.name or root.resolve().name).split())  # it goes on one line of the README
     if not name:
         raise UsageError("Give the project a name with --name")
-    result = create(root, name, dry_run=args.dry_run, ci=args.ci)
+    if args.desktop and args.ci:
+        raise UsageError("--ci gitlab makes a pipeline for Linux Docker runners, and desktop tests need a Windows "
+                         "runner. The project's README shows the commands for one.")
+    result = create(root, name, dry_run=args.dry_run, ci=args.ci, desktop=args.desktop)
     if args.json:
-        print(json.dumps({"root": root.as_posix(), "dry_run": args.dry_run,
+        print(json.dumps({"root": root.as_posix(), "dry_run": args.dry_run, "desktop": args.desktop,
                           "created": result.created, "skipped": result.skipped}, indent=2))
         return 0
     shown = root.as_posix()
@@ -285,6 +296,16 @@ def cmd_init(args: argparse.Namespace) -> int:
             print(f"  = {path}")
     if args.dry_run:
         print("\nNothing was written. Run again without --dry-run to create these files.")
+        return 0
+    if args.desktop:
+        print(f"""
+Next, on Windows:
+  cd {shown}
+  python -m venv .venv
+  .venv\\Scripts\\python -m pip install --require-hashes -r requirements.lock -r requirements-desktop.lock
+  .venv\\Scripts\\python -m pytest
+
+README.md explains the rest: pointing it at your app (desktop_app in pytest.ini), adding scenarios, conventions, CI.""")
         return 0
     print(f"""
 Next:
@@ -336,6 +357,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("path", nargs="?", help="folder to create it in; created if missing (default: .)")
     p.add_argument("--name", help="project name for its README (default: the folder's name)")
     p.add_argument("--ci", choices=sorted(CI_FILES), help="also add a pipeline file for this CI system")
+    p.add_argument("--desktop", action="store_true", help="a project for testing a Windows desktop app, not a website")
     p.add_argument("--dry-run", action="store_true", help="list the files it would create, write nothing")
     p.add_argument("--json", action="store_true", help="machine-readable output")
     p.set_defaults(func=cmd_init)

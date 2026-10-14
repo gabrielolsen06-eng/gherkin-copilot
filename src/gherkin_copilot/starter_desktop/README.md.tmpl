@@ -1,0 +1,100 @@
+# {{name}}
+
+Automated acceptance tests for a Windows desktop app. Scenarios are written in plain English
+(Gherkin) in `features/`; the code behind each step lives in one shared library in `steps/`.
+They run with [pytest-bdd](https://pytest-bdd.readthedocs.io) and drive the app through
+Windows UI Automation, the accessibility interface screen readers use (`uia.py`, with the
+`comtypes` package).
+
+Run them on a test VM, not on a machine with real work open: UI Automation can press buttons
+in any window the logged-in user can see.
+
+## Set up (once, on Windows)
+
+You need Python 3.11 or newer.
+
+```powershell
+python -m venv .venv
+.venv\Scripts\python -m pip install --require-hashes -r requirements.lock -r requirements-desktop.lock
+```
+
+`--require-hashes` installs exactly the versions in the lock files and refuses any file that
+doesn't match its recorded hash.
+
+## Check your app can be tested this way
+
+Open the app, start Narrator (Win + Ctrl + Enter) and Tab through it. If Narrator reads out
+the names of its buttons and fields, the steps can use those names. Press Win + Ctrl + Enter
+again to stop Narrator.
+
+## Run the tests
+
+```powershell
+.venv\Scripts\python -m pytest                # every scenario
+.venv\Scripts\python -m pytest -k checkbox    # only scenarios whose name matches
+```
+
+The example in `features/character_map.feature` tests Character Map, which every Windows has,
+so it proves the setup works on this machine. Delete it once your first real scenario passes.
+On macOS or Linux the scenarios are skipped: they need Windows.
+
+## Point it at your app
+
+Set `desktop_app` in `pytest.ini` to the app's `.exe`. If the app starts through a launcher or
+a splash screen, also set `desktop_window` to part of its main window's title. For one run,
+the `DESKTOP_APP` environment variable overrides `desktop_app`.
+
+Each scenario starts the app and closes it afterwards, even if the scenario fails. If the app
+is already open, the scenario stops rather than take over (and later close) that window. Apps
+that need administrator rights need the tests started as administrator.
+
+## Steps you can use
+
+| Step | What it does |
+|---|---|
+| `Given the app is open` | Starts the app and waits for its window |
+| `When I click "Save"` | Presses a button (also checkboxes, options, tabs, list and menu items) |
+| `When I tick "Remember me"` | Ticks a checkbox, if it isn't ticked already |
+| `When I type "ACME Ltd" into "Customer name"` | Fills in a field |
+| `Then "Customer name" shows "ACME Ltd"` | Checks a field's text |
+| `Then "Customer name" is not empty` | Checks a field has something in it |
+| `Then "Remember me" is ticked` | Checks a checkbox |
+| `Then I see "Customer saved"` | Checks some text appears anywhere in the app, message boxes included |
+
+Controls are found by the name Narrator reads out (a trailing colon doesn't matter), or by the
+developer's AutomationId when a name is missing or used twice. When a control can't be found,
+the error lists every control the app shows.
+
+## Add a scenario
+
+1. Write it in a `.feature` file in `features/`. Every scenario there runs automatically.
+2. Run `gherkin-copilot check features --stubs`. It lists every line that has no step yet and
+   drafts the code for it.
+3. Add new steps to a file in `steps/`, grouped by area (`login_steps.py`,
+   `invoice_steps.py`...). Every file in `steps/` is loaded automatically.
+
+Or use the app: run `gherkin-copilot ui` and add this folder as a project (steps folder
+`steps`, features folder `features`). A line with no step gets **Build its code with action
+blocks**: click, tick, type into, check what a field shows, check text appears. No Python
+needed.
+
+## Conventions
+
+- **One shared step library.** Before writing a step, search for one that already exists:
+  `gherkin-copilot find "When I click"`. Never copy a step into a new file for one scenario.
+- **Say what, not how.** `Given I am logged in as a clerk`, not five typing steps. The step's
+  code knows the details, so a changed login window means one fix.
+- **`Given` sets the scene, `When` acts, `Then` only checks.**
+- **Keep the library tidy.** `gherkin-copilot dupes` finds steps that say the same thing in
+  different words, and `gherkin-copilot merge` combines them.
+
+## In CI
+
+Desktop tests need a Windows machine with a desktop session, such as a Windows runner; a
+Linux Docker runner can't run them. On a Windows runner:
+
+```powershell
+python -m pip install --require-hashes -r requirements.lock -r requirements-desktop.lock
+gherkin-copilot check features          # fails if a line has no step, or matches two
+python -m pytest --cucumberjson=reports/cucumber.json
+```

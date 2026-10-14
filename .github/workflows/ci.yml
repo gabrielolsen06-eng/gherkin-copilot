@@ -114,7 +114,6 @@ jobs:
       - run: python -m pip install --no-deps --no-build-isolation .
       - name: Every scenario line has a step
         run: gherkin-copilot check desktop_demo/features --path desktop_demo/steps
-      - run: mkdir reports
       - name: Run the scenarios against Character Map
         run: python -m pytest desktop_demo -v -p no:cacheprovider --cucumberjson=reports/desktop.json --junitxml=reports/desktop.xml
       - name: Show each failure on the run page
@@ -131,6 +130,11 @@ jobs:
       - name: HTML report
         if: always()
         run: gherkin-copilot report reports/desktop.json -o reports/desktop.html
+      - name: A project made by `init --desktop` runs as created
+        run: gherkin-copilot init --desktop "$env:RUNNER_TEMP\desktop-starter"
+      - name: Its example scenarios pass
+        working-directory: ${{ runner.temp }}/desktop-starter
+        run: python -m pytest -v -p no:cacheprovider
       - uses: actions/upload-artifact@v7
         if: always()
         with:

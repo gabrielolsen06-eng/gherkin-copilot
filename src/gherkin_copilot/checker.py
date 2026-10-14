@@ -122,10 +122,11 @@ def stub_parts(step: FeatureStep) -> tuple[str, list[tuple[str, str]], str]:
     return pattern, params, function
 
 
-def make_stub(step: FeatureStep) -> str:
-    """Draft a pytest-bdd step definition, turning quoted values and numbers into parameters."""
+def make_stub(step: FeatureStep, fixture: str = "page") -> str:
+    """Draft a pytest-bdd step definition, turning quoted values and numbers into parameters.
+    ``fixture`` is what the step works on: Playwright's ``page``, or ``app`` for a desktop app."""
     pattern, params, function = stub_parts(step)
-    args = ", ".join(["page"] + [p for p, _ in params])
+    args = ", ".join([fixture] + [p for p, _ in params])
     decorator = f"@{step.keyword}(parsers.parse({pattern!r}))" if params else f"@{step.keyword}({pattern!r})"
     return (
         f"{decorator}\n"

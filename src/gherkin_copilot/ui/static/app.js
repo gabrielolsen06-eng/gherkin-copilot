@@ -1583,6 +1583,8 @@ async function openStepCode(block, keyword) {
     return toast(error.message);
   }
   Object.assign(sc, { line, keyword, info, names: {}, actions: [], preview: null });
+  $("stepcode-hint-web").hidden = info.kind === "desktop";
+  $("stepcode-hint-desktop").hidden = info.kind !== "desktop";
   for (const p of info.params) sc.names[p.name] = p.name;
   sc.actions.push(newAction(info.params.length ? "fill" : "click"));
   $("stepcode-line").replaceChildren(el("span", { class: "kw-pill" }, capitalize(keyword)), " ", info.text);
@@ -1602,9 +1604,11 @@ async function openStepCode(block, keyword) {
 function newAction(action) {
   const meta = Object.fromEntries((sc.info?.actions || []).map((a) => [a.id, a]));
   const first = sc.info?.params[0]?.name;
+  const ways = (sc.info?.targets || []).map((t) => t.id); // a desktop app has one: the control's name
+  const by = action === "fill" ? "label" : "button";
   return {
     action,
-    target: { by: action === "fill" ? "label" : "button", value: "" },
+    target: { by: ways.includes(by) ? by : ways[0], value: "" },
     value: meta[action]?.value && first ? { param: first } : { text: "" },
   };
 }

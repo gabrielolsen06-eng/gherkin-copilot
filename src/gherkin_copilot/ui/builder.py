@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from gherkin_copilot.checker import check_steps, iter_feature_files, make_stub, parse_feature_text
-from gherkin_copilot.indexer import build_index, index_file, iter_python_files
+from gherkin_copilot.indexer import build_index, index_file, iter_python_files, uses_desktop_helper
 from gherkin_copilot.ui.catalog import segments
 from gherkin_copilot.ui.projects import Project
 
@@ -82,11 +82,12 @@ def check(project: Project, lines: list[str], examples: object = None) -> list[d
 
     text = outline_check_text(lines, examples)
     results = check_steps(parse_feature_text(text), build_index(Path(project.steps)))
+    fixture = "app" if uses_desktop_helper(Path(project.steps)) else "page"
     return [{
         "status": r.status,
         "bound": [{"file": s.file, "line": s.line, "function": s.function} for s in r.bound],
         "suggestions": [{"score": m.score, **asdict(m.step), "segments": segments(m.step)} for m in r.suggestions],
-        "stub": make_stub(r.step) if r.status == "missing" else None,
+        "stub": make_stub(r.step, fixture) if r.status == "missing" else None,
     } for r in results]
 
 

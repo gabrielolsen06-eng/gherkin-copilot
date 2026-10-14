@@ -1,6 +1,6 @@
 Feature: Character Map
   Character Map is on every Windows machine, so these scenarios prove desktop testing works
-  anywhere, including GitHub's Windows machines. Point DESKTOP_APP at your own app to test it.
+  anywhere, including CI. Set desktop_app in pytest.ini to test your own app instead.
 
   Scenario: Type into a field
     Given the app is open

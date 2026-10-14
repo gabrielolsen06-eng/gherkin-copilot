@@ -141,6 +141,18 @@ def _imports(tree: ast.Module, module: str) -> bool:
     return False
 
 
+def uses_desktop_helper(root: Path) -> bool:
+    """Whether the step code here drives Windows desktop apps: it imports uia, the helper `init --desktop` creates.
+    Its steps then take the app (the `app` fixture) where browser steps take Playwright's `page`."""
+    for path in iter_python_files(root):
+        try:
+            if _imports(ast.parse(path.read_text(encoding="utf-8")), "uia"):
+                return True
+        except (SyntaxError, UnicodeDecodeError):
+            continue
+    return False
+
+
 def iter_project_files(root: Path, pattern: str) -> Iterator[Path]:
     """Files under root, skipping virtual environments, build output and caches *inside* the project.
 
