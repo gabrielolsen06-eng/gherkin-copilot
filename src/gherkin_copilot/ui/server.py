@@ -205,17 +205,19 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             port = cast(tuple[str, int], self.server.server_address)[1]
             return self.headers.get("Host", "") in {f"{HOST}:{port}", f"localhost:{port}"}
 
-        def _send(self, status: HTTPStatus, body: bytes, content_type: str) -> None:
+        def _send(self, status: HTTPStatus, body: bytes, content_type: str, close: bool = False) -> None:
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
             for name, value in SECURITY_HEADERS.items():
                 self.send_header(name, value)
+            if close:  # the request body wasn't read, so this connection can't carry another request
+                self.send_header("Connection", "close")
             self.end_headers()
             self.wfile.write(body)
 
-        def _json(self, status: HTTPStatus, data: Any) -> None:
-            self._send(status, json.dumps(data).encode(), "application/json")
+        def _json(self, status: HTTPStatus, data: Any, close: bool = False) -> None:
+            self._send(status, json.dumps(data).encode(), "application/json", close)
 
         def do_GET(self) -> None:
             if not self._host_ok():
@@ -269,6 +271,17 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 self._unexpected(exc)
 
         def do_POST(self) -> None:
+            # Read the body before any check: on Windows, closing a socket with unread data sends a TCP reset,
+            # and the client sees "connection aborted" (10053) instead of the refusal
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = -1
+            if length < 0:  # rfile.read(-1) would wait for the client to hang up
+                return self._json(HTTPStatus.BAD_REQUEST, {"error": "Invalid Content-Length."}, close=True)
+            if length > MAX_BODY:
+                return self._json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "Request too large."}, close=True)
+            raw = self.rfile.read(length)
             if not self._host_ok():
                 return self._json(HTTPStatus.FORBIDDEN, {"error": "Wrong host."})
             origin = self.headers.get("Origin")
@@ -278,11 +291,8 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 return self._json(HTTPStatus.FORBIDDEN, {"error": "Missing or wrong session token. Reload the page."})
             if self.headers.get_content_type() != "application/json":
                 return self._json(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, {"error": "Send JSON."})
-            length = int(self.headers.get("Content-Length") or 0)
-            if length > MAX_BODY:
-                return self._json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "Request too large."})
             try:
-                body = builder.json_object(json.loads(self.rfile.read(length) or b"{}"))
+                body = builder.json_object(json.loads(raw or b"{}"))
                 if body is None:
                     raise ApiError(HTTPStatus.BAD_REQUEST, "Send a JSON object.")
                 self._json(HTTPStatus.OK, app.post(urlsplit(self.path).path, body))

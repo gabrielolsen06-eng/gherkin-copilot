@@ -8,7 +8,7 @@ from gherkin_copilot.indexer import StepDef
 from gherkin_copilot.ui import history
 from gherkin_copilot.ui.catalog import editor_url, segments
 from gherkin_copilot.ui.projects import ProjectStore
-from gherkin_copilot.ui.server import start_in_background
+from gherkin_copilot.ui.server import MAX_BODY, start_in_background
 
 DEMO = Path(__file__).parent.parent / "demo"
 
@@ -66,6 +66,14 @@ def test_changes_need_the_token_and_matching_origin(app):
     status, _, data, _ = request(port, "POST", "/api/projects/add", body, token=app.token,
                                  headers={"Origin": f"http://127.0.0.1:{port}"})
     assert status == 200 and json.loads(data)["active"] == "demo"
+
+
+def test_bad_or_oversized_bodies_are_refused_and_close_the_connection(app):
+    app, port = app
+    for length, status in (("abc", 400), ("-1", 400), (str(MAX_BODY + 1), 413)):
+        code, _, data, response = request(port, "POST", "/api/projects/add", token=app.token,
+                                          headers={"Content-Length": length, "Content-Type": "application/json"})
+        assert (code, response.getheader("Connection")) == (status, "close"), (length, data)
 
 
 def test_add_switch_list_steps_and_remove(app, tmp_path):
