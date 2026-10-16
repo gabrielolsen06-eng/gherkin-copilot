@@ -22,7 +22,7 @@ from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 
 from gherkin_copilot import __version__, gherkin
-from gherkin_copilot.ui import builder, dupes, editor, history, home, runner, stepcode
+from gherkin_copilot.ui import builder, dupes, editor, history, home, records, runner, stepcode
 from gherkin_copilot.ui.catalog import describe
 from gherkin_copilot.ui.projects import Project, ProjectStore
 
@@ -109,6 +109,11 @@ class App:
             if route == "/api/run/stop":
                 self.runner.stop(project.id)
                 return {"stopping": True}
+            if route == "/api/record":
+                if (self.runner.status(project.id) or {}).get("status") == "running":
+                    raise ValueError("Wait for the tests to finish, then save the record.")
+                return records.save(project, body.get("started"), body.get("title"), body.get("author"),
+                                    body.get("environment"), body.get("notes"))
             if route == "/api/check":
                 lines = builder.clean_lines(body.get("lines"))
                 return {"results": builder.check(project, lines, body.get("examples"))}

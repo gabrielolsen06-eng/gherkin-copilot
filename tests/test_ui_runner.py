@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 from test_ui import request
 
-from gherkin_copilot.ui import history, runner
+from gherkin_copilot.ui import history, records, runner
 from gherkin_copilot.ui.projects import Project, ProjectStore
 from gherkin_copilot.ui.server import start_in_background
 
@@ -219,6 +219,10 @@ def test_settings_and_artifacts_over_http(project, tmp_path):
         assert get("../history.jsonl")[0] == 400
         assert get("run.json")[0] == 400
 
+        record = {"project": added.id, "started": 1.0, "title": "Smoke", "author": "Ada"}
+        status, _, data, _ = request(port, "POST", "/api/record", record, app.token)
+        assert status == 400 and "changed since" in json.loads(data)["error"]
+
         state = json.loads(request(port, "GET", f"/api/run?project={added.id}")[2])
         assert state["run"] is None and state["default_folder"] == project.steps
     finally:
@@ -248,3 +252,81 @@ def test_default_folder_and_not_found_hint(project, tmp_path):
     done = wait(lambda: work.status("p"))
     assert f"$ cd {project.steps}" in done["log"]
     assert "couldn't find “nowhere”" in done["log"][-1]
+
+
+def finished_run(project):
+    work = runner.Runner()
+    work.start(project, "all")
+    run = wait(lambda: work.status("p"))
+    for name in ("test-adding-works", "test-adding-works-again"):  # as if screenshots were on
+        shots = runner.results_dir(project) / "artifacts" / f"tests-test-sums-py-{name}"
+        shots.mkdir(parents=True)
+        (shots / "test-finished-1.png").write_bytes(b"\x89PNG")
+        (shots / "trace.zip").write_bytes(b"PK")
+    return run
+
+
+def test_save_a_run_as_a_test_record(project):
+    run = finished_run(project)
+    root = Path(project.steps)
+    (root / ".git" / "refs" / "heads").mkdir(parents=True)
+    (root / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+    (root / ".git" / "refs" / "heads" / "main").write_text("c9b6fb9" + "0" * 33 + "\n")
+
+    saved = records.save(project, run["started"], " Release 2.3  regression ", "Ada", "Windows 11, Edge",
+                         "First <b>try</b>")
+    day = time.strftime("%Y-%m-%d", time.localtime(run["started"]))
+    assert saved["folder"] == f"test-records/{day}_release-2-3-regression"
+    folder = root / saved["folder"]
+    assert sorted(p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file()) == [
+        "cucumber.json", "record.json", "report.html",
+        "screenshots/tests-test-sums-py-test-adding-works-again/test-finished-1.png",  # failed only, no traces
+    ]
+    assert (folder / "cucumber.json").read_bytes() == (runner.results_dir(project) / "cucumber.json").read_bytes()
+    record = json.loads((folder / "record.json").read_text())
+    assert record["title"] == "Release 2.3 regression" and record["result"] == "failed"
+    assert record["scenarios"]["total"] == 2 and record["scenarios"]["passed"] == 1
+    assert record["ran_by"] == "Ada" and record["what_ran"] == "All tests" and record["environment"] == "Windows 11, Edge"
+    assert record["git"] == {"branch": "main", "commit": "c9b6fb9" + "0" * 33}
+    html = (folder / "report.html").read_text()
+    assert "<h1>Release 2.3 regression</h1>" in html and "<dd>1 of 2 failed</dd>" in html
+    assert "<dd>main @ c9b6fb9</dd>" in html and "First &lt;b&gt;try&lt;/b&gt;" in html
+    assert 'src="screenshots/tests-test-sums-py-test-adding-works-again/test-finished-1.png"' in html
+
+    again = records.save(project, run["started"], "Release 2.3 regression", "Ada")
+    assert again["folder"].endswith("_release-2-3-regression-2")  # never overwrites a record
+    assert records.save(project, run["started"], "日本", "Ada")["folder"].endswith("_record")
+
+
+def test_runs_that_cant_be_saved_as_records(project, tmp_path_factory, monkeypatch):
+    run = finished_run(project)
+    started = run["started"]
+    with pytest.raises(ValueError, match="title"):
+        records.save(project, started, "  ", "Ada")
+    with pytest.raises(ValueError, match="your name"):
+        records.save(project, started, "Smoke", "")
+    with pytest.raises(ValueError, match="changed since"):
+        records.save(project, started - 1, "Smoke", "Ada")  # the page showed an older run
+    run_file = runner.results_dir(project) / "run.json"
+    run_file.write_text(json.dumps({**json.loads(run_file.read_text()), "status": "stopped"}))
+    with pytest.raises(ValueError, match="Only a run that finished"):
+        records.save(project, started, "Smoke", "Ada")
+    run_file.write_text(json.dumps({**json.loads(run_file.read_text()), "status": "finished"}))
+
+    def full_disk(*args, **kwargs):
+        raise OSError("No space left on device")
+
+    monkeypatch.setattr(records, "render_html", full_disk)
+    with pytest.raises(OSError):
+        records.save(project, started, "Smoke", "Ada")
+    assert not any(records.records_dir(project).iterdir())  # no half-saved record left behind
+    records.records_dir(project).rmdir()
+
+    outside = tmp_path_factory.mktemp("outside")
+    try:
+        os.symlink(outside, records.records_dir(project), target_is_directory=True)
+    except OSError:
+        pytest.skip("can't create symlinks here")
+    with pytest.raises(ValueError, match="outside the project"):
+        records.save(project, started, "Smoke", "Ada")
+    assert not any(outside.iterdir())

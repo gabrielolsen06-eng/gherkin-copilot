@@ -423,7 +423,7 @@ button.small { padding: 4px 10px; }
 .names { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .names select { width: 100%; }
 .description summary { cursor: pointer; font-size: 0.85rem; color: var(--muted); font-weight: 600; }
-.description textarea {
+.description textarea, dialog textarea {
   width: 100%; margin-top: 6px; font: inherit; color: inherit; background: var(--card);
   border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; resize: vertical;
 }

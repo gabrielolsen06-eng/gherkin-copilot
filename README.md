@@ -358,9 +358,24 @@ Results go to `.gherkin-copilot/results` in the project, which git ignores
 automatically. To run a single scenario or file, its feature file must be loaded by a test
 module (for example `scenarios("checkout.feature")` in a `test_*.py` file).
 
+Each run is a scratch run: the next one replaces it. To keep one, for example for a release
+sign-off, press **Save as test record** once the run has finished, and give it a title (the
+environment and notes are optional). The app copies the run into
+`test-records/<date>_<title>/` in the project, for you to commit with your code:
+
+| File | What's in it |
+|---|---|
+| `report.html` | The results as a page anyone can open, with the record's details at the top |
+| `record.json` | Title, result, what ran, when, who ran it, environment, notes, computer, branch and commit |
+| `cucumber.json` | The raw results, as pytest-bdd wrote them |
+| `screenshots/` | Screenshots of the scenarios that failed (traces and videos are left out: they can hold passwords) |
+
+The app never edits or deletes a record. It reads the commit from `.git`, but it can't tell
+whether files had changed since, so commit before you run.
+
 When demoing on this repository's `demo` folder, reset it afterwards with
 `git checkout -- demo` (and delete any new `.feature` files you created). The demo's
-history file is ignored by git here.
+history file and test records are ignored by git here.
 
 Options: `--port` to use another port, `--no-open` to not open the browser, `--projects`
 to use a different project list file.

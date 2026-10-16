@@ -14,6 +14,7 @@ import json
 import math
 import os
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from html import escape
@@ -222,7 +223,9 @@ def _scenario_html(s: Scenario, out_dir: Path) -> str:
     )
 
 
-def render_html(features: list[Feature], out_dir: Path, source: str) -> str:
+def render_html(features: list[Feature], out_dir: Path, source: str, title: str = "Test report",
+                details: Sequence[tuple[str, str]] = ()) -> str:
+    """``details`` (label, value) are listed above the results, e.g. who ran the tests for a test record."""
     scenarios = [s for f in features for s in f.scenarios]
     counts = {k: sum(s.status == k for s in scenarios) for k in STATUS_ORDER}
     steps = [st for s in scenarios for st in s.steps]
@@ -250,6 +253,7 @@ def render_html(features: list[Feature], out_dir: Path, source: str) -> str:
             + "".join(_scenario_html(s, out_dir) for s in f.scenarios) + "</section>"
         )
 
+    details_html = "".join(f"<dt>{escape(k)}</dt><dd>{escape(v)}</dd>" for k, v in details if v)
     generated = datetime.now().strftime("%Y-%m-%d %H:%M")
     return f"""<!doctype html>
 <html lang="en">
@@ -258,15 +262,16 @@ def render_html(features: list[Feature], out_dir: Path, source: str) -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy"
   content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; media-src 'self'">
-<title>Test report</title>
+<title>{escape(title)}</title>
 <style>{CSS}</style>
 </head>
 <body>
 <header class="top {overall}">
-  <h1>Test report</h1>
+  <h1>{escape(title)}</h1>
   <p>{escape(source)} · generated {generated}</p>
 </header>
 <main>
+  {f'<dl class="details">{details_html}</dl>' if details_html else ""}
   <div class="tiles">{tiles_html}</div>
   {"".join(sections) or '<p>No scenarios found in this report.</p>'}
 </main>
@@ -297,6 +302,10 @@ body { margin:0; background:var(--bg); }
 .top p { margin:4px 0 0; opacity:.9; font-size:.9rem; }
 main { max-width:1000px; margin:0 auto; padding:20px 16px 60px; }
 .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:24px; }
+.details { display:grid; grid-template-columns:max-content 1fr; gap:6px 16px; margin:0 0 24px; padding:12px 14px;
+  background:var(--card); border:1px solid var(--line); border-radius:10px; }
+.details dt { color:var(--muted); }
+.details dd { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
 .tile { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
 .tv { font-size:1.5rem; font-weight:700; font-variant-numeric:tabular-nums; }
 .tl { color:var(--muted); font-size:.8rem; }

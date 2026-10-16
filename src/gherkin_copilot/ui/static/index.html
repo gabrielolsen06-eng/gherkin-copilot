@@ -187,6 +187,7 @@
         <p class="muted" id="results-summary"></p>
       </div>
       <div class="panel-tools">
+        <button type="button" class="ghost" id="record-btn" hidden>Save as test record</button>
         <button type="button" class="primary" id="run-all">▶ Run all tests</button>
       </div>
     </div>
@@ -344,6 +345,31 @@
       <button type="button" class="ghost" id="stepcode-cancel">Cancel</button>
       <button type="button" class="ghost" id="stepcode-back" hidden>Back</button>
       <button type="submit" class="primary" id="stepcode-submit">Preview changes</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="record-dialog">
+  <form id="record-form" method="dialog">
+    <h2>Save as a test record</h2>
+    <p class="field-hint">Test runs aren't kept: the next run replaces these results. A test record is a copy of this
+      run that you keep, in <code>test-records/</code> in this project, to commit with your code.</p>
+    <p id="record-summary"></p>
+    <label>Title
+      <input name="title" required maxlength="80" placeholder="e.g. Release 2.3 regression" autocomplete="off">
+    </label>
+    <label><span>Environment <span class="optional">optional</span></span>
+      <input name="environment" maxlength="120" placeholder="e.g. Windows 11 VM, Edge, test site" autocomplete="off">
+    </label>
+    <label><span>Notes <span class="optional">optional</span></span>
+      <textarea name="notes" maxlength="1000" rows="3"></textarea>
+    </label>
+    <p class="field-hint">The record names your last commit, but the app can't tell whether files had changed since,
+      so commit before you run the tests. Screenshots of failed scenarios are copied; traces and videos aren't.</p>
+    <p class="error-box" id="record-error" role="alert" hidden></p>
+    <div class="dialog-actions">
+      <button type="button" class="ghost" id="record-cancel">Cancel</button>
+      <button type="submit" class="primary">Save record</button>
     </div>
   </form>
 </dialog>

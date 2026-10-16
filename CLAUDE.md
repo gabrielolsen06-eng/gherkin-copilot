@@ -74,7 +74,9 @@ and `.github/workflows/ci.yml` if playwright changed; `tests/test_init.py` fails
   scenario list/open-as-blocks/new/edit/delete/duplicate/restore (validates a structured
   spec, never writes raw browser text), `history.py` append-only
   `.gherkin-copilot/history.jsonl` in the project, `runner.py` runs the project's test
-  command and reads `cucumber.json` back, `home.py` home page statistics, `gitinfo.py` branch/commit/pull/ahead-behind
+  command and reads `cucumber.json` back (runs are scratch: replaced by the next run), `records.py` "Save as test
+  record": copies a finished run into `test-records/<date>_<title>/` to commit (never overwrites or deletes;
+  screenshots of failures only, no traces), `home.py` home page statistics, `gitinfo.py` branch/commit/pull/ahead-behind
   read straight from `.git` (refs, reflog, zlib loose objects and v2 packs; never runs git), `stepcode.py` action blocks → Playwright step code
   (fixed action/locator menu, `repr` for all user text, compiled before saving), `static/` plain
   HTML/CSS/JS, `textContent` only, no frameworks or CDNs)
@@ -118,7 +120,8 @@ catalogue (done); 2. block-based scenario builder with live check, stubs, save t
 editor + history (done); 4. test results with a Run button (done: whole suite, one feature
 file, or the scenario being edited; results in `.gherkin-copilot/results`, self-ignored);
 5. home page: stats, git, recent changes (done); 6. docs/security pass (done 14 Oct 2026: README and SECURITY.md edited with the humanizer skill, every
-check re-run, SECURITY.md's table dated 2026-10-14).
+check re-run, SECURITY.md's table dated 2026-10-14). 7. test records (done 16 Oct 2026: **Save as test record** on the
+Results tab; informal runs stay in the ignored results folder).
 
 
 1. Done: `index`, `find`, `dupes`, `merge`, `check --stubs`, `report`, runnable demo

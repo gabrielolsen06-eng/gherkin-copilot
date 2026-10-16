@@ -30,6 +30,7 @@ const state = {
   dupesKeep: new Set(), // functions the user chose to keep
   run: null, // the current or last test run (live, from the server)
   runResults: null, // the last results on disk
+  recordSaved: null, // start time of the run last saved as a test record
   defaultFolder: "",
 };
 
@@ -1299,6 +1300,12 @@ function renderResults() {
   $("run-dot").title = running ? "Tests running" : "The last run had failures";
   $("run-dot").setAttribute("aria-label", $("run-dot").title);
 
+  const finished = !running && state.runResults?.run?.status === "finished" && resultCounts().total > 0;
+  const saved = finished && state.recordSaved === state.runResults.run.started;
+  $("record-btn").hidden = !finished;
+  $("record-btn").disabled = saved;
+  $("record-btn").textContent = saved ? "Saved as test record" : "Save as test record";
+
   $("run-status").hidden = !running;
   if (running) $("run-status-text").textContent = `Running ${run.label === "All tests" ? "all tests" : run.label}` +
     ` · ${run.done} done · ${elapsed(run)}`;
@@ -1330,6 +1337,39 @@ function renderResults() {
     if (!total && !running && run) $("run-log").open = true;
   }
   if (state.tab === "home") renderHome();
+}
+
+async function openRecordDialog() {
+  const name = await ensureAuthor();
+  if (!name) return;
+  const meta = state.runResults.run;
+  const { total, failed } = resultCounts();
+  const form = $("record-form");
+  form.reset();
+  form.elements.environment.value = store("gc-record-environment") || "";
+  $("record-summary").textContent = `${meta.label} · ${failed ? `${failed} of ${total} failed` : `${plural(total, "scenario")} passed`}` +
+    ` · ran ${when(new Date(meta.started * 1000).toISOString())} · by ${name}`;
+  $("record-error").hidden = true;
+  $("record-dialog").showModal();
+  form.elements.title.focus();
+}
+
+async function saveRecord(event) {
+  event.preventDefault();
+  const form = event.target.elements;
+  const started = state.runResults.run.started;
+  try {
+    const result = await api("/api/record", { project: state.active, started, author: author(),
+      title: form.title.value, environment: form.environment.value, notes: form.notes.value });
+    store("gc-record-environment", form.environment.value.trim());
+    state.recordSaved = started;
+    $("record-dialog").close();
+    renderResults();
+    toast(`Saved as a test record in ${result.folder}`);
+  } catch (error) {
+    $("record-error").textContent = error.message;
+    $("record-error").hidden = false;
+  }
 }
 
 // --- history ----------------------------------------------------------------------
@@ -1946,6 +1986,9 @@ $("stepcode-cancel").addEventListener("click", () => $("stepcode-dialog").close(
 $("stepcode-back").addEventListener("click", () => showStepCodePreview(null));
 $("stepcode-form").addEventListener("change", (e) => { if (e.target.name === "target") syncStepCodeTarget(); });
 $("run-all").addEventListener("click", () => startRun("all"));
+$("record-btn").addEventListener("click", () => openRecordDialog().catch((e) => toast(e.message)));
+$("record-form").addEventListener("submit", saveRecord);
+$("record-cancel").addEventListener("click", () => $("record-dialog").close());
 $("home-run").addEventListener("click", () => startRun("all"));
 $("home-build").addEventListener("click", () => showTab("build"));
 $("run-setup-btn").addEventListener("click", openInfoDialog);
