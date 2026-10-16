@@ -288,6 +288,8 @@ def test_unrelated_folders_keep_history_with_the_features(tmp_path):
     (tmp_path / "b").mkdir()
     project = Project("p", "P", str(tmp_path / "a"), str(tmp_path / "b"))
     assert history.history_file(project).parent.parent == tmp_path / "b"
+    (tmp_path / "pytest.ini").write_text("[pytest]\n")  # steps/ and features/ in one pytest project, as init makes them
+    assert history.history_file(project).parent.parent == tmp_path == history.project_root(project)
 
 
 # --- over HTTP: every save is recorded ---------------------------------------------------

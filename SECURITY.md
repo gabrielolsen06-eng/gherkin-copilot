@@ -85,11 +85,14 @@ This page is written for whoever approves software on a managed work laptop.
     the Python. Everything typed is placed inside quoted Python strings, value names must
     be plain identifiers, and the result is compiled and checked to match the scenario line
     before it can be saved, so no text from the browser can become code;
-  - a history of those changes, appended to `.gherkin-copilot/history.jsonl` inside the
-    project. It holds the diffs, the scenario text before and after, and the name the user
-    typed in. It never contains anything beyond what's already in the project's files.
+  - a history of those changes, appended to `.gherkin-copilot/history.jsonl` in the
+    project folder: the folder holding both the steps and features folders, if one holds the
+    other or they sit side by side in a pytest project (one with `pytest.ini`,
+    `pyproject.toml`, `tox.ini`, `setup.cfg` or `conftest.py`); otherwise the features
+    folder. The test results and test records below go in the same folder. It holds the
+    diffs, the scenario text before and after, and the name the user typed in. It never contains anything beyond what's already in the project's files.
   - a test record, only when you press **Save as test record** on a run that finished: a
-    new folder, `test-records/<date>_<title>/` in the project, holding a copy of the run's
+    new folder, `test-records/<date>_<title>/` in the project folder, holding a copy of the run's
     `cucumber.json`, a `report.html` made from it (the same no-script page as `report`), a
     `record.json` with the title, environment and notes you typed, your name, the
     computer's operating system and the branch and commit read from `.git`, and screenshots

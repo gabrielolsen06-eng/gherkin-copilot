@@ -22,17 +22,22 @@ from gherkin_copilot.ui.builder import json_object
 from gherkin_copilot.ui.projects import Project
 
 MAX_AUTHOR = 60
+PROJECT_FILES = ("pytest.ini", "pyproject.toml", "tox.ini", "setup.cfg", "conftest.py")  # pytest's own markers
 _lock = threading.Lock()
 
 
 def project_root(project: Project) -> Path:
-    """The folder that holds both steps and features, or the features folder if they're unrelated."""
+    """The folder that holds both steps and features: one of the two, or a pytest project around them (steps/ and
+    features/ side by side, as ``init`` makes them). Otherwise the features folder, so two unrelated folders never
+    put the app's files in whatever folder they happen to share."""
     steps, features = Path(project.steps), Path(project.features)
     try:
         common = Path(os.path.commonpath([steps, features]))
     except ValueError:  # Windows: on different drives
         return features
-    return common if common in (steps, features) else features
+    if common in (steps, features) or any((common / name).is_file() for name in PROJECT_FILES):
+        return common
+    return features
 
 
 def history_file(project: Project) -> Path:

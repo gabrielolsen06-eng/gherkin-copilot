@@ -257,6 +257,12 @@ your step definitions, and optionally the folder with your `.feature` files. You
 as many projects as you like and switch between them at the top; the list is saved in
 `~/.gherkin-copilot/projects.json`.
 
+The app keeps its own files (history, test results, test records) in the project folder.
+That's the folder holding both the steps and the features folders, if one is inside the
+other, or if they sit side by side in a pytest project (a folder with `pytest.ini`,
+`pyproject.toml`, `tox.ini`, `setup.cfg` or `conftest.py`, like the ones `init` creates).
+Otherwise it's the features folder.
+
 **Home** is the project at a glance, and where the app opens:
 
 - **Numbers:** scenarios, step definitions (used and unused), how often each step is

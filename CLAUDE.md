@@ -73,7 +73,8 @@ and `.github/workflows/ci.yml` if playwright changed; `tests/test_init.py` fails
   screen on top of `merger.plan_merges` (one pair at a time, multi-file hash), `editor.py`
   scenario list/open-as-blocks/new/edit/delete/duplicate/restore (validates a structured
   spec, never writes raw browser text), `history.py` append-only
-  `.gherkin-copilot/history.jsonl` in the project, `runner.py` runs the project's test
+  `.gherkin-copilot/history.jsonl` in the project folder (`project_root`: steps/features side by side count as one project
+  only if their parent has a pytest config or conftest.py, else the features folder; results and records live there too), `runner.py` runs the project's test
   command and reads `cucumber.json` back (runs are scratch: replaced by the next run), `records.py` "Save as test
   record": copies a finished run into `test-records/<date>_<title>/` to commit (never overwrites or deletes;
   screenshots of failures only, no traces), `home.py` home page statistics, `gitinfo.py` branch/commit/pull/ahead-behind

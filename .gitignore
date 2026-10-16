@@ -8,6 +8,8 @@ build/
 # history and test records written by the app during demos (in real projects, commit them)
 demo/**/.gherkin-copilot/
 demo/**/test-records/
+desktop_demo/**/.gherkin-copilot/
+desktop_demo/**/test-records/
 .DS_Store
 .venv-dev/
 # Office lock files (e.g. ~$deck.pptx while PowerPoint has it open)
