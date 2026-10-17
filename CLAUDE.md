@@ -27,7 +27,6 @@ python -m pytest tests                    # tool unit tests
 python run_demo.py --brave --headed       # full demo in Brave (owner's browser on macOS)
 python run_demo.py --brave --no-open      # same, without opening the HTML report
 python -m pytest desktop_demo             # desktop scenarios: Windows only (skip on macOS); CI job "desktop"
-gherkin-copilot init|index|find|dupes|merge|check|report|ui --help
 gherkin-copilot ui                        # the app, on 127.0.0.1:8765
 ```
 
@@ -47,63 +46,37 @@ All four must stay clean. So must VS Code's Pylance, which reads `[tool.pyright]
 so Pyright checks it on Windows and skips it on macOS (not `assert`: bandit flags it). Exit codes: 0 ok, 1 finding, 2 bad input (`UsageError`; wrap loaders in
 `cli._input_file()` to turn their ValueError into one), 3 internal error. Displayed paths use `.as_posix()`. CI: `.github/workflows/ci.yml`.
 
-### Dependencies
+Changing dependencies: follow the `update-dependencies` skill (`.claude/skills/`).
 
-Edit `requirements.in`, then regenerate the lock with pip-tools (in a separate venv):
-`pip-compile --generate-hashes --allow-unsafe --strip-extras -o requirements.lock requirements.in`.
-Keep `colorama` pinned (pytest needs it on Windows). Run `pip-audit -r requirements.lock`
-and `bandit -r src demo run_demo.py` afterwards. Then copy the lock to
-`src/gherkin_copilot/starter/requirements.lock.tmpl` and the pins to `requirements.in.tmpl`
-(the project `init` creates), and the Playwright image tag in `starter/gitlab-ci.yml.tmpl`
-and `.github/workflows/ci.yml` if playwright changed; `tests/test_init.py` fails until all match.
+## Layout gotchas
 
-## Layout
+Read the tree for what each module does; these are the rules the code doesn't show.
 
-- `src/gherkin_copilot/`: `scaffold.py` + `starter/` (`init`: starter project from `*.tmpl`
-  files shipped as package data; only creates files, never overwrites), `indexer.py` (find step defs via ast; `StepDef.stub` marks bodies that only raise NotImplementedError, which `check` fails on), `matcher.py` (exact and
-  fuzzy matching), `gherkin.py` (the one feature-file parser: exact scenario line spans + renderer; comments above a step are kept,
-  other lines it can't write back are in `Block.unkept`, and the editor refuses those scenarios), `files.py`
-  (`save_text`: every write of a user's file keeps its line endings and is atomic; `resolves_inside` for links), `checker.py` (steps
-  from `gherkin.py`, binding, stubs), `merger.py` (merge duplicate
-  steps; the only code that edits user files, and only with `--apply`), `report.py` (Cucumber JSON
-  to HTML, no JS), `cli.py`, `ui/` (the local web app: `server.py` stdlib HTTP server with
-  token + Host/Origin checks, `projects.py` project list in `~/.gherkin-copilot/`,
-  `catalog.py` steps as text + slots + `vscode://` links to their code (no editing step code in the app), `builder.py` check/save/stubs for the scenario
-  builder (preview diff + hash, writes only inside project folders), `dupes.py` duplicates
-  screen on top of `merger.plan_merges` (one pair at a time, multi-file hash), `editor.py`
-  scenario list/open-as-blocks/new/edit/delete/duplicate/restore (validates a structured
-  spec, never writes raw browser text), `history.py` append-only
-  `.gherkin-copilot/history.jsonl` in the project folder (`project_root`: steps/features side by side count as one project
-  only if their parent has a pytest config or conftest.py, else the features folder; results and records live there too), `runner.py` runs the project's test
-  command and reads `cucumber.json` back (runs are scratch: replaced by the next run), `records.py` "Save as test
-  record": copies a finished run into `test-records/<date>_<title>/` to commit (never overwrites or deletes;
-  screenshots of failures only, no traces), `home.py` home page statistics, `gitinfo.py` branch/commit/pull/ahead-behind
-  read straight from `.git` (refs, reflog, zlib loose objects and v2 packs; never runs git), `stepcode.py` action blocks → Playwright step code
-  (fixed action/locator menu, `repr` for all user text, compiled before saving), `static/` plain
-  HTML/CSS/JS, `textContent` only, no frameworks or CDNs)
-- `demo/`: `app/` practice shop, `features/`, `drafts/` (deliberately unimplemented
-  checkout scenario), `steps/` (two deliberate near-duplicate steps for the `dupes`/`merge` demo; `cart.feature`
-  uses one so `merge` rewrites a line),
-  `conftest.py` (loads every file in `steps/`; registers every feature-file tag as a pytest marker, as the starter
-  conftests do, so a tag added in the app can't break collection), `browsers.py` (finds Brave), `server.py`. `demo/` is a
-  package: import as `demo.server`, `demo.browsers`, `demo.steps.*`
-- `tests/`: unit tests for the tool (`test_app_server.py` imports the generated project's `app_server.py`)
-- Starter templates: `starter/app_server.py.tmpl` starts/stops a program that serves the site
-  (`app_server` in pytest.ini; job object on Windows, process group elsewhere). CI's lint job runs
-  ruff and bandit on freshly generated web and desktop projects, so template code is checked too.
-- `desktop_demo/`: Windows desktop testing, exactly the project `init --desktop` creates: its
-  files are copied to `src/gherkin_copilot/starter_desktop/*.tmpl` (plus a README template)
-  and `test_init.py` fails until they match, like the lock files. Standalone project (no
-  `__init__.py`; `import uia`, `steps.*`). `uia.py` drives apps through Windows UI Automation via
-  `comtypes` (imported lazily so it loads on macOS); scenarios skip off Windows via `pytestmark`
-  (a whole-module skip exits 5, a skip in conftest.py crashes). App from `desktop_app` in
-  pytest.ini (env `DESKTOP_APP` overrides). Actions run in a background thread (invoke blocks
-  while a message box is open). A project counts as desktop when its step code imports `uia`
-  (`indexer.uses_desktop_helper`): the app then offers desktop action blocks
-  (`stepcode.DESKTOP_ACTIONS`, calling `uia.*`; keep those function names stable) and stubs
-  take `app` instead of `page`. `requirements-desktop.lock` is hand-written: one pure-Python
-  package; update its hashes from PyPI's JSON when bumping, never via pip-compile on macOS (it
-  drops Windows-only packages). Desktop failures show as annotations on the CI run.
+- `gherkin.py` is the one feature-file parser. Comments above a step are kept; other lines it can't write back
+  go in `Block.unkept`, and the editor refuses those scenarios.
+- Every write of a user's file goes through `files.save_text` (keeps line endings, atomic); check links with
+  `resolves_inside`. `merger.py` is the only CLI code that edits user files, and only with `--apply`;
+  `init` (`scaffold.py`) only creates files, never overwrites.
+- The app (`ui/`): no editing step code in the app (`catalog.py` links to it with `vscode://`); writes only after
+  the user confirms a preview, and only inside project folders; `editor.py` validates a structured spec and never
+  writes raw browser text; `stepcode.py` uses a fixed action/locator menu, `repr` for all user text, and compiles
+  before saving; `gitinfo.py` never runs git; `static/` is `textContent` only, no frameworks or CDNs.
+- `project_root`: steps/features side by side count as one project only if their parent has a pytest config or
+  conftest.py, else the features folder. History, results (scratch: replaced by the next run) and test records
+  (`test-records/`: never overwritten or deleted; screenshots of failures only, no traces) live there.
+- `demo/` is a package: import as `demo.server`, `demo.browsers`, `demo.steps.*`. `drafts/` is deliberately
+  unimplemented, and `steps/` has two deliberate near-duplicate steps for the `dupes`/`merge` demo
+  (`cart.feature` uses one so `merge` rewrites a line): don't "fix" them. Its `conftest.py` registers every
+  feature-file tag as a pytest marker, as the starter conftests do, so a tag added in the app can't break collection.
+- CI's lint job runs ruff and bandit on freshly generated web and desktop projects, so template code is checked
+  too. `tests/test_app_server.py` imports the generated project's `app_server.py`.
+- `desktop_demo/` is exactly the project `init --desktop` creates: its files are copied to
+  `src/gherkin_copilot/starter_desktop/*.tmpl` (plus a README template) and `test_init.py` fails until they match.
+  Standalone project (no `__init__.py`; `import uia`, `steps.*`); `comtypes` is imported lazily so it loads on
+  macOS. Scenarios skip off Windows via `pytestmark` (a whole-module skip exits 5, a skip in conftest.py crashes).
+  Actions run in a background thread (invoke blocks while a message box is open). Keep the `uia.*` function names
+  that `stepcode.DESKTOP_ACTIONS` calls stable. `requirements-desktop.lock` is hand-written: update its hashes from
+  PyPI's JSON, never via pip-compile on macOS (it drops Windows-only packages).
 
 ## Conventions
 
@@ -112,21 +85,7 @@ and `.github/workflows/ci.yml` if playwright changed; `tests/test_init.py` fails
 - Python 3.11+. Type hints, dataclasses, small functions, comments only where non-obvious.
 - Every new command gets `--json` output and tests in `tests/`.
 
-## Roadmap
-
-In progress, the app (`gherkin-copilot ui`), built in stages: 1. server, projects, step
-catalogue (done); 2. block-based scenario builder with live check, stubs, save to
-.feature (done; writes only after the user confirms a preview); 3. duplicates & merge
-(done; `merge --features` supports features outside the steps folder); 3b. scenario
-editor + history (done); 4. test results with a Run button (done: whole suite, one feature
-file, or the scenario being edited; results in `.gherkin-copilot/results`, self-ignored);
-5. home page: stats, git, recent changes (done); 6. docs/security pass (done 14 Oct 2026: README and SECURITY.md edited with the humanizer skill, every
-check re-run, SECURITY.md's table dated 2026-10-14). 7. test records (done 16 Oct 2026: **Save as test record** on the
-Results tab; informal runs stay in the ignored results folder).
-
-
-1. Done: `index`, `find`, `dupes`, `merge`, `check --stubs`, `report`, runnable demo
-2. Done: GitHub repo with CI (GitHub Actions, Ubuntu + Windows)
+## Not planned
 
 **No LLM features** (dropped the planned `generate STORY.txt`): the tool has to run on a
 locked-down, low-powered work laptop, so no network models and no local models either.
