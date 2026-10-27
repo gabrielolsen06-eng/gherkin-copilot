@@ -285,6 +285,9 @@ def test_save_a_run_as_a_test_record(project):
     assert (folder / "cucumber.json").read_bytes() == (runner.results_dir(project) / "cucumber.json").read_bytes()
     record = json.loads((folder / "record.json").read_text())
     assert record["title"] == "Release 2.3 regression" and record["result"] == "failed"
+    assert record["pytest_exit_code"] == 1 and record["versions"][0].startswith("platform ")
+    assert "pytest-" in record["versions"][0] and record["versions"][1].startswith("plugins: ")
+    assert "bdd-" in record["versions"][1]  # the order of plugins depends on what's installed
     assert record["scenarios"]["total"] == 2 and record["scenarios"]["passed"] == 1
     assert record["ran_by"] == "Ada" and record["what_ran"] == "All tests" and record["environment"] == "Windows 11, Edge"
     assert record["git"] == {"branch": "main", "commit": "c9b6fb9" + "0" * 33}
@@ -296,6 +299,20 @@ def test_save_a_run_as_a_test_record(project):
     again = records.save(project, run["started"], "Release 2.3 regression", "Ada")
     assert again["folder"].endswith("_release-2-3-regression-2")  # never overwrites a record
     assert records.save(project, run["started"], "日本", "Ada")["folder"].endswith("_record")
+
+
+def test_a_record_is_only_a_pass_if_pytest_agrees(project):
+    work = runner.Runner()
+    work.start(project, "scenario", "sums.feature", "Adding works")
+    run = wait(lambda: work.status("p"))
+    assert records.save(project, run["started"], "Smoke", "Ada")["record"]["result"] == "passed"
+    run_file = runner.results_dir(project) / "run.json"
+    for exit_code in (1, None):  # e.g. a test outside the feature files failed, or no exit code was saved
+        run_file.write_text(json.dumps({**json.loads(run_file.read_text()), "exit_code": exit_code}))
+        saved = records.save(project, run["started"], "Smoke", "Ada")
+        assert saved["record"]["result"] == "mismatch" and saved["record"]["pytest_exit_code"] == exit_code
+        html = (Path(project.steps) / saved["folder"] / "report.html").read_text()
+        assert f"match pytest: the results say 1 passed, pytest&#x27;s exit code was {exit_code}</dd>" in html
 
 
 def test_runs_that_cant_be_saved_as_records(project, tmp_path_factory, monkeypatch):

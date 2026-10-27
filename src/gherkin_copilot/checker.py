@@ -21,6 +21,10 @@ STEP_LINE = re.compile(r"^(Given|When|Then|And|But|\*)\s+(.+)$")
 OUTLINE_PARAM = re.compile(r"<([^<>]+)>")
 QUOTED = re.compile(r'"[^"]*"')
 NUMBER = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?(?![\w.])")
+PUBLIC_PASSWORDS = frozenset({"secret_sauce", "wrong", "invalid", "incorrect"})  # a practice site's, deliberately wrong
+PASSWORD_COLUMN = re.compile(r"(?:password|passwd|pwd)$", re.IGNORECASE)
+PASSWORD_IN_STEP = re.compile(r"\b(?:password|passwd|pwd)\W{0,3}\"([^\"<>]+)\"", re.IGNORECASE)
+PASSWORD_IN_CODE = re.compile(r"(?:password|passwd|pwd)['\"]?\s*[:=]\s*(['\"])([^'\"]+)\1", re.IGNORECASE)
 
 
 @dataclass
@@ -74,6 +78,39 @@ def invalid_lines(text: str) -> list[tuple[int, str]]:
     """Lines inside a scenario that aren't Gherkin (a mistyped keyword, say): pytest-bdd rejects the whole file."""
     lines = text.splitlines()
     return [(n, lines[n - 1].strip()) for block in gherkin.parse(text).blocks for n in block.invalid]
+
+
+def password_lines(text: str) -> list[tuple[int, str]]:
+    """Feature-file lines that seem to hold a password: a quoted value after "password" in a step, or a cell in a
+    table's password column. The value is shown as *** so the warning doesn't copy it into a CI log."""
+    found: list[tuple[int, str]] = []
+    column: int | None = None  # in a table: its password column, or -1; None: the next row is a header
+    for n, line in enumerate(text.splitlines(), 1):
+        stripped = line.strip()
+        if stripped.startswith("|"):
+            row = gherkin.cells(stripped)
+            if column is None:
+                column = next((i for i, cell in enumerate(row) if PASSWORD_COLUMN.search(cell)), -1)
+            elif 0 <= column < len(row) and row[column] and row[column] not in PUBLIC_PASSWORDS:
+                row[column] = "***"
+                found.append((n, "| " + " | ".join(row) + " |"))
+            continue
+        if stripped and not stripped.startswith("#"):
+            column = None
+        match = PASSWORD_IN_STEP.search(stripped)
+        if match and match.group(1) not in PUBLIC_PASSWORDS:
+            found.append((n, f"{stripped[:match.start(1)]}***{stripped[match.end(1):]}"))
+    return found
+
+
+def password_assignments(text: str) -> list[tuple[int, str]]:
+    """Python lines that set a password to a literal, shown as ***. ``# nosec`` (bandit's marker) skips a line."""
+    found: list[tuple[int, str]] = []
+    for n, line in enumerate(text.splitlines(), 1):
+        match = PASSWORD_IN_CODE.search(line)
+        if match and match.group(2) not in PUBLIC_PASSWORDS and "nosec" not in line:
+            found.append((n, f"{line[:match.start(2)]}***{line[match.end(2):]}".strip()))
+    return found
 
 
 def _fill(text: str, values: dict[str, str]) -> str:

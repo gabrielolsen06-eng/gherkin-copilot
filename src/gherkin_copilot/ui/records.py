@@ -108,11 +108,19 @@ def save(project: Project, started: object, title: object, author: object, envir
 
         counts = {status: sum(s.status == status for s in scenarios) for status in STATUS_ORDER}
         failed_count = len(scenarios) - counts["passed"] - counts["skipped"]
+        summary = f"{failed_count} of {len(scenarios)} failed" if failed_count else f"{counts['passed']} passed"
+        # A false pass is the one mistake a record mustn't make: it's only a pass if pytest's exit code agrees
+        exit_code = run.get("exit_code")
+        result = "failed" if failed_count else "passed"
+        if (exit_code == 0) != (result == "passed"):
+            result = "mismatch"
+            summary = f"Verdict doesn't match pytest: the results say {summary}, pytest's exit code was {exit_code}"
         ended = run.get("ended")
         git = _git(root)
         record: dict[str, Any] = {
             "title": title_text,
-            "result": "failed" if failed_count else "passed",
+            "result": result,
+            "pytest_exit_code": exit_code,
             "scenarios": {"total": len(scenarios), **counts},
             "what_ran": run.get("label"),
             "started": _local(started).isoformat(timespec="seconds"),
@@ -121,18 +129,20 @@ def save(project: Project, started: object, title: object, author: object, envir
             "environment": _one_line(environment, MAX_ENVIRONMENT),
             "notes": notes.strip()[:MAX_NOTES] if isinstance(notes, str) else "",
             "computer": platform.platform(),
+            "versions": run.get("versions") or [],  # what pytest says was installed, not what the lock file asks for
             "git": git,
             "saved": datetime.now().astimezone().isoformat(timespec="seconds"),
             "tool": f"gherkin-copilot {__version__}",
         }
         commit = f"{git['branch'] or 'detached'} @ {(git['commit'] or '')[:7]}" if git and git["commit"] else ""
         details = [
-            ("Result", f"{failed_count} of {len(scenarios)} failed" if failed_count else f"{counts['passed']} passed"),
+            ("Result", summary),
             ("What ran", str(run.get("label") or "")),
             ("Ran on", f"{_local(started):%Y-%m-%d %H:%M}"),
             ("Ran by", ran_by),
             ("Environment", record["environment"]),
             ("Computer", record["computer"]),
+            ("Versions", "; ".join(record["versions"])),
             ("Commit", commit),
             ("Notes", record["notes"]),
         ]

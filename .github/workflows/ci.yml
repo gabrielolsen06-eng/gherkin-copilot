@@ -3,6 +3,8 @@ name: CI
 on:
   push:
   pull_request:
+  schedule:
+    - cron: "0 6 * * 1"  # weekly: new vulnerabilities in pinned packages appear without any code change
 
 permissions:
   contents: read

@@ -12,7 +12,7 @@ and helps you:
 | `find "STEP"` | Says whether a line of Gherkin binds to a step, and suggests close matches if it doesn't |
 | `dupes` | Spots step definitions that say the same thing in slightly different words |
 | `merge` | Merges those duplicates: rewrites feature files to use one wording and deletes the other step (preview first, `--apply` to write) |
-| `check FEATURES` | Checks every line of your .feature files (including lines that aren't Gherkin, which pytest-bdd would reject, and steps that only raise `NotImplementedError`), and drafts Python code for missing steps (`--stubs`) |
+| `check FEATURES` | Checks every line of your .feature files (including lines that aren't Gherkin, which pytest-bdd would reject, and steps that only raise `NotImplementedError`), drafts Python code for missing steps (`--stubs`), and warns about passwords written in feature and step files |
 | `ui` | Opens the gherkin-copilot app in your browser: build and edit scenarios with blocks, run them, browse every step, merge duplicates, see the history of changes |
 | `report [JSON]` | Turns a Cucumber JSON results file into a single HTML page, with screenshots, videos and traces linked |
 
@@ -231,7 +231,8 @@ Every command accepts `--json`, and exit codes are meant for CI:
 | 2 | A problem with the input: a path that doesn't exist, no `.feature` files found, a file that isn't a valid index / report / UTF-8 text. One line on stderr, no traceback |
 | 3 | An internal error (a bug): the details are printed so it can be reported |
 
-A typo in a path therefore fails a CI gate. Output never crashes on a Windows console or log
+A typo in a path therefore fails a CI gate. `check`'s password warnings are a guess, so they
+never change the exit code. Output never crashes on a Windows console or log
 file: the ✓ / ✗ marks become `OK` / `MISSING` when the output can't show them.
 
 The saved index (`.gherkin-index.json`) remembers which folder it came from and when. If a
@@ -372,9 +373,13 @@ environment and notes are optional). The app copies the run into
 | File | What's in it |
 |---|---|
 | `report.html` | The results as a page anyone can open, with the record's details at the top |
-| `record.json` | Title, result, what ran, when, who ran it, environment, notes, computer, branch and commit |
+| `record.json` | Title, result, what ran, when, who ran it, environment, notes, computer, branch and commit, pytest's exit code, and the Python, pytest and plugin versions that ran |
 | `cucumber.json` | The raw results, as pytest-bdd wrote them |
 | `screenshots/` | Screenshots of the scenarios that failed (traces and videos are left out: they can hold passwords) |
+
+A record only says it passed if pytest's exit code agrees with the results. If they disagree
+(say a test outside the feature files failed), its result is `mismatch` and the report says
+"Verdict doesn't match pytest"; the results page shows the same.
 
 The app never edits or deletes a record. It reads the commit from `.git`, but it can't tell
 whether files had changed since, so commit before you run.

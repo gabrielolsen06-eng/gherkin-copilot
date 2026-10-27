@@ -1,0 +1,34 @@
+"""Logging in. Scenarios name a test role, never a person, and no password is ever written in a file:
+
+    Given I am logged in as the "standard" test user
+
+logs in with TEST_USER_STANDARD and TEST_PASSWORD_STANDARD from the environment. Change the
+page and the locators below to match your application's login page.
+"""
+
+import os
+import re
+
+import pytest
+from playwright.sync_api import Page
+from pytest_bdd import given, parsers
+
+
+def login_for(role: str) -> tuple[str, str]:
+    """The user name and password for a test role, from TEST_USER_<ROLE> and TEST_PASSWORD_<ROLE>."""
+    suffix = re.sub(r"\W+", "_", role).upper()
+    names = (f"TEST_USER_{suffix}", f"TEST_PASSWORD_{suffix}")
+    missing = [name for name in names if not os.environ.get(name)]
+    if missing:
+        pytest.fail(f"Set {' and '.join(missing)} to the {role} test user's login (README.md: Test logins)",
+                    pytrace=False)
+    return os.environ[names[0]], os.environ[names[1]]
+
+
+@given(parsers.parse('I am logged in as the "{role}" test user'))
+def logged_in_as(page: Page, role: str):
+    user, password = login_for(role)
+    page.goto("/login")
+    page.get_by_label("User name").fill(user)
+    page.get_by_label("Password").fill(password)
+    page.get_by_role("button", name="Log in").click()

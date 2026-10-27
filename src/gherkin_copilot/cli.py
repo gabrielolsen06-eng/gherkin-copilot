@@ -31,16 +31,25 @@ from gherkin_copilot.checker import (
     iter_feature_files,
     make_stub,
     parse_feature,
+    password_assignments,
+    password_lines,
 )
-from gherkin_copilot.indexer import StepDef, build_index, load_index, save_index, uses_desktop_helper
+from gherkin_copilot.indexer import (
+    StepDef,
+    build_index,
+    iter_python_files,
+    load_index,
+    save_index,
+    uses_desktop_helper,
+)
 from gherkin_copilot.matcher import find, find_duplicates
 from gherkin_copilot.merger import MergeResult, apply, plan_merges
 from gherkin_copilot.report import write_report
 from gherkin_copilot.scaffold import CI_FILES, create
 
 DEFAULT_INDEX = Path(".gherkin-index.json")
-MARKS = {"ok": "✓", "missing": "✗", "ambiguous": "!"}
-ASCII_MARKS = {"ok": "OK", "missing": "MISSING", "ambiguous": "AMBIGUOUS"}
+MARKS = {"ok": "✓", "missing": "✗", "ambiguous": "!", "warning": "!"}
+ASCII_MARKS = {"ok": "OK", "missing": "MISSING", "ambiguous": "AMBIGUOUS", "warning": "WARNING"}
 
 
 class UsageError(Exception):
@@ -191,25 +200,42 @@ def cmd_check(args: argparse.Namespace) -> int:
         raise UsageError(f"No .feature files found in {root}")
     results: list[StepResult] = []
     invalid: list[tuple[str, int, str]] = []
+    passwords: list[tuple[str, int, str]] = []
     for feature in features:
         shown = feature.relative_to(base).as_posix()
         with _input_file():
             parsed = parse_feature(feature, shown)
-            invalid += [(shown, n, line) for n, line in invalid_lines(feature.read_text(encoding="utf-8"))]
+            text = feature.read_text(encoding="utf-8")
+            invalid += [(shown, n, line) for n, line in invalid_lines(text)]
+            passwords += [(shown, n, line) for n, line in password_lines(text)]
         results.extend(check_steps(parsed, steps))
+    steps_root = _steps_root(args)
+    for path in iter_python_files(steps_root):
+        try:
+            source = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):  # unreadable step code is index's to report, not this warning's
+            continue
+        shown = path.relative_to(steps_root if steps_root.is_dir() else steps_root.parent).as_posix()
+        passwords += [(shown, n, line) for n, line in password_assignments(source)]
 
     if args.json:
         print(json.dumps([{"file": r.step.file, "line": r.step.line, "step": r.step.raw,
                            "status": "unwritten" if r.status == "ok" and r.bound[0].stub else r.status,
                            "bound_to": [s.location for s in r.bound]} for r in results] +
-                         [{"file": file, "line": n, "step": line, "status": "invalid", "bound_to": []}
-                          for file, n, line in invalid], indent=2))
+                         [{"file": file, "line": n, "step": line, "status": status, "bound_to": []}
+                          for status, found in (("invalid", invalid), ("password", passwords))
+                          for file, n, line in found], indent=2))
     else:
         _print_results(results)
         if invalid:
             print("\nNot Gherkin, so pytest-bdd won't load these files (a mistyped keyword?):")
             for file, n, line in invalid:
                 print(f"  {_mark('missing')} {file}:{n}  {line}")
+        if passwords:  # a warning, not a finding: the exit code doesn't change
+            print("\nThese look like passwords. Everything in these files ends up in git, so read logins from "
+                  "environment variables instead:")
+            for file, n, line in passwords:
+                print(f"  {_mark('warning')} {file}:{n}  {line}")
         missing = [r.step for r in results if r.status == "missing"]
         if args.stubs and missing:
             _print_stubs(missing, "app" if uses_desktop_helper(_steps_root(args)) else "page")

@@ -7,6 +7,15 @@ This page is written for whoever approves software on a managed work laptop.
 - **Reads source files, never runs them.** Step definitions are found by parsing Python
   files with the standard library's `ast` module. Scanned code is never imported or
   executed, so pointing the tool at a project can't trigger side effects.
+- **Warns about passwords written in files.** `check` also reads the step code's Python files
+  as text and warns about anything that looks like a password: a quoted value after
+  "password" in a feature file, a table column named password, or a password set to a
+  literal in Python. The warning shows the value as `***` and doesn't change the exit code,
+  as it's a guess. (The list of steps above it still shows each feature-file line as
+  written.) Public practice passwords and deliberately wrong ones (`secret_sauce`, `wrong`,
+  `invalid`, `incorrect`) are allowed, and `# nosec` skips a Python line. The web project
+  `init` creates reads test logins from environment variables (`TEST_USER_<ROLE>`,
+  `TEST_PASSWORD_<ROLE>`), never from its files.
 - **No network access.** The tool makes no HTTP requests, sends no telemetry and has no
   update check.
 - **No third-party runtime dependencies.** `pyproject.toml` lists none; it uses only the
@@ -95,8 +104,12 @@ This page is written for whoever approves software on a managed work laptop.
     new folder, `test-records/<date>_<title>/` in the project folder, holding a copy of the run's
     `cucumber.json`, a `report.html` made from it (the same no-script page as `report`), a
     `record.json` with the title, environment and notes you typed, your name, the
-    computer's operating system and the branch and commit read from `.git`, and screenshots
-    of the scenarios that didn't pass. Traces and videos are never copied, as they can hold
+    computer's operating system, the branch and commit read from `.git`, pytest's exit code
+    and the Python, pytest and plugin versions pytest printed, and screenshots
+    of the scenarios that didn't pass. A record only says it passed if pytest's exit code
+    agrees with the results file; if they disagree it says "Verdict doesn't match pytest"
+    (result `mismatch`), so a mistake in the tool can't turn a failed run into a pass.
+    Traces and videos are never copied, as they can hold
     whatever a test typed. It never overwrites or deletes a record, refuses a `test-records`
     link that points outside the project, and refuses if the results changed since the page
     showed them. Records are meant to be committed, so their screenshots are shared with
@@ -250,8 +263,9 @@ point pip at it with `--index-url`; the hashes still guarantee the same files.
   the code.
 - **CI actions are pinned to major versions** (for example `@v7`), and the Playwright image in
   the GitLab template to a version tag, not to exact commits or digests.
-- **Dependency updates are manual.** Nothing watches for new vulnerabilities between changes;
-  `pip-audit` runs on every push.
+- **Dependency updates are manual.** `pip-audit` runs on every push and once a week (CI's
+  schedule), so a new vulnerability in a pinned package fails a run, but updating the pin is
+  done by hand.
 - **Desktop tests can control any window the test user can see** (see above). Run them on test
   VMs only.
 - **Playwright starts its own helper program,** a bundled Node.js driver (`node.exe` inside the
@@ -259,20 +273,21 @@ point pip at it with `--index-url`; the hashes still guarantee the same files.
 
 ## Checks run on this version
 
-Results from 2026-10-16. The independent review in `reviews/` and its re-review were
+Results from 2026-10-26 for version 2026.10.26 (the browser, desktop and clean-install rows
+are from 2026-10-16). The independent review in `reviews/` and its re-review were
 worked through on 2026-10-12 (see `gherkin-copilot-review-2026-10-11-status.md` and
-`gherkin-copilot-review-2026-10-12-status.md`); the app's home page, desktop testing and
-`app_server` were added after them:
+`gherkin-copilot-review-2026-10-12-status.md`); the app's home page, desktop testing,
+`app_server`, test records and the password warnings were added after them:
 
 | Check | Result |
 |---|---|
-| `pip-audit --strict -r requirements.lock -r requirements-desktop.lock` (known vulnerabilities) | No known vulnerabilities found |
+| `pip-audit --strict -r requirements.lock -r requirements-desktop.lock` (known vulnerabilities) | One: setuptools 84.0.0 ([GHSA-xmj3-9gf7-h52w](https://github.com/advisories/GHSA-xmj3-9gf7-h52w)), fixed in 84.1.0; the pin isn't updated yet |
 | `bandit -q -r src demo desktop_demo run_demo.py`, and on both kinds of project `init` creates (static security analysis) | No findings. The places that start a process (`run_demo.py`, the app's Run button in `ui/runner.py`, and the desktop steps starting the app under test) use fixed argument lists and no shell, and are annotated with why |
 | `mypy --strict` | No issues in 24 source files |
 | `ruff check` (rules in `pyproject.toml`), also on both kinds of project `init` creates | No issues |
 | Pyright, the type checker in VS Code (settings in `pyproject.toml`): strict on `src`, `demo`, `desktop_demo` and both kinds of project `init` creates, standard on `tests/`, checked as macOS, Windows and Linux | No errors |
-| Tool tests | 334 passed (macOS, Python 3.14; also run on Windows and Ubuntu in CI), including tests for missing paths, malformed files, non-finite numbers, Windows code pages, generated inputs, the project `init` creates, and the home page's git reader checked against git itself (every object in a delta-compressed pack, and commits to push/pull on branchy history) |
-| Branch coverage (`coverage run -m pytest tests`) | 92% |
+| Tool tests | 337 passed (macOS, Python 3.14; also run on Windows and Ubuntu in CI), including tests for missing paths, malformed files, non-finite numbers, Windows code pages, generated inputs, the project `init` creates, and the home page's git reader checked against git itself (every object in a delta-compressed pack, and commits to push/pull on branchy history) |
+| Branch coverage (`coverage run -m pytest tests`) | 93% |
 | Demo scenarios in a real browser (Brave) | 6 passed |
 | Desktop scenarios on Windows (`desktop_demo/`, Character Map, CI `windows-latest`) | 3 passed: typing into a field, clicking a button and ticking a checkbox, through UI Automation with no fake mouse or keyboard. A project made by `init --desktop` passes the same scenarios as created |
 | A project made by `init`, run in a real browser | Passes in Brave locally, and in CI in Chromium and in the installed Edge on Windows (no browser download), with warnings treated as errors. Its `requirements.lock` is identical to this repo's (a test checks), so the audit above covers it |

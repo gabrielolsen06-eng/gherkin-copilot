@@ -39,6 +39,7 @@ ENV_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 TIME_LIMIT = 30 * 60
 LOG_LINES = 3000
 RESULT_LINE = re.compile(r"^\S+::\S.*\s(PASSED|FAILED|ERROR|SKIPPED|XFAIL|XPASS)(\s|$)")  # "t.py::test_a PASSED [50%]"
+VERSION_LINES = ("platform ", "plugins: ")  # pytest's header: Python, pytest and plugin versions
 
 
 def split_command(text: str, windows: bool = os.name == "nt") -> list[str]:
@@ -119,10 +120,11 @@ class Run:
     done: int = 0
     process: subprocess.Popen[str] | None = None
     stop_requested: bool = False
+    versions: list[str] = field(default_factory=list[str])
 
     def describe(self) -> dict[str, Any]:
         return {"label": self.label, "status": self.status, "exit_code": self.exit_code, "started": self.started,
-                "ended": self.ended, "done": self.done, "log": list(self.log)[-400:]}
+                "ended": self.ended, "done": self.done, "versions": self.versions, "log": list(self.log)[-400:]}
 
 
 class Runner:
@@ -190,6 +192,8 @@ class Runner:
                 run.log.append(line)
                 if RESULT_LINE.match(line):
                     run.done += 1
+                elif not run.done and line.startswith(VERSION_LINES):  # kept here: the log drops its oldest lines
+                    run.versions.append(line)
             return process.wait()
         finally:
             timer.cancel()

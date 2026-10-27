@@ -82,7 +82,38 @@ def test_stubs_are_valid_python_with_parameters():
 
 def test_demo_features_are_fully_bound(capsys):
     assert main(["check", str(DEMO / "features"), "--path", str(DEMO)]) == 0
-    assert "0 missing, 0 ambiguous" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "0 missing, 0 ambiguous" in out and "look like passwords" not in out  # secret_sauce and wrong are allowed
+
+
+def test_check_warns_about_passwords_without_failing(tmp_path, capsys):
+    (tmp_path / "login.feature").write_text(
+        'Feature: x\n  Scenario Outline: y\n    Given I am on the login page\n'
+        '    When I log in as "bob" with password "hunter2"\n'
+        '    When I log in as "<user>" with password "<password>"\n\n'
+        '    Examples:\n      | user | Password |\n      # a comment\n      | bob  | hunter2  |\n      | ann  | wrong    |\n'
+        '\n    Examples:\n      | user | result |\n      | bob  | ok     |\n')
+    (tmp_path / "steps.py").write_text(
+        'from pytest_bdd import given, parsers, when\n\n'
+        'ADMIN_PASSWORD = "hunter2"\nPASSWORD_FIELD = "#password"\nLOGIN = {"password": "s3cret"}\n'
+        'PRACTICE_PASSWORD = "secret_sauce"\nOTHER_PASSWORD = "x"  # nosec B105: not a real one\n\n\n'
+        '@given("I am on the login page")\ndef login_page(page):\n    page.goto("/")\n\n\n'
+        '@when(parsers.parse(\'I log in as "{user}" with password "{password}"\'))\n'
+        'def log_in(page, user, password):\n    page.fill("#password", password)\n')
+    assert main(["check", str(tmp_path), "--path", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    warnings = out.split("look like passwords")[1]
+    assert "hunter2" not in warnings and "s3cret" not in out  # the warning doesn't copy them into a CI log
+    assert warnings.splitlines()[1:] == [
+        '  ! login.feature:4  When I log in as "bob" with password "***"',
+        "  ! login.feature:10  | bob | *** |",
+        '  ! steps.py:3  ADMIN_PASSWORD = "***"',
+        '  ! steps.py:5  LOGIN = {"password": "***"}',
+    ]
+    assert main(["check", str(tmp_path), "--path", str(tmp_path), "--json"]) == 0
+    found = [e for e in json.loads(capsys.readouterr().out) if e["status"] == "password"]
+    assert [(e["file"], e["line"]) for e in found] == [("login.feature", 4), ("login.feature", 10), ("steps.py", 3),
+                                                       ("steps.py", 5)]
 
 
 def test_check_fails_on_lines_pytest_bdd_would_reject(tmp_path, capsys):

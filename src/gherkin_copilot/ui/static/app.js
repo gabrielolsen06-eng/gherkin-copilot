@@ -1317,9 +1317,12 @@ function renderResults() {
     ? `Last run: ${meta.label} · ${when(new Date(meta.started * 1000).toISOString())}` + (meta.status === "stopped" ? " (stopped)" : "")
     : configured ? "No results yet. Press Run to run the tests." : "";
   const seconds = scenarios.reduce((sum, s) => sum + s.seconds, 0);
+  const disagrees = meta.status === "finished" && (meta.exit_code === 0) === !!failed; // same check as a test record
   $("results-tiles").replaceChildren(...(total ? [
-    el("div", { class: `tile ${failed ? "bad" : "good"}` }, el("strong", {}, failed ? `${failed} failed` : "All passed"),
-      el("span", { class: "muted small" }, `${passed} of ${plural(total, "scenario")} passed`)),
+    el("div", { class: `tile ${failed || disagrees ? "bad" : "good"}` },
+      el("strong", {}, disagrees ? "Verdict doesn't match pytest" : failed ? `${failed} failed` : "All passed"),
+      el("span", { class: "muted small" }, `${passed} of ${plural(total, "scenario")} passed` +
+        (disagrees ? ` · pytest's exit code was ${meta.exit_code}` : ""))),
     el("div", { class: "tile" }, el("strong", {}, `${seconds.toFixed(1)}s`), el("span", { class: "muted small" }, "test time")),
   ] : []));
   $("results-list").replaceChildren(...(results?.features || []).map((f) => el("article", { class: "result-feature" },

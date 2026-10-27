@@ -72,6 +72,23 @@ def browser_context_args(browser_context_args):
     return {**browser_context_args, "ignore_https_errors": True}
 ```
 
+## Test logins
+
+Never write a password in a feature or step file: everything in them ends up in git. A
+scenario names a test role instead, and `steps/login_steps.py` reads that role's login from
+environment variables:
+
+```gherkin
+Given I am logged in as the "standard" test user
+```
+
+logs in with `TEST_USER_STANDARD` and `TEST_PASSWORD_STANDARD`. Set them in the terminal
+before running the tests (`export TEST_USER_STANDARD=...`; PowerShell:
+`$env:TEST_USER_STANDARD = "..."`), or in CI as masked, protected variables. Use dedicated
+test accounts, never your own. Change the step's page and locators to match your login page.
+`gherkin-copilot check` warns about anything in your feature and step files that looks like
+a password.
+
 ## Add a scenario
 
 1. Write it in a `.feature` file in `features/`. Every scenario there runs automatically.
