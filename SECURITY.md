@@ -289,7 +289,8 @@ point pip at it with `--index-url`; the hashes still guarantee the same files.
 
 ## Checks run on this version
 
-Results from 2026-10-27 (the browser, desktop and clean-install rows are from 2026-10-16). The independent review in `reviews/` and its re-review were
+Results from 2026-10-27 (CI on the release commit for the browser and desktop rows; the local
+Brave run of a project made by `init` is from 2026-10-16). The independent review in `reviews/` and its re-review were
 worked through on 2026-10-12 (see `gherkin-copilot-review-2026-10-11-status.md` and
 `gherkin-copilot-review-2026-10-12-status.md`); the app's home page, desktop testing,
 `app_server`, test records, the password warnings, test settings in the project, fingerprints
@@ -297,7 +298,7 @@ and the version-control check were added after them:
 
 | Check | Result |
 |---|---|
-| `pip-audit --strict -r requirements.lock -r requirements-desktop.lock` (known vulnerabilities) | One: setuptools 84.0.0 ([GHSA-xmj3-9gf7-h52w](https://github.com/advisories/GHSA-xmj3-9gf7-h52w)), fixed in 84.1.0; the pin isn't updated yet |
+| `pip-audit --strict -r requirements.lock -r requirements-desktop.lock` (known vulnerabilities) | No known vulnerabilities found (setuptools moved to 84.2.1 for GHSA-xmj3-9gf7-h52w on 2026-10-27) |
 | `bandit -q -r src demo desktop_demo run_demo.py`, and on both kinds of project `init` creates (static security analysis) | No findings. The places that start a process (`run_demo.py`, the app's Run button in `ui/runner.py`, and the desktop steps starting the app under test) use fixed argument lists and no shell, and are annotated with why |
 | `mypy --strict` | No issues in 26 source files |
 | `ruff check` (rules in `pyproject.toml`), also on both kinds of project `init` creates | No issues |
@@ -307,7 +308,7 @@ and the version-control check were added after them:
 | Demo scenarios in a real browser (Brave) | 6 passed |
 | Desktop scenarios on Windows (`desktop_demo/`, Character Map, CI `windows-latest`) | 3 passed: typing into a field, clicking a button and ticking a checkbox, through UI Automation with no fake mouse or keyboard. A project made by `init --desktop` passes the same scenarios as created |
 | A project made by `init`, run in a real browser | Passes in Brave locally, and in CI in Chromium and in the installed Edge on Windows (no browser download), with warnings treated as errors. Its `requirements.lock` is identical to this repo's (a test checks), so the audit above covers it |
-| `pip install --require-hashes -r requirements.lock` in a clean venv, then `pip check` | Installs cleanly, no broken requirements (checked 2026-10-09; the lock file hasn't changed since) |
+| `pip install --require-hashes -r requirements.lock` in a clean venv, then `pip check` | Installs cleanly, no broken requirements (checked 2026-10-27, after the setuptools update) |
 
 Ruff, mypy, bandit and the tests also run as pre-commit hooks, and the same checks run on
 every push in CI (`.github/workflows/ci.yml`), including the tests on Windows. To repeat them

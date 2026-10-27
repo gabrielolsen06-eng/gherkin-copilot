@@ -6,7 +6,7 @@ pytest==9.1.1
 pytest-bdd==9.0.0
 pytest-playwright==0.10.0
 playwright==1.63.0
-setuptools>=78.1.1
+setuptools>=84.1.0
 # pytest needs colorama on Windows; pinned for every platform so the lock file
 # installs with --require-hashes on Windows, macOS and Linux alike.
 colorama==0.4.6
