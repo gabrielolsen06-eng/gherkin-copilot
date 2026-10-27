@@ -111,7 +111,9 @@ This page is written for whoever approves software on a managed work laptop.
     `record.json` with the title, environment and notes you typed, your name, the
     computer's operating system, the test command that ran (with the values of variables
     whose names look like secrets shown as `***`), the branch and commit read from `.git`, pytest's exit code
-    and the Python, pytest and plugin versions pytest printed, and screenshots
+    and the Python, pytest and plugin versions pytest printed, a SHA-256 fingerprint of
+    every file that defines the tests (feature, Python, pytest configuration and requirements
+    files, the test settings and `data/`), taken as the run started, and screenshots
     of the scenarios that didn't pass. A record only says it passed if pytest's exit code
     agrees with the results file; if they disagree it says "Verdict doesn't match pytest"
     (result `mismatch`), so a mistake in the tool can't turn a failed run into a pass.

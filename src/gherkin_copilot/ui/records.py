@@ -131,6 +131,7 @@ def save(project: Project, started: object, title: object, author: object, envir
             "notes": notes.strip()[:MAX_NOTES] if isinstance(notes, str) else "",
             "computer": platform.platform(),
             "versions": run.get("versions") or [],  # what pytest says was installed, not what the lock file asks for
+            "fingerprints": run.get("fingerprints") or {},  # SHA-256 of each file that defines the tests, at the start
             "git": git,
             "saved": datetime.now().astimezone().isoformat(timespec="seconds"),
             "tool": f"gherkin-copilot {__version__}",
@@ -145,6 +146,8 @@ def save(project: Project, started: object, title: object, author: object, envir
             ("Environment", record["environment"]),
             ("Computer", record["computer"]),
             ("Versions", "; ".join(record["versions"])),
+            ("Fingerprints", f"SHA-256 of {len(record['fingerprints'])} files, listed in record.json"
+             if record["fingerprints"] else ""),
             ("Commit", commit),
             ("Notes", record["notes"]),
         ]

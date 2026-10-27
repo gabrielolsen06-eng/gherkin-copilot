@@ -378,7 +378,7 @@ environment and notes are optional). The app copies the run into
 | File | What's in it |
 |---|---|
 | `report.html` | The results as a page anyone can open, with the record's details at the top |
-| `record.json` | Title, result, what ran and the exact command, when, who ran it, environment, notes, computer, branch and commit, pytest's exit code, and the Python, pytest and plugin versions that ran |
+| `record.json` | Title, result, what ran and the exact command, when, who ran it, environment, notes, computer, branch and commit, pytest's exit code, the Python, pytest and plugin versions that ran, and a SHA-256 fingerprint of every file that defines the tests (taken as the run started) |
 | `cucumber.json` | The raw results, as pytest-bdd wrote them |
 | `screenshots/` | Screenshots of the scenarios that failed (traces and videos are left out: they can hold passwords) |
 

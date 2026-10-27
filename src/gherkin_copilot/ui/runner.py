@@ -32,6 +32,7 @@ from gherkin_copilot import gherkin
 from gherkin_copilot.files import resolves_inside
 from gherkin_copilot.report import ARTIFACT_KINDS, attach_artifacts, load_report, short_error
 from gherkin_copilot.ui.builder import path_inside
+from gherkin_copilot.ui.fingerprints import fingerprints
 from gherkin_copilot.ui.history import project_root
 from gherkin_copilot.ui.projects import Project
 
@@ -128,6 +129,7 @@ class Run:
     stop_requested: bool = False
     versions: list[str] = field(default_factory=list[str])
     command: str = ""
+    fingerprints: dict[str, str] = field(default_factory=dict[str, str])  # saved in run.json, not polled
 
     def describe(self) -> dict[str, Any]:
         return {"label": self.label, "status": self.status, "exit_code": self.exit_code, "started": self.started,
@@ -218,6 +220,7 @@ class Runner:
                 shutil.rmtree(out)
             out.mkdir(parents=True)
             (out / ".gitignore").write_text("*\n", encoding="utf-8")
+            run.fingerprints = fingerprints(project_root(project))  # before pytest (and conftest.py) can change them
             extra = [f"--cucumberjson={out / 'cucumber.json'}", "-v"]
             if project.capture:
                 extra += [f"--output={out / 'artifacts'}", "--screenshot=on", "--tracing=retain-on-failure"]
@@ -257,7 +260,7 @@ class Runner:
             run.ended = time.time()
             try:
                 if out.is_dir():
-                    saved = {**run.describe(), "status": status}
+                    saved = {**run.describe(), "status": status, "fingerprints": run.fingerprints}
                     del saved["log"]
                     (out / "run.json").write_text(json.dumps(saved), encoding="utf-8")
             finally:
@@ -269,6 +272,7 @@ def latest_results(project: Project) -> dict[str, Any] | None:
     report = out / "cucumber.json"
     run_file = out / "run.json"
     meta: dict[str, Any] = json.loads(run_file.read_text(encoding="utf-8")) if run_file.is_file() else {}
+    meta.pop("fingerprints", None)  # only test records need them
     if not report.is_file():
         return {"run": meta, "features": []} if meta else None
     try:

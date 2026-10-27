@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import sys
@@ -10,7 +11,7 @@ from typing import Any
 import pytest
 from test_ui import request
 
-from gherkin_copilot.ui import history, records, runner, settings
+from gherkin_copilot.ui import fingerprints, history, records, runner, settings
 from gherkin_copilot.ui.projects import Project, ProjectStore
 from gherkin_copilot.ui.server import start_in_background
 
@@ -92,6 +93,20 @@ def test_split_command_on_each_platform(command, windows, expected):
 def test_bad_commands(command, message):
     with pytest.raises(ValueError, match=message):
         runner.parse_command(command)
+
+
+def test_fingerprints_cover_the_files_that_define_tests(tmp_path):
+    kept = ["conftest.py", "data/users.csv", "features/a.feature", "pyproject.toml", "requirements.lock",
+            "steps/deep/more_steps.py", ".gherkin-copilot/settings.json"]
+    left_out = ["notes.txt", ".env", ".venv/lib/x.py", "venv/x.py", "node_modules/a.py", "steps/__pycache__/x.py",
+                ".git/hooks/pre-commit.py", ".gherkin-copilot/history.jsonl", ".gherkin-copilot/results/x.py",
+                "test-records/2026-10-27_smoke/record.json", "reports/x.py", "build/lib/x.py"]
+    for name in kept + left_out:
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text(name)
+    found = fingerprints.fingerprints(tmp_path)
+    assert sorted(found) == sorted(kept)
+    assert found["data/users.csv"] == hashlib.sha256(b"data/users.csv").hexdigest()
 
 
 def test_shown_command_hides_secret_looking_values():
@@ -328,6 +343,8 @@ def test_save_a_run_as_a_test_record(project):
     assert record["scenarios"]["total"] == 2 and record["scenarios"]["passed"] == 1
     assert record["ran_by"] == "Ada" and record["what_ran"] == "All tests" and record["environment"] == "Windows 11, Edge"
     assert record["command"].startswith(f"{sys.executable} -m pytest tests -p no:cacheprovider --cucumberjson=")
+    ran = ["features/other.feature", "features/sums.feature", "pytest.ini", "tests/test_sums.py"]
+    assert record["fingerprints"] == {name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in ran}
     assert record["git"] == {"branch": "main", "commit": "c9b6fb9" + "0" * 33}
     html = (folder / "report.html").read_text()
     assert "<h1>Release 2.3 regression</h1>" in html and "<dd>1 of 2 failed</dd>" in html
