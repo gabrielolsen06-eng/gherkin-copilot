@@ -66,6 +66,11 @@ This page is written for whoever approves software on a managed work laptop.
 - **What it writes, and when:**
   - the project list, `~/.gherkin-copilot/projects.json` (names and folder paths).
     Removing a project from the list never touches its files;
+  - the project's test settings, `.gherkin-copilot/settings.json` in the project folder, when
+    you press **Save test settings** in Details: the test command, the folder to run it from
+    (relative to the project) and the screenshots setting. The change is logged in the
+    history. The file is meant to be committed, so a command that sets an environment
+    variable whose name contains PASS, SECRET, TOKEN or KEY is refused;
   - a scenario into a `.feature` file, and step templates into an existing step file, but
     only when you press Save or Add, after the app has shown you exactly what will change.
     The server re-checks the file when you confirm and refuses if it changed since the
@@ -104,7 +109,8 @@ This page is written for whoever approves software on a managed work laptop.
     new folder, `test-records/<date>_<title>/` in the project folder, holding a copy of the run's
     `cucumber.json`, a `report.html` made from it (the same no-script page as `report`), a
     `record.json` with the title, environment and notes you typed, your name, the
-    computer's operating system, the branch and commit read from `.git`, pytest's exit code
+    computer's operating system, the test command that ran (with the values of variables
+    whose names look like secrets shown as `***`), the branch and commit read from `.git`, pytest's exit code
     and the Python, pytest and plugin versions pytest printed, and screenshots
     of the scenarios that didn't pass. A record only says it passed if pytest's exit code
     agrees with the results file; if they disagree it says "Verdict doesn't match pytest"
@@ -119,10 +125,13 @@ This page is written for whoever approves software on a managed work laptop.
   their code.
 - **Opens your browser** with Python's standard `webbrowser` module (use `--no-open` to
   skip).
-- **Runs tests only when you ask, and only your own command.** A project can have a test
-  command (for example `python -m pytest tests`), typed in by you in the project's
-  details and stored in your `~/.gherkin-copilot/projects.json`. Until you set one, the
-  app can't run anything. When you press Run, the app:
+- **Runs tests only when you ask, and only the project's own command.** A project can have a
+  test command (for example `python -m pytest tests`), set in the project's details and
+  saved in its `.gherkin-copilot/settings.json`, which is meant to be committed (a project
+  without that file uses the command an earlier version saved in your
+  `~/.gherkin-copilot/projects.json`). So whoever can commit to a project decides what Run
+  runs, as they already decide what its `conftest.py` does: pytest runs that on every run.
+  Until a command is set, the app can't run anything. When you press Run, the app:
   - checks that the command runs pytest (`pytest …` or `python -m pytest …`), optionally
     preceded by `NAME=value` environment settings. That check catches typing mistakes; it
     isn't a security boundary. pytest runs the project's own `conftest.py` and test code

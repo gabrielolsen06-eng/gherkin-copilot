@@ -123,6 +123,7 @@ def save(project: Project, started: object, title: object, author: object, envir
             "pytest_exit_code": exit_code,
             "scenarios": {"total": len(scenarios), **counts},
             "what_ran": run.get("label"),
+            "command": run.get("command"),
             "started": _local(started).isoformat(timespec="seconds"),
             "ended": _local(ended).isoformat(timespec="seconds") if isinstance(ended, int | float) else None,
             "ran_by": ran_by,
@@ -138,6 +139,7 @@ def save(project: Project, started: object, title: object, author: object, envir
         details = [
             ("Result", summary),
             ("What ran", str(run.get("label") or "")),
+            ("Command", str(run.get("command") or "")),
             ("Ran on", f"{_local(started):%Y-%m-%d %H:%M}"),
             ("Ran by", ran_by),
             ("Environment", record["environment"]),

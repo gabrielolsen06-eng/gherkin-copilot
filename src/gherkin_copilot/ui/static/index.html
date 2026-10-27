@@ -266,13 +266,16 @@
       <label>Test command
         <input name="test_command" placeholder="python -m pytest tests" autocomplete="off" spellcheck="false">
         <span class="field-hint">What you'd type in a terminal to run this project's pytest-bdd tests. Start with
-          <code>NAME=value</code> to set an environment variable, e.g. <code>DEMO_BROWSER=brave python -m pytest demo</code>.</span>
+          <code>NAME=value</code> to set an environment variable, e.g. <code>DEMO_BROWSER=brave python -m pytest demo</code>.
+          Passwords and tokens go in the environment, never here.</span>
       </label>
       <label>Run from folder <span class="optional">optional</span>
         <input name="run_from" autocomplete="off" spellcheck="false">
       </label>
       <label class="check"><input type="checkbox" name="capture" checked> Screenshots and traces
         <span class="field-hint">(needs pytest-playwright)</span></label>
+      <p class="field-hint">Saved in the project, in <code>.gherkin-copilot/settings.json</code>: commit it so
+        everyone runs the tests the same way.</p>
       <p class="error-box" id="tests-error" role="alert" hidden></p>
       <div class="dialog-actions"><button type="submit" class="ghost">Save test settings</button></div>
     </form>

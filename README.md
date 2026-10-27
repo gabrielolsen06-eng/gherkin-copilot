@@ -258,7 +258,7 @@ your step definitions, and optionally the folder with your `.feature` files. You
 as many projects as you like and switch between them at the top; the list is saved in
 `~/.gherkin-copilot/projects.json`.
 
-The app keeps its own files (history, test results, test records) in the project folder.
+The app keeps its own files (history, test settings, test results, test records) in the project folder.
 That's the folder holding both the steps and the features folders, if one is inside the
 other, or if they sit side by side in a pytest project (a folder with `pytest.ini`,
 `pyproject.toml`, `tox.ini`, `setup.cfg` or `conftest.py`, like the ones `init` creates).
@@ -360,6 +360,11 @@ example:
 | This repository's demo | `DEMO_BROWSER=brave python -m pytest demo` | the `gherkin-copilot` folder |
 | A typical project | `python -m pytest tests` | the project folder |
 
+These settings are saved in the project, in `.gherkin-copilot/settings.json` (the folder is
+stored relative to the project), so commit that file and everyone runs the tests the same
+way. Projects without one use the settings an earlier version saved on your computer.
+Passwords and tokens can't go in the command: set them in the environment.
+
 The app only runs pytest commands, never through a shell, and only when you press Run.
 Results go to `.gherkin-copilot/results` in the project, which git ignores
 automatically. To run a single scenario or file, its feature file must be loaded by a test
@@ -373,7 +378,7 @@ environment and notes are optional). The app copies the run into
 | File | What's in it |
 |---|---|
 | `report.html` | The results as a page anyone can open, with the record's details at the top |
-| `record.json` | Title, result, what ran, when, who ran it, environment, notes, computer, branch and commit, pytest's exit code, and the Python, pytest and plugin versions that ran |
+| `record.json` | Title, result, what ran and the exact command, when, who ran it, environment, notes, computer, branch and commit, pytest's exit code, and the Python, pytest and plugin versions that ran |
 | `cucumber.json` | The raw results, as pytest-bdd wrote them |
 | `screenshots/` | Screenshots of the scenarios that failed (traces and videos are left out: they can hold passwords) |
 

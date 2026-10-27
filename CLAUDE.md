@@ -63,7 +63,9 @@ Read the tree for what each module does; these are the rules the code doesn't sh
   before saving; `gitinfo.py` never runs git; `static/` is `textContent` only, no frameworks or CDNs.
 - `project_root`: steps/features side by side count as one project only if their parent has a pytest config or
   conftest.py, else the features folder. History, results (scratch: replaced by the next run) and test records
-  (`test-records/`: never overwritten or deleted; screenshots of failures only, no traces) live there.
+  (`test-records/`: never overwritten or deleted; screenshots of failures only, no traces) live there. So do
+  test settings (`.gherkin-copilot/settings.json`, `ui/settings.py`): they win over `projects.json`, and
+  `App.project()` applies them, so take projects from there.
 - `demo/` is a package: import as `demo.server`, `demo.browsers`, `demo.steps.*`. `drafts/` is deliberately
   unimplemented, and `steps/` has two deliberate near-duplicate steps for the `dupes`/`merge` demo
   (`cart.feature` uses one so `merge` rewrites a line): don't "fix" them. Its `conftest.py` registers every

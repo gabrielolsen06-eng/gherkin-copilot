@@ -65,8 +65,8 @@ class ProjectStore:
             raise ValueError("Give the project a name.")
         if len(name) > MAX_NAME:
             raise ValueError(f"Keep the name under {MAX_NAME} characters.")
-        steps_dir = _folder(steps, "steps")
-        features_dir = _folder(features, "features") if features.strip() else steps_dir
+        steps_dir = existing_folder(steps, "steps")
+        features_dir = existing_folder(features, "features") if features.strip() else steps_dir
         with self._lock:
             projects, _ = self._read()
             base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "project"
@@ -86,22 +86,6 @@ class ProjectStore:
                 raise ValueError("No such project.")
             self._write(remaining, None if active == project_id else active)
 
-    def update_tests(self, project_id: str, test_command: str, run_from: str, capture: bool) -> Project:
-        """Save how to run the project's tests (the command is checked by the caller)."""
-        test_command = " ".join(test_command.split())
-        if len(test_command) > 500:
-            raise ValueError("Keep the test command under 500 characters.")
-        folder = str(_folder(run_from, "run-from")) if run_from.strip() else ""
-        with self._lock:
-            projects, active = self._read()
-            current = next((p for p in projects if p.id == project_id), None)
-            if current is None:
-                raise ValueError("No such project.")
-            updated = Project(current.id, current.name, current.steps, current.features, test_command, folder,
-                              bool(capture))
-            self._write([updated if p.id == project_id else p for p in projects], active)
-        return updated
-
     def set_active(self, project_id: str) -> None:
         with self._lock:
             projects, _ = self._read()
@@ -110,7 +94,7 @@ class ProjectStore:
             self._write(projects, project_id)
 
 
-def _folder(text: str, label: str) -> Path:
+def existing_folder(text: str, label: str) -> Path:
     if not text.strip():
         raise ValueError(f"Enter the {label} folder.")
     path = Path(text.strip()).expanduser()

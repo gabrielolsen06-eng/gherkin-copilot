@@ -40,6 +40,7 @@ TIME_LIMIT = 30 * 60
 LOG_LINES = 3000
 RESULT_LINE = re.compile(r"^\S+::\S.*\s(PASSED|FAILED|ERROR|SKIPPED|XFAIL|XPASS)(\s|$)")  # "t.py::test_a PASSED [50%]"
 VERSION_LINES = ("platform ", "plugins: ")  # pytest's header: Python, pytest and plugin versions
+SECRET_NAME = re.compile(r"PASS|SECRET|TOKEN|KEY", re.IGNORECASE)  # environment variables never written down
 
 
 def split_command(text: str, windows: bool = os.name == "nt") -> list[str]:
@@ -77,6 +78,11 @@ def parse_command(text: str) -> tuple[dict[str, str], list[str]]:
     if tokens[0] in {"python", "python3", "py"}:
         tokens[0] = sys.executable  # the Python the app runs with, i.e. the project's virtual environment
     return env, tokens
+
+
+def shown_command(env: dict[str, str], args: list[str]) -> str:
+    """The command as run, for the log and test records, with the values of secret-looking variables hidden."""
+    return " ".join([*(f"{k}={'***' if SECRET_NAME.search(k) else v}" for k, v in env.items()), *args])
 
 
 def default_folder(project: Project) -> Path:
@@ -121,10 +127,12 @@ class Run:
     process: subprocess.Popen[str] | None = None
     stop_requested: bool = False
     versions: list[str] = field(default_factory=list[str])
+    command: str = ""
 
     def describe(self) -> dict[str, Any]:
         return {"label": self.label, "status": self.status, "exit_code": self.exit_code, "started": self.started,
-                "ended": self.ended, "done": self.done, "versions": self.versions, "log": list(self.log)[-400:]}
+                "ended": self.ended, "done": self.done, "versions": self.versions, "command": self.command,
+                "log": list(self.log)[-400:]}
 
 
 class Runner:
@@ -232,7 +240,8 @@ class Runner:
                     return
             command = [*args, *extra]
             run.log.append(f"$ cd {cwd}")
-            run.log.append("$ " + " ".join([*(f"{k}={v}" for k, v in env.items()), *command]))
+            run.command = shown_command(env, command)
+            run.log.append("$ " + run.command)
             run.exit_code = self._exec(run, command, env, cwd, deadline)
             missing = next((line for line in run.log if "file or directory not found:" in line), None)
             if missing:

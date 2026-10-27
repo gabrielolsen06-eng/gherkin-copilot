@@ -9,6 +9,7 @@ blocks DNS-rebinding tricks.
 
 from __future__ import annotations
 
+import contextlib
 import hmac
 import json
 import secrets
@@ -22,7 +23,7 @@ from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 
 from gherkin_copilot import __version__, gherkin
-from gherkin_copilot.ui import builder, dupes, editor, history, home, records, runner, stepcode
+from gherkin_copilot.ui import builder, dupes, editor, history, home, records, runner, settings, stepcode
 from gherkin_copilot.ui.catalog import describe
 from gherkin_copilot.ui.projects import Project, ProjectStore
 
@@ -62,16 +63,22 @@ class App:
 
     def projects(self) -> dict[str, Any]:
         projects, active = self.store.load()
-        return {"active": active, "projects": [p.__dict__ for p in projects]}
+        listed: list[dict[str, Any]] = []
+        for project in projects:
+            with contextlib.suppress(ValueError):  # unreadable settings file: Run says so, saving Details replaces it
+                project = settings.apply(project)
+            listed.append(project.__dict__)
+        return {"active": active, "projects": listed}
 
-    def project(self, project_id: object) -> Project:
+    def project(self, project_id: object, with_settings: bool = True) -> Project:
+        """The project, with the test settings from its settings file unless ``with_settings`` is False."""
         project = self.store.get(project_id) if isinstance(project_id, str) else None
         if project is None:
             raise ApiError(HTTPStatus.NOT_FOUND, "No such project.")
         for folder in (project.steps, project.features):
             if not Path(folder).is_dir():
                 raise ApiError(HTTPStatus.NOT_FOUND, f"This project's folder is missing: {folder}")
-        return project
+        return settings.apply(project) if with_settings else project
 
     def steps(self, project_id: str) -> dict[str, Any]:
         return {"steps": describe(Path(self.project(project_id).steps))}
@@ -96,11 +103,9 @@ class App:
             if route == "/api/projects/active":
                 self.store.set_active(text("id"))
                 return self.projects()
-            if route == "/api/projects/tests":
-                if text("test_command").strip():
-                    runner.parse_command(text("test_command"))
-                self.store.update_tests(text("id"), text("test_command"), text("run_from"),
-                                        body.get("capture") is not False)
+            if route == "/api/projects/tests":  # read without its settings file, so a broken one can be replaced
+                settings.save(self.project(text("id"), with_settings=False), text("test_command"), text("run_from"),
+                              body.get("capture") is not False, body.get("author"))
                 return self.projects()
 
             project = self.project(body.get("project"))

@@ -229,8 +229,10 @@ async function saveTestSettings(event) {
   event.preventDefault();
   const form = event.target.elements;
   try {
+    const name = await ensureAuthor();
+    if (!name) return;
     applyProjects(await api("/api/projects/tests", { id: state.active, test_command: form.test_command.value,
-      run_from: form.run_from.value, capture: form.capture.checked }));
+      run_from: form.run_from.value, capture: form.capture.checked, author: name }));
     $("tests-error").hidden = true;
     toast("Test settings saved");
     renderResults();
@@ -1380,6 +1382,7 @@ async function saveRecord(event) {
 const ACTIONS = {
   create: "Created file", add: "Added scenario", edit: "Edited", delete: "Deleted", duplicate: "Duplicated",
   restore: "Restored", merge: "Merged duplicates", "add steps": "Added step templates", "add step code": "Built step code",
+  settings: "Changed test settings",
 };
 
 async function loadHistory() {

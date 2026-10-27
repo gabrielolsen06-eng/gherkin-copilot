@@ -3,13 +3,14 @@ import os
 import sys
 import time
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import pytest
 from test_ui import request
 
-from gherkin_copilot.ui import history, records, runner
+from gherkin_copilot.ui import history, records, runner, settings
 from gherkin_copilot.ui.projects import Project, ProjectStore
 from gherkin_copilot.ui.server import start_in_background
 
@@ -91,6 +92,37 @@ def test_split_command_on_each_platform(command, windows, expected):
 def test_bad_commands(command, message):
     with pytest.raises(ValueError, match=message):
         runner.parse_command(command)
+
+
+def test_shown_command_hides_secret_looking_values():
+    env = {"DEMO_BROWSER": "brave", "API_TOKEN": "t0k3n", "db_password": "pw"}
+    assert runner.shown_command(env, ["pytest", "-v"]) == "DEMO_BROWSER=brave API_TOKEN=*** db_password=*** pytest -v"
+
+
+def test_test_settings_live_in_the_project(project, tmp_path):
+    machine = replace(project, test_command="python -m pytest elsewhere")
+    assert settings.apply(machine) == machine  # no settings file yet: this computer's settings apply
+    saved = settings.save(machine, "python  -m pytest tests", str(tmp_path / "tests"), False, "Ada")
+    file = tmp_path / ".gherkin-copilot" / "settings.json"
+    assert json.loads(file.read_text()) == {"test_command": "python -m pytest tests", "run_from": "tests",
+                                            "capture": False}  # relative, so it works on every computer
+    assert (saved.test_command, saved.run_from, saved.capture) == ("python -m pytest tests", str(tmp_path / "tests"),
+                                                                   False)
+    assert settings.apply(machine) == saved  # the project's file wins
+    entry = history.entries(project)[0]
+    assert entry["action"] == "settings" and entry["author"] == "Ada" and entry["files"] == [
+        ".gherkin-copilot/settings.json"]
+    settings.save(machine, "python -m pytest tests", str(tmp_path / "tests"), False, "Ada")
+    assert len(history.entries(project)) == 1  # nothing changed, nothing logged
+
+    with pytest.raises(ValueError, match="API_TOKEN would be committed"):
+        settings.save(machine, "API_TOKEN=x python -m pytest", "", True, "Ada")
+    with pytest.raises(ValueError, match="doesn't exist"):
+        settings.save(machine, "python -m pytest", str(tmp_path / "missing"), True, "Ada")
+    file.write_text("{oops")
+    with pytest.raises(ValueError, match="can't be read"):
+        settings.apply(machine)
+    assert settings.save(machine, "pytest", "", True, "Ada").test_command == "pytest"  # saving again replaces it
 
 
 def test_names_and_keyword_expression():
@@ -206,8 +238,13 @@ def test_settings_and_artifacts_over_http(project, tmp_path):
         assert status == 400 and "must run pytest" in json.loads(data)["error"]
         body["test_command"] = "python -m pytest tests"
         assert request(port, "POST", "/api/projects/tests", body)[0] == 403  # needs the token
-        data = json.loads(request(port, "POST", "/api/projects/tests", body, app.token)[2])
+        data = json.loads(request(port, "POST", "/api/projects/tests", {**body, "author": "Ada"}, app.token)[2])
         assert data["projects"][0]["test_command"] == "python -m pytest tests"
+        assert (Path(project.steps) / ".gherkin-copilot" / "settings.json").is_file()
+        assert [p.test_command for p in store.load()[0]] == [""]  # in the project, not in this computer's list
+        status, _, data, _ = request(port, "POST", "/api/projects/tests",
+                                     {**body, "test_command": "API_KEY=x pytest"}, app.token)
+        assert status == 400 and "API_KEY would be committed" in json.loads(data)["error"]
 
         shots = runner.results_dir(project) / "artifacts" / "test-x"
         shots.mkdir(parents=True)
@@ -290,6 +327,7 @@ def test_save_a_run_as_a_test_record(project):
     assert "bdd-" in record["versions"][1]  # the order of plugins depends on what's installed
     assert record["scenarios"]["total"] == 2 and record["scenarios"]["passed"] == 1
     assert record["ran_by"] == "Ada" and record["what_ran"] == "All tests" and record["environment"] == "Windows 11, Edge"
+    assert record["command"].startswith(f"{sys.executable} -m pytest tests -p no:cacheprovider --cucumberjson=")
     assert record["git"] == {"branch": "main", "commit": "c9b6fb9" + "0" * 33}
     html = (folder / "report.html").read_text()
     assert "<h1>Release 2.3 regression</h1>" in html and "<dd>1 of 2 failed</dd>" in html
