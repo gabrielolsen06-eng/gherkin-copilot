@@ -32,7 +32,7 @@ from gherkin_copilot import gherkin
 from gherkin_copilot.files import resolves_inside
 from gherkin_copilot.report import ARTIFACT_KINDS, attach_artifacts, load_report, short_error
 from gherkin_copilot.ui.builder import path_inside
-from gherkin_copilot.ui.fingerprints import fingerprints
+from gherkin_copilot.ui.fingerprints import snapshot
 from gherkin_copilot.ui.history import project_root
 from gherkin_copilot.ui.projects import Project
 
@@ -129,7 +129,7 @@ class Run:
     stop_requested: bool = False
     versions: list[str] = field(default_factory=list[str])
     command: str = ""
-    fingerprints: dict[str, str] = field(default_factory=dict[str, str])  # saved in run.json, not polled
+    snapshot: dict[str, Any] = field(default_factory=dict[str, Any])  # fingerprints and git: in run.json, not polled
 
     def describe(self) -> dict[str, Any]:
         return {"label": self.label, "status": self.status, "exit_code": self.exit_code, "started": self.started,
@@ -220,7 +220,7 @@ class Runner:
                 shutil.rmtree(out)
             out.mkdir(parents=True)
             (out / ".gitignore").write_text("*\n", encoding="utf-8")
-            run.fingerprints = fingerprints(project_root(project))  # before pytest (and conftest.py) can change them
+            run.snapshot = snapshot(project_root(project))  # before pytest (and conftest.py) can change anything
             extra = [f"--cucumberjson={out / 'cucumber.json'}", "-v"]
             if project.capture:
                 extra += [f"--output={out / 'artifacts'}", "--screenshot=on", "--tracing=retain-on-failure"]
@@ -260,7 +260,7 @@ class Runner:
             run.ended = time.time()
             try:
                 if out.is_dir():
-                    saved = {**run.describe(), "status": status, "fingerprints": run.fingerprints}
+                    saved = {**run.describe(), "status": status, **run.snapshot}
                     del saved["log"]
                     (out / "run.json").write_text(json.dumps(saved), encoding="utf-8")
             finally:

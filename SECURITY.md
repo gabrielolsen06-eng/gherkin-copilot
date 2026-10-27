@@ -58,7 +58,9 @@ This page is written for whoever approves software on a managed work laptop.
   the standard library's `zlib` and capped at 1 MB each. It never writes there and never
   contacts the remote, so "to pull" is as of your last fetch. User names and tokens in
   URLs are removed from reflog messages before they're shown, and remote URLs from
-  `.git/config` are never read out.
+  `.git/config` are never read out. As each test run starts, the same reader compares the
+  files that define the tests with the commit: it reads the commit's tree objects (only the
+  folders on the way to those files) and the tags (`refs/tags`, `packed-refs`).
 - **Step code is edited in your editor, not in the app.** The app has no way to type Python:
   to fix a step's code, **Open in VS Code** is a `vscode://` link to the step's file and line,
   built by the server from the project's own folder. Following it is the browser's job (it
@@ -113,7 +115,10 @@ This page is written for whoever approves software on a managed work laptop.
     whose names look like secrets shown as `***`), the branch and commit read from `.git`, pytest's exit code
     and the Python, pytest and plugin versions pytest printed, a SHA-256 fingerprint of
     every file that defines the tests (feature, Python, pytest configuration and requirements
-    files, the test settings and `data/`), taken as the run started, and screenshots
+    files, the test settings and `data/`), taken as the run started, whether those files
+    were the commit's (a file changed since the commit or not in it, a branch other than
+    `main`, `master` or `release/…`, or no git at all is listed as a reason: the record is
+    still saved, and the Save dialog shows the reasons first), and screenshots
     of the scenarios that didn't pass. A record only says it passed if pytest's exit code
     agrees with the results file; if they disagree it says "Verdict doesn't match pytest"
     (result `mismatch`), so a mistake in the tool can't turn a failed run into a pass.
@@ -284,20 +289,20 @@ point pip at it with `--index-url`; the hashes still guarantee the same files.
 
 ## Checks run on this version
 
-Results from 2026-10-26 for version 2026.10.26 (the browser, desktop and clean-install rows
-are from 2026-10-16). The independent review in `reviews/` and its re-review were
+Results from 2026-10-27 (the browser, desktop and clean-install rows are from 2026-10-16). The independent review in `reviews/` and its re-review were
 worked through on 2026-10-12 (see `gherkin-copilot-review-2026-10-11-status.md` and
 `gherkin-copilot-review-2026-10-12-status.md`); the app's home page, desktop testing,
-`app_server`, test records and the password warnings were added after them:
+`app_server`, test records, the password warnings, test settings in the project, fingerprints
+and the version-control check were added after them:
 
 | Check | Result |
 |---|---|
 | `pip-audit --strict -r requirements.lock -r requirements-desktop.lock` (known vulnerabilities) | One: setuptools 84.0.0 ([GHSA-xmj3-9gf7-h52w](https://github.com/advisories/GHSA-xmj3-9gf7-h52w)), fixed in 84.1.0; the pin isn't updated yet |
 | `bandit -q -r src demo desktop_demo run_demo.py`, and on both kinds of project `init` creates (static security analysis) | No findings. The places that start a process (`run_demo.py`, the app's Run button in `ui/runner.py`, and the desktop steps starting the app under test) use fixed argument lists and no shell, and are annotated with why |
-| `mypy --strict` | No issues in 24 source files |
+| `mypy --strict` | No issues in 26 source files |
 | `ruff check` (rules in `pyproject.toml`), also on both kinds of project `init` creates | No issues |
 | Pyright, the type checker in VS Code (settings in `pyproject.toml`): strict on `src`, `demo`, `desktop_demo` and both kinds of project `init` creates, standard on `tests/`, checked as macOS, Windows and Linux | No errors |
-| Tool tests | 337 passed (macOS, Python 3.14; also run on Windows and Ubuntu in CI), including tests for missing paths, malformed files, non-finite numbers, Windows code pages, generated inputs, the project `init` creates, and the home page's git reader checked against git itself (every object in a delta-compressed pack, and commits to push/pull on branchy history) |
+| Tool tests | 341 passed (macOS, Python 3.14; also run on Windows and Ubuntu in CI), including tests for missing paths, malformed files, non-finite numbers, Windows code pages, generated inputs, the project `init` creates, and the home page's git reader checked against git itself (every object in a delta-compressed pack, and commits to push/pull on branchy history) |
 | Branch coverage (`coverage run -m pytest tests`) | 93% |
 | Demo scenarios in a real browser (Brave) | 6 passed |
 | Desktop scenarios on Windows (`desktop_demo/`, Character Map, CI `windows-latest`) | 3 passed: typing into a field, clicking a button and ticking a checkbox, through UI Automation with no fake mouse or keyboard. A project made by `init --desktop` passes the same scenarios as created |

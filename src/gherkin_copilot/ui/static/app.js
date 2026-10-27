@@ -1354,6 +1354,11 @@ async function openRecordDialog() {
   form.elements.environment.value = store("gc-record-environment") || "";
   $("record-summary").textContent = `${meta.label} · ${failed ? `${failed} of ${total} failed` : `${plural(total, "scenario")} passed`}` +
     ` · ran ${when(new Date(meta.started * 1000).toISOString())} · by ${name}`;
+  const reasons = meta.uncontrolled || [];
+  $("record-uncontrolled").hidden = !reasons.length;
+  $("record-uncontrolled").replaceChildren(el("strong", {}, "This run isn't fully under version control. The record will say so:"),
+    el("ul", {}, ...reasons.map((reason) => el("li", {}, reason))),
+    "For a clean record, commit your changes (on main or a release branch) and run the tests again.");
   $("record-error").hidden = true;
   $("record-dialog").showModal();
   form.elements.title.focus();

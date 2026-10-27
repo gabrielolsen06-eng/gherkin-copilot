@@ -6,7 +6,7 @@ import subprocess  # nosec B404: builds throwaway git repositories to check the 
 import pytest
 from test_ui import DEMO, request
 
-from gherkin_copilot.ui import gitinfo, history, home
+from gherkin_copilot.ui import fingerprints, gitinfo, history, home
 from gherkin_copilot.ui.projects import Project, ProjectStore
 from gherkin_copilot.ui.server import start_in_background
 
@@ -260,3 +260,40 @@ def test_damaged_deltas_are_refused():
     with pytest.raises(ValueError):
         gitinfo.apply_delta(b"abc", bytes([4, 3, 0x91, 0, 3]))  # base size doesn't match
     assert gitinfo.apply_delta(b"hello", bytes([5, 8, 0x90, 5, 3]) + b"!!!") == b"hello!!!"
+
+
+def test_runs_are_compared_with_the_commit_they_ran_from(tmp_path, git):
+    repo = tmp_path / "repo"
+    project = repo / "acceptance"  # the project can sit below the repository's top folder
+    (project / "features").mkdir(parents=True)
+    (project / "features" / "a.feature").write_text("Feature: a\n")
+    (project / "steps.py").write_bytes(b"x = 1\ny = 2\n")
+    git(repo, "init", "-q")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "tests")
+    git(repo, "tag", "tests-v1")
+    git(repo, "tag", "-a", "-m", "signed off", "tests-v1-final")
+    clean = fingerprints.snapshot(project)
+    assert clean["uncontrolled"] == []
+    assert clean["git"] == {"branch": "main", "commit": git(repo, "rev-parse", "HEAD"),
+                            "tags": ["tests-v1", "tests-v1-final"]}
+    git(repo, "gc", "-q")  # packed objects and packed refs read the same
+    assert fingerprints.snapshot(project) == clean
+
+    short = clean["git"]["commit"][:7]
+    (project / "steps.py").write_bytes(b"x = 1\r\ny = 2\r\n")  # only Windows line endings: not a change
+    (project / "features" / "a.feature").write_text("Feature: changed\n")
+    (project / "more_steps.py").write_text("")
+    git(repo, "checkout", "-q", "-b", "feature/x")
+    assert fingerprints.snapshot(project)["uncontrolled"] == [
+        "Not on main, master or a release/ branch: feature/x",
+        f"Changed since commit {short}: features/a.feature",
+        f"Not in commit {short}: more_steps.py",
+    ]
+    git(repo, "checkout", "-q", "--detach")
+    assert fingerprints.snapshot(project)["uncontrolled"][0] == "Not on a branch (detached HEAD)."
+
+    (tmp_path / "outside").mkdir()
+    outside = fingerprints.snapshot(tmp_path / "outside")
+    assert outside["git"] is None
+    assert outside["uncontrolled"] == ["Not in a git repository, so what ran can't be traced to a commit."]

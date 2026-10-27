@@ -104,7 +104,7 @@ def test_fingerprints_cover_the_files_that_define_tests(tmp_path):
     for name in kept + left_out:
         (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / name).write_text(name)
-    found = fingerprints.fingerprints(tmp_path)
+    found = fingerprints.snapshot(tmp_path)["fingerprints"]
     assert sorted(found) == sorted(kept)
     assert found["data/users.csv"] == hashlib.sha256(b"data/users.csv").hexdigest()
 
@@ -319,11 +319,11 @@ def finished_run(project):
 
 
 def test_save_a_run_as_a_test_record(project):
-    run = finished_run(project)
     root = Path(project.steps)
     (root / ".git" / "refs" / "heads").mkdir(parents=True)
     (root / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
     (root / ".git" / "refs" / "heads" / "main").write_text("c9b6fb9" + "0" * 33 + "\n")
+    run = finished_run(project)
 
     saved = records.save(project, run["started"], " Release 2.3  regression ", "Ada", "Windows 11, Edge",
                          "First <b>try</b>")
@@ -345,7 +345,8 @@ def test_save_a_run_as_a_test_record(project):
     assert record["command"].startswith(f"{sys.executable} -m pytest tests -p no:cacheprovider --cucumberjson=")
     ran = ["features/other.feature", "features/sums.feature", "pytest.ini", "tests/test_sums.py"]
     assert record["fingerprints"] == {name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in ran}
-    assert record["git"] == {"branch": "main", "commit": "c9b6fb9" + "0" * 33}
+    assert record["git"] == {"branch": "main", "commit": "c9b6fb9" + "0" * 33, "tags": []}  # as the run started
+    assert record["uncontrolled"] == ["The files couldn't be compared with commit c9b6fb9."]  # no such commit
     html = (folder / "report.html").read_text()
     assert "<h1>Release 2.3 regression</h1>" in html and "<dd>1 of 2 failed</dd>" in html
     assert "<dd>main @ c9b6fb9</dd>" in html and "First &lt;b&gt;try&lt;/b&gt;" in html

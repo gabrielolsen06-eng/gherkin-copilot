@@ -388,6 +388,76 @@ def resolve(git_dir: Path, common: Path, name: str) -> str | None:
     return None
 
 
+def head(start: Path) -> dict[str, str | None] | None:
+    """Branch and commit, read from the refs only (no history walk, never runs git)."""
+    found = find_repository(start)
+    if found is None:
+        return None
+    git_dir, common = found
+    try:
+        text = (git_dir / "HEAD").read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:
+        return None
+    branch = text.removeprefix("ref: refs/heads/") if text.startswith("ref: refs/heads/") else None
+    return {"branch": branch, "commit": resolve(git_dir, common, "HEAD")}
+
+
+def commit_tree(objects: Objects, sha: str) -> str:
+    kind, data = objects.read(sha)
+    first = data.split(b"\n", 1)[0].decode("ascii", "replace")
+    if kind != "commit" or not first.startswith("tree "):
+        raise ValueError(f"{sha} isn't a commit.")
+    return first.removeprefix("tree ")
+
+
+def tree_files(objects: Objects, tree: str, paths: set[str]) -> dict[str, str]:
+    """Object ids of these files (``a/b.py``) in a tree; paths that aren't files in it are left out.
+    Only the folders on the way to a wanted path are read."""
+    kind, data = objects.read(tree)
+    if kind != "tree":
+        raise ValueError(f"{tree} isn't a tree.")
+    size, pos = len(tree) // 2, 0
+    entries: dict[str, tuple[bytes, str]] = {}
+    while pos < len(data):  # "<mode> <name>\0<raw id>", repeated
+        space, end = data.index(b" ", pos), data.index(b"\0", pos)
+        name = data[space + 1 : end].decode("utf-8", "replace")
+        entries[name] = (data[pos:space], data[end + 1 : end + 1 + size].hex())
+        pos = end + 1 + size
+    found: dict[str, str] = {}
+    below: dict[str, set[str]] = {}
+    for path in paths:
+        name, _, rest = path.partition("/")
+        mode, sha = entries.get(name, (b"", ""))
+        if rest and mode == b"40000":
+            below.setdefault(name, set()).add(rest)
+        elif not rest and mode and mode not in {b"40000", b"160000"}:  # not a folder or a submodule
+            found[path] = sha
+    for folder, wanted in below.items():
+        found |= {f"{folder}/{path}": sha for path, sha in tree_files(objects, entries[folder][1], wanted).items()}
+    return found
+
+
+def tags_at(git_dir: Path, common: Path, objects: Objects, commit: str) -> list[str]:
+    """Tags pointing at this commit, lightweight or annotated."""
+    folder = common / "refs" / "tags"
+    names: set[str] = {p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file()} \
+        if folder.is_dir() else set()
+    packed = common / "packed-refs"
+    for line in packed.read_text(encoding="utf-8", errors="replace").splitlines() if packed.is_file() else []:
+        names |= {line.partition(" refs/tags/")[2]} - {""}
+    found: list[str] = []
+    for name in sorted(names):
+        sha = resolve(git_dir, common, f"refs/tags/{name}")
+        for _ in range(5):  # an annotated tag is an object pointing at the commit (or at another tag)
+            if sha is None or sha == commit:
+                break
+            kind, data = objects.read(sha)
+            sha = data.split(b"\n", 1)[0].removeprefix(b"object ").decode("ascii", "replace") if kind == "tag" else None
+        if sha == commit:
+            found.append(name)
+    return found
+
+
 def upstream_ref(common: Path, branch: str) -> str | None:
     """The remote-tracking ref a branch pulls from (``[branch "main"] remote/merge`` in .git/config)."""
     section, remote, merge = "", "", ""

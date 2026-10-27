@@ -21,7 +21,7 @@ from gherkin_copilot import __version__
 from gherkin_copilot.files import resolves_inside
 from gherkin_copilot.report import STATUS_ORDER, attach_artifacts, load_report, render_html
 from gherkin_copilot.ui import gitinfo
-from gherkin_copilot.ui.builder import json_object
+from gherkin_copilot.ui.builder import json_object, list_of
 from gherkin_copilot.ui.history import clean_author, project_root
 from gherkin_copilot.ui.projects import Project
 from gherkin_copilot.ui.runner import results_dir
@@ -42,20 +42,6 @@ def _one_line(value: object, limit: int) -> str:
 
 def _local(seconds: float) -> datetime:
     return datetime.fromtimestamp(seconds).astimezone()
-
-
-def _git(root: Path) -> dict[str, str | None] | None:
-    """Branch and commit, read from the refs only (no history walk, never runs git)."""
-    found = gitinfo.find_repository(root)
-    if found is None:
-        return None
-    git_dir, common = found
-    try:
-        head = (git_dir / "HEAD").read_text(encoding="utf-8", errors="replace").strip()
-    except OSError:
-        return None
-    branch = head.removeprefix("ref: refs/heads/") if head.startswith("ref: refs/heads/") else None
-    return {"branch": branch, "commit": gitinfo.resolve(git_dir, common, "HEAD")}
 
 
 def save(project: Project, started: object, title: object, author: object, environment: object = "",
@@ -116,7 +102,10 @@ def save(project: Project, started: object, title: object, author: object, envir
             result = "mismatch"
             summary = f"Verdict doesn't match pytest: the results say {summary}, pytest's exit code was {exit_code}"
         ended = run.get("ended")
-        git = _git(root)
+        git: dict[str, Any] | None = json_object(run["git"]) if "git" in run else gitinfo.head(root)  # at the start
+        uncontrolled = list_of(run.get("uncontrolled"), str)
+        if uncontrolled is None:  # an earlier version's run.json
+            uncontrolled = ["Not checked: an earlier version ran these tests."]
         record: dict[str, Any] = {
             "title": title_text,
             "result": result,
@@ -133,10 +122,12 @@ def save(project: Project, started: object, title: object, author: object, envir
             "versions": run.get("versions") or [],  # what pytest says was installed, not what the lock file asks for
             "fingerprints": run.get("fingerprints") or {},  # SHA-256 of each file that defines the tests, at the start
             "git": git,
+            "uncontrolled": uncontrolled,  # why the files that ran may not be the commit's: empty if they are
             "saved": datetime.now().astimezone().isoformat(timespec="seconds"),
             "tool": f"gherkin-copilot {__version__}",
         }
         commit = f"{git['branch'] or 'detached'} @ {(git['commit'] or '')[:7]}" if git and git["commit"] else ""
+        commit += f" · tag {', '.join(git['tags'])}" if commit and git and git.get("tags") else ""
         details = [
             ("Result", summary),
             ("What ran", str(run.get("label") or "")),
@@ -149,6 +140,7 @@ def save(project: Project, started: object, title: object, author: object, envir
             ("Fingerprints", f"SHA-256 of {len(record['fingerprints'])} files, listed in record.json"
              if record["fingerprints"] else ""),
             ("Commit", commit),
+            ("Version control", "\n".join(uncontrolled) or "Every file that ran matches the commit"),
             ("Notes", record["notes"]),
         ]
         (folder / "report.html").write_text(render_html(features, folder, "cucumber.json", title_text, details),

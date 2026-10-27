@@ -367,8 +367,9 @@
     <label><span>Notes <span class="optional">optional</span></span>
       <textarea name="notes" maxlength="1000" rows="3"></textarea>
     </label>
-    <p class="field-hint">The record names your last commit, but the app can't tell whether files had changed since,
-      so commit before you run the tests. Screenshots of failed scenarios are copied; traces and videos aren't.</p>
+    <div class="warn-box" id="record-uncontrolled" role="status" hidden></div>
+    <p class="field-hint">The record names the commit the tests ran from, and says if any file that ran wasn't that
+      commit's. Screenshots of failed scenarios are copied; traces and videos aren't.</p>
     <p class="error-box" id="record-error" role="alert" hidden></p>
     <div class="dialog-actions">
       <button type="button" class="ghost" id="record-cancel">Cancel</button>

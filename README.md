@@ -378,7 +378,7 @@ environment and notes are optional). The app copies the run into
 | File | What's in it |
 |---|---|
 | `report.html` | The results as a page anyone can open, with the record's details at the top |
-| `record.json` | Title, result, what ran and the exact command, when, who ran it, environment, notes, computer, branch and commit, pytest's exit code, the Python, pytest and plugin versions that ran, and a SHA-256 fingerprint of every file that defines the tests (taken as the run started) |
+| `record.json` | Title, result, what ran and the exact command, when, who ran it, environment, notes, computer, branch and commit, pytest's exit code, the Python, pytest and plugin versions that ran, a SHA-256 fingerprint of every file that defines the tests (taken as the run started), and why those files might not be the commit's |
 | `cucumber.json` | The raw results, as pytest-bdd wrote them |
 | `screenshots/` | Screenshots of the scenarios that failed (traces and videos are left out: they can hold passwords) |
 
@@ -386,8 +386,11 @@ A record only says it passed if pytest's exit code agrees with the results. If t
 (say a test outside the feature files failed), its result is `mismatch` and the report says
 "Verdict doesn't match pytest"; the results page shows the same.
 
-The app never edits or deletes a record. It reads the commit from `.git`, but it can't tell
-whether files had changed since, so commit before you run.
+The app never edits or deletes a record. As each run starts, it also compares the files that
+define the tests with the commit (reading `.git`, never running git). If one changed or isn't
+committed, the branch isn't `main`, `master` or `release/…`, or the project isn't in git, the
+Save dialog says so and the record lists the reasons. It's still saved, so commit before you
+run for a clean record.
 
 When demoing on this repository's `demo` folder, reset it afterwards with
 `git checkout -- demo` (and delete any new `.feature` files you created). The demo's
